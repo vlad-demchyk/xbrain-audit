@@ -43,25 +43,15 @@ SIGNED_IN = [
 # -- the filter ---------------------------------------------------------------
 
 
-def test_sharepoint_keeps_only_the_tenants_own_hosts():
-    kept = ssi.cookies_for_fetcher(SITE, SIGNED_IN)
-    assert [(r["name"], r["domain"], r["host_only"]) for r in kept] == [
-        ("FedAuth", SITE, True),
-        # rtFa lives on `.sharepoint.com`; SharePoint answers 403 without
-        # it, so it is kept - as a host-only cookie of the tenant's host.
-        ("rtFa", SITE, True),
-        ("rtFa", ".contoso.sharepoint.com", False),
-        ("FedAuth", "contoso-my.sharepoint.com", True),
-    ]
-
-
-def test_only_rtfa_is_taken_from_the_shared_parent():
-    assert ssi.cookie_is_for_fetcher(SITE, ".sharepoint.com", "rtFa")
-    assert not ssi.cookie_is_for_fetcher(SITE, ".sharepoint.com", "FedAuth")
-    assert not ssi.cookie_is_for_fetcher(SITE, ".sharepoint.com", "")
-    # Not for a host that is not a tenant of that parent.
-    assert not ssi.cookie_is_for_fetcher("intranet.example.com",
-                                         ".sharepoint.com", "rtFa")
+def test_sharepoint_session_never_reaches_the_copy():
+    """FedAuth and rtFa stay in the browser profile: the copy gets neither,
+    nor any HttpOnly cookie, nor anything off the tenant's hosts."""
+    lang = dict(record("lang", SITE), http_only=False)
+    kept = ssi.cookies_for_fetcher(SITE, SIGNED_IN + [lang])
+    assert [(r["name"], r["domain"]) for r in kept] == [("lang", SITE)]
+    # Scope alone: the tenant's hosts, never the shared parent.
+    assert ssi.cookie_is_for_fetcher(SITE, SITE, "FedAuth")
+    assert not ssi.cookie_is_for_fetcher(SITE, ".sharepoint.com", "rtFa")
 
 
 def test_an_identity_provider_cookie_never_reaches_the_fetcher():
@@ -163,25 +153,65 @@ def test_the_hint_reads_in_every_language():
 # -- Done writes only the filtered copy ------------------------------------------
 
 
-def test_done_saves_only_what_the_fetcher_should_send():
+def _on_site(dialog, path="/sites/ExampleSite", loaded=True):
+    dialog._current_url = f"https://{dialog.host}{path}"
+    dialog._loaded = loaded
+    return dialog
+
+
+def test_done_marks_the_profile_and_copies_no_session():
     host = "contoso.sharepoint.com"
-    dialog = _dialog(host=host)
+    dialog = _on_site(_dialog(host=host))
     for item in SIGNED_IN:
         dialog._cookies[dialog._cookie_key(item)] = item
-    dialog.accept = lambda: None
+    dialog.accept = lambda: setattr(dialog, "was_accepted", True)
     try:
         dialog._on_done()
-        saved = site_session.load_cookies(host)
-        assert {r["domain"] for r in saved} == {
-            "contoso.sharepoint.com", ".contoso.sharepoint.com",
-            "contoso-my.sharepoint.com"}
-        assert not any("ESTSAUTH" in r["name"] for r in saved)
-        assert not any(r["name"] == "SPOIDCRL" for r in saved)
-        assert "4" in dialog.status.text
+        assert site_session.load_cookies(host) == []
+        assert site_session.profile_signed_in(host)
+        assert site_session.has_session(host)
+        assert site_session.session_mode(host) == site_session.SESSION_BROWSER
+        assert getattr(dialog, "was_accepted", False) and dialog.saved
+        assert "0" in dialog.status.text
         # The browser half keeps everything for a silent re-sign-in.
         assert len(dialog._cookies) == len(SIGNED_IN)
     finally:
         site_session.forget(host)
+
+
+def test_done_works_with_no_cookie_reported_at_all():
+    """A profile signed in last time reports nothing (cookies restored from
+    disk never reach `cookieAdded`); Done must still confirm it."""
+    dialog = _on_site(_dialog())
+    dialog.accept = lambda: None
+    try:
+        dialog._on_done()
+        assert dialog.saved and site_session.has_session(SITE)
+    finally:
+        site_session.forget(SITE)
+
+
+@pytest.mark.parametrize("url,loaded", [
+    ("https://login.microsoftonline.com/common/oauth2/authorize", True),
+    (f"https://{SITE}/_layouts/15/Authenticate.aspx", True),
+    (f"https://{SITE}/sites/ExampleSite", False),
+    ("https://news.example.org/", True),
+    ("", False),
+])
+def test_done_waits_until_a_page_of_the_site_has_loaded(url, loaded):
+    dialog = _dialog()
+    dialog._current_url, dialog._loaded = url, loaded
+    dialog._on_done()
+    assert not dialog.saved and not site_session.has_session(SITE)
+    assert "Nothing was saved" in dialog.status.text
+
+
+def test_an_ordinary_site_keeps_its_old_done():
+    assert ssi.can_finish("", "app.example.com", False)
+    assert ssi.can_finish("https://www.example.com/x", "app.example.com", False)
+    assert not ssi.can_finish("https://login.live.com/", "app.example.com", True)
+    assert ssi.can_finish(f"https://{SITE}/sites/X", SITE, True)
+    assert ssi.can_finish("https://contoso-my.sharepoint.com/", SITE, True)
 
 
 # -- a profile that was signed in before -----------------------------------------
@@ -220,6 +250,8 @@ def test_cookies_already_in_the_profile_are_loaded(monkeypatch):
     class _Page:
         def __init__(self, profile, parent):
             self.profile = profile
+            self.loadStarted = _Signal()
+            self.loadFinished = _Signal()
 
     monkeypatch.setattr(core, "QWebEnginePage", _Page)
     dialog = _dialog()
@@ -271,113 +303,6 @@ def test_an_overwrite_reported_out_of_order_keeps_the_new_value():
     assert [r["value"] for r in dialog._cookies.values()] == ["new"]
     dialog._on_cookie_removed(_FakeQtCookie("FedAuth", "new", SITE))
     assert dialog._cookies == {}
-
-
-def test_missing_session_cookies_only_for_sharepoint():
-    both = [record("FedAuth", SITE), record("rtFa", SITE)]
-    assert site_session.missing_session_cookies(SITE, both) == []
-    assert site_session.missing_session_cookies(
-        SITE, [record("FedAuth", SITE)]) == ["rtFa"]
-    assert site_session.missing_session_cookies(
-        SITE, [record("FedAuth", SITE, value="")]) == ["FedAuth", "rtFa"]
-    assert site_session.missing_session_cookies("app.example.com", []) == []
-
-
-def _chromium_cookie_file(path, rows):
-    import sqlite3
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path) as db:
-        db.execute("CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT,"
-                   " encrypted_value BLOB, path TEXT, is_secure INTEGER,"
-                   " is_httponly INTEGER, expires_utc INTEGER)")
-        db.executemany("INSERT INTO cookies VALUES (?,?,?,?,?,?,?,?)", rows)
-    return path
-
-
-def test_reading_the_profile_file_takes_only_the_session_names(tmp_path):
-    _chromium_cookie_file(tmp_path / "Cookies", [
-        (SITE, "FedAuth", "synthetic-a", b"", "/", 1, 1, 0),
-        (".sharepoint.com", "rtFa", "synthetic-b", b"", "/", 1, 1, 0),
-        (".sharepoint.com", "SPOIDCRL", "synthetic-c", b"", "/", 1, 1, 0),
-        ("login.microsoftonline.com", "ESTSAUTH", "synthetic-d", b"", "/", 1, 1, 0),
-        ("fabrikam.sharepoint.com", "FedAuth", "synthetic-e", b"", "/", 1, 1, 0),
-        # Encrypted by Chromium: not guessed at.
-        ("contoso-my.sharepoint.com", "FedAuth", "", b"v10xxxx", "/", 1, 1, 0),
-    ])
-    found = site_session.read_profile_cookies(tmp_path, SITE)
-    assert sorted((r["name"], r["domain"]) for r in found) == [
-        ("FedAuth", SITE), ("rtFa", ".sharepoint.com")]
-    assert all(r["expires"] is None for r in found)
-
-
-def test_reading_a_missing_or_broken_file_is_empty(tmp_path):
-    assert site_session.read_profile_cookies(tmp_path, SITE) == []
-    (tmp_path / "Cookies").write_bytes(b"not a database")
-    assert site_session.read_profile_cookies(tmp_path, SITE) == []
-    assert site_session.read_profile_cookies("", SITE) == []
-
-
-class _Store:
-    def __init__(self):
-        self.loaded = 0
-
-    def loadAllCookies(self):
-        self.loaded += 1
-
-
-class _Profile:
-    def __init__(self, storage):
-        self.store = _Store()
-        self.storage = str(storage)
-
-    def cookieStore(self):
-        return self.store
-
-    def persistentStoragePath(self):
-        return self.storage
-
-
-def test_done_without_rtfa_asks_again_then_reads_the_file(tmp_path, monkeypatch):
-    scheduled = []
-    monkeypatch.setattr(ssi, "_later", lambda ms, fn: scheduled.append(fn))
-    dialog = _dialog()
-    dialog.profile = _Profile(tmp_path)
-    dialog.accept = lambda: setattr(dialog, "was_accepted", True)
-    dialog._on_cookie(_FakeQtCookie("FedAuth", "synthetic", SITE))
-    try:
-        dialog._on_done()
-        # First: nothing saved, the store asked again, a second look queued.
-        assert scheduled and dialog.profile.store.loaded == 1
-        assert dialog.done_btn.enabled is False
-        assert not site_session.has_session(SITE)
-        _chromium_cookie_file(tmp_path / "Network" / "Cookies", [
-            (".sharepoint.com", "rtFa", "synthetic", b"", "/", 1, 1, 0)])
-        scheduled.pop()()
-        saved = site_session.load_cookies(SITE)
-        assert sorted(r["name"] for r in saved) == ["FedAuth", "rtFa"]
-        assert getattr(dialog, "was_accepted", False)
-    finally:
-        site_session.forget(SITE)
-
-
-def test_done_with_half_a_session_saves_nothing_and_says_so(tmp_path, monkeypatch):
-    scheduled = []
-    monkeypatch.setattr(ssi, "_later", lambda ms, fn: scheduled.append(fn))
-    dialog = _dialog()
-    dialog.profile = _Profile(tmp_path)
-    dialog.accept = lambda: setattr(dialog, "was_accepted", True)
-    dialog._on_cookie(_FakeQtCookie("FedAuth", "synthetic", SITE))
-    dialog._on_done()
-    scheduled.pop()()
-    assert not site_session.has_session(SITE)
-    assert not getattr(dialog, "was_accepted", False)
-    assert dialog.done_btn.enabled is True
-    assert "not complete" in dialog.status.text
-    assert "synthetic" not in dialog.status.text
-    # The next Done starts the checks again rather than giving up.
-    dialog._on_done()
-    assert len(scheduled) == 1
 
 
 # -- B3: the window stays on the site and its sign-in ----------------------------

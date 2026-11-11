@@ -7031,9 +7031,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "This is a real browser window on {host}. Sign in the way you normally do - including 2FA, SSO or a captcha. The tool sees neither your username nor your password: it keeps only what the site gave this browser, and uses that on the next run. Press \"Done\" once you are inside.",
     },
     "sign_in_site_incomplete": {
-        "uk": "Вхід на {host} ще не завершено: SharePoint не видав цьому вікну сесію. Відкрийте в цьому вікні будь-яку сторінку сайту, дочекайтеся, поки вона завантажиться, і знову натисніть «Готово». Нічого не збережено.",
-        "it": "L'accesso a {host} non è ancora completo: SharePoint non ha dato a questa finestra la sessione. Apri in questa finestra una pagina qualsiasi del sito, attendi che si carichi e premi di nuovo «Fatto». Non è stato salvato nulla.",
-        "en": "Signing in to {host} is not complete yet: SharePoint has not given this window its session. Open any page of the site in this window, wait for it to load, then press \"Done\" again. Nothing was saved.",
+        "uk": "Сторінка {host} ще не відкрилась у цьому вікні. Дочекайтеся, поки завантажиться сторінка сайту (не сторінка входу), і знову натисніть «Готово». Нічого не збережено.",
+        "it": "La pagina di {host} non è ancora aperta in questa finestra. Attendi che si carichi una pagina del sito (non quella di accesso) e premi di nuovo «Fatto». Non è stato salvato nulla.",
+        "en": "A page of {host} is not open in this window yet. Wait until a page of the site (not the sign-in page) has loaded, then press \"Done\" again. Nothing was saved.",
     },
     "sign_in_site_checking": {
         "uk": "Перевіряю, чи сесія для {host} уже є…",
@@ -7076,9 +7076,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Forget this session",
     },
     "sign_in_site_saved": {
-        "uk": "Сесію для {host} збережено ({count} значень). Її вміст не потрапляє ні у звіт, ні в журнал.",
-        "it": "Sessione per {host} salvata ({count} valori). Il contenuto non finisce né nel report né nei log.",
-        "en": "The session for {host} is saved ({count} values). Its contents never reach a report or a log.",
+        "uk": "Вхід на {host} збережено: прогін читатиме сайт через цей профіль браузера ({count} значень скопійовано для простих запитів). Вміст сесії не потрапляє ні у звіт, ні в журнал.",
+        "it": "Accesso a {host} salvato: la scansione leggerà il sito tramite questo profilo del browser ({count} valori copiati per le richieste semplici). Il contenuto della sessione non finisce né nel report né nei log.",
+        "en": "The sign-in to {host} is saved: the run reads the site through this browser profile ({count} values copied for plain requests). The session's contents never reach a report or a log.",
     },
     "sign_in_site_forgotten": {
         "uk": "Сесію для {host} видалено з цієї машини.",

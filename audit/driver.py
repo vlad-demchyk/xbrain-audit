@@ -937,6 +937,101 @@ def open_session_profile(host: str, parent=None):
     return profile
 
 
+#: How long `release_session_profile` waits for Chromium to let go of the
+#: profile's files after the profile is deleted. The database is closed on a
+#: background thread, so the deletion returning is not the file being free.
+RELEASE_WAIT_MS = 3000
+
+
+def release_session_profile(host: str) -> bool:
+    """Close this host's cached profile, so its files can be read again.
+
+    Why: once QtWebEngine holds a profile, Windows refuses every other open
+    of its `Cookies` file, and the cookie store never reports a cookie it
+    restored from disk. The sign-in window therefore reads the file *before*
+    it opens the profile - which a process that already opened it (a browser
+    pass, an earlier sign-in window) makes impossible for as long as
+    `_SESSION_PROFILES` keeps it. Called right before the window opens; the
+    window then creates the profile afresh.
+
+    Refuses (returns `False`, keeps the profile) while a page still uses it:
+    deleting a profile under a live page is the crash Qt warns about, and a
+    live page means a run is reading the site right now. `True` when nothing
+    of this host is held any more, including when nothing was.
+    """
+    import site_session
+
+    host = site_session.host_of(host) or host
+    profile = _SESSION_PROFILES.get(host)
+    if profile is None:
+        return True
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    app = QCoreApplication.instance()
+    if app is not None:
+        # Pages already given up (`deleteLater`) are still alive until the
+        # deferred deletions run; see `BrowserAuditRunner.close`.
+        app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    if _pages_of(profile):
+        return False
+    del _SESSION_PROFILES[host]
+    try:
+        import shiboken6
+
+        if shiboken6.isValid(profile):
+            # Explicitly, not by dropping the reference: a sign-in window
+            # that already closed can still hold one as an attribute.
+            shiboken6.delete(profile)
+    except Exception:  # noqa: BLE001 - a profile already gone is the goal
+        pass
+    del profile
+    _wait_until_free(site_session.profile_dir(host), RELEASE_WAIT_MS)
+    return True
+
+
+def _pages_of(profile) -> list:
+    """The live pages made from `profile`, as Python knows them.
+
+    Qt has no "pages of this profile" question; every page here is made from
+    Python, so the garbage collector's view is the complete one.
+    """
+    import gc
+
+    import shiboken6
+    from PySide6.QtWebEngineCore import QWebEnginePage
+
+    pages = []
+    for obj in gc.get_objects():
+        try:
+            if (isinstance(obj, QWebEnginePage) and shiboken6.isValid(obj)
+                    and obj.profile() is profile):
+                pages.append(obj)
+        except Exception:  # noqa: BLE001 - a half-deleted wrapper is not a user
+            continue
+    return pages
+
+
+def _wait_until_free(folder, milliseconds: int) -> None:
+    """Pump the event loop until the profile's cookie files open, or time out."""
+    import time
+
+    candidates = [folder / "Cookies", folder / "Network" / "Cookies"]
+    deadline = time.monotonic() + milliseconds / 1000
+    while True:
+        free = True
+        for path in candidates:
+            if not path.is_file():
+                continue
+            try:
+                with open(path, "rb"):
+                    pass
+            except OSError:
+                free = False
+        if free or time.monotonic() >= deadline:
+            return
+        _pump(50)
+
+
 class html_renderer:
     """A `render(url) -> html` callable backed by one browser, as a context.
 

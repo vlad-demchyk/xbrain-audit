@@ -353,6 +353,11 @@ class _Client:
             if authwall.forms_auth_required(headers):
                 raise AuthRequired(AUTH_FORMS_HEADER, _redact(url))
             if status in (301, 302, 303, 307, 308):
+                # A browser transport cannot see where a redirect went when
+                # it left the site; for a signed-in request that is the
+                # identity provider (see `audit.browser_fetch`).
+                if _header(headers, "X-XAnalyze-Redirect") == "off-site":
+                    raise AuthRequired(AUTH_LOGIN_REDIRECT, _redact(url))
                 location = urljoin(url, _header(headers, "Location") or "")
                 if authwall.is_definite_login_url(location):
                     raise AuthRequired(AUTH_LOGIN_REDIRECT, _redact(url))
@@ -1058,7 +1063,9 @@ def discover(site_url: str, session, *, max_pages: int = 2000,
     """Every page of a SharePoint Online site and its subsites.
 
     ``session`` is a ``requests.Session`` that already carries the sign-in
-    (see `session_from_cookies`); it is not modified. ``site_url`` may be the
+    (see `session_from_cookies`), or anything with the same ``get`` - the
+    signed-in browser's own transport (`audit.browser_fetch`) above all; it
+    is not modified. ``site_url`` may be the
     site, a subsite or a page inside one - it is cut back to the web.
 
     ``max_duration`` (seconds, 0 for none) caps the whole walk, waits

@@ -133,7 +133,9 @@ class OneSessionForEveryReader(unittest.TestCase):
 
 
 class TheFetcherCopyIsFiltered(unittest.TestCase):
-    def test_save_cookies_keeps_only_the_tenants_hosts(self):
+    def test_save_cookies_never_writes_the_sharepoint_session(self):
+        """The session stays in the browser profile (`SESSION_BROWSER`):
+        no FedAuth, no rtFa, no HttpOnly cookie, nothing off the tenant."""
         import site_session
 
         host = "contoso.sharepoint.com"
@@ -143,12 +145,15 @@ class TheFetcherCopyIsFiltered(unittest.TestCase):
                 {"name": "ESTSAUTHPERSISTENT", "value": "s",
                  "domain": "login.microsoftonline.com"},
                 {"name": "rtFa", "value": "s", "domain": ".sharepoint.com"},
+                {"name": "other", "value": "s", "domain": host,
+                 "http_only": True},
+                {"name": "lang", "value": "s", "domain": host},
             ])
             saved = site_session.load_cookies(host)
         finally:
             site_session.forget(host)
         self.assertEqual([(c["name"], c["domain"]) for c in saved],
-                         [("FedAuth", host), ("rtFa", host)])
+                         [("lang", host)])
 
     def test_the_window_uses_the_same_filter(self):
         try:
@@ -419,9 +424,17 @@ class TheCommand(unittest.TestCase):
         import cli
 
         out, err = io.StringIO(), io.StringIO()
+
+        def signed(target, config, use_session=True):
+            # A placeholder value: what matters is that the fetcher got one.
+            if session_host and use_session:
+                config.cookies = [{"name": "placeholder", "value": "x"}]
+                return session_host
+            return ""
+
         patches = [mock.patch("cli_impl.auditpass.apply_session",
-                              return_value=session_host),
-                   mock.patch("cli.apply_session", return_value=session_host),
+                              side_effect=signed),
+                   mock.patch("cli.apply_session", side_effect=signed),
                    # The refusal asked before the run folder exists.
                    mock.patch("site_session.has_session",
                               return_value=bool(session_host))]

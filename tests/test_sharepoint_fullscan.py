@@ -37,14 +37,24 @@ def _tree(status, pages=()):
     return tree
 
 
-def _main(argv, *, signed_in, crawl_site=None, extra=()):
+def _main(argv, *, signed_in, crawl_site=None, extra=(), cookies=True):
+    """`cookies=False`: a session that exists but gives the fetcher nothing."""
     import cli
 
     out, err = io.StringIO(), io.StringIO()
     host = "contoso.sharepoint.com" if signed_in else ""
+
+    def signed(target, config, use_session=True):
+        if not (host and use_session):
+            return ""
+        if cookies:
+            # A placeholder value: what matters is that the fetcher got one.
+            config.cookies = [{"name": "placeholder", "value": "x"}]
+        return host
+
     patches = [mock.patch("site_session.has_session", return_value=signed_in),
-               mock.patch("cli_impl.auditpass.apply_session", return_value=host),
-               mock.patch("cli.apply_session", return_value=host),
+               mock.patch("cli_impl.auditpass.apply_session", side_effect=signed),
+               mock.patch("cli.apply_session", side_effect=signed),
                # The content pass is not what this file is about, and its
                # detectors are slow to load.
                mock.patch("cli_impl.fullscan._content_findings_from_pages",
@@ -95,6 +105,55 @@ class NoSignInLeavesNothingBehind(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("--no-session", err)
 
+    def test_a_bad_ootb_registry_is_refused_before_the_folder(self):
+        from cli_impl import runfolder
+
+        for command, folder_fn in (("fullscan", "prepare"),
+                                   ("audit", "prepare_for")):
+            with self.subTest(command), mock.patch.object(
+                    runfolder, folder_fn,
+                    side_effect=AssertionError("folder made")):
+                code, _out, err = _main(
+                    [command, SITE, "--no-browser", "--no-hints",
+                     "--ootb-registry", "no-such-file.json"],
+                    signed_in=True, crawl_site=_never)
+                self.assertEqual(code, 2)
+                self.assertIn("--ootb-registry no-such-file.json", err)
+
+    def test_a_session_that_gives_nothing_is_refused_not_crawled(self):
+        """In cookie mode an empty copy is no session: refused."""
+        cookie_mode = mock.patch("site_session.session_mode",
+                                 return_value="cookies")
+        for command in ("fullscan", "audit"):
+            with self.subTest(command):
+                code, _out, err = _main(
+                    [command, SITE, "--no-browser", "--no-hints"],
+                    signed_in=True, cookies=False, crawl_site=_never,
+                    extra=(cookie_mode,))
+                self.assertEqual(code, 2)
+                self.assertIn(f"xanalyze login {SITE}", err)
+
+    def test_browser_mode_crawls_with_an_empty_copy(self):
+        """In browser mode the session is the profile's; an empty copy is
+        normal and the run goes on to the crawl."""
+        browser_mode = mock.patch("site_session.session_mode",
+                                  return_value="browser")
+
+        for command in ("fullscan", "audit"):
+            crawled = []
+
+            def reached(*_a, **_k):
+                crawled.append(True)
+                return [], None
+
+            with self.subTest(command):
+                code, _out, err = _main(
+                    [command, SITE, "--no-browser", "--no-hints", "--json"],
+                    signed_in=True, cookies=False, crawl_site=reached,
+                    extra=(browser_mode,))
+                self.assertEqual(crawled, [True])
+                self.assertNotIn("xanalyze login", err)
+
     def test_an_ordinary_site_is_not_asked_for_a_sign_in(self):
         self.assertEqual(auditpass.sign_in_refusal(
             "https://example.com/", mock.Mock(no_session=False)), "")
@@ -112,6 +171,26 @@ class FullscanReadsTheTree(unittest.TestCase):
                 self.assertEqual(code, 2)
                 self.assertIn(words, err)
                 self.assertIn(f"xanalyze login {SITE}", err)
+
+    def test_the_folder_of_a_refused_run_says_why(self):
+        """The tree needs the network, so it is asked after the folder: the
+        folder then has to record the refusal, not sit there empty."""
+        import os
+
+        tree = _tree(spt.STATUS_ACCESS_DENIED)
+        root = Path(os.environ["XANALYZE_REPORT_ROOT"])
+        before = set(root.rglob("state.json"))
+        code, _out, _err = _main(
+            ["fullscan", SITE, "--no-browser", "--no-hints"],
+            signed_in=True, crawl_site=lambda *a, **k: ([], tree))
+        self.assertEqual(code, 2)
+        new = sorted(set(root.rglob("state.json")) - before)
+        self.assertEqual(len(new), 1)
+        state = json.loads(new[0].read_text(encoding="utf-8"))
+        self.assertEqual(state["status"], "failed")
+        self.assertIn("no permission", json.dumps(state, ensure_ascii=False))
+        markdown = (new[0].parent / "state.md").read_text(encoding="utf-8")
+        self.assertIn("no permission", markdown)
 
     def test_the_tree_and_the_zones_reach_the_json(self):
         url = f"{SITE}/SitePages/Home.aspx"

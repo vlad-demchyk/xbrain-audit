@@ -149,6 +149,11 @@ class CrawlConfig:
     max_links_per_page: int = 1000
     #: Addresses waiting in the queue at once.
     max_queue: int = 20_000
+    #: `site_session.SESSION_BROWSER` reads every page with the `render`
+    #: callable only - the session lives in the browser profile and a
+    #: `requests` fetch would read the sign-in page. Anything else: fetch,
+    #: then render as `render_mode` says.
+    session_mode: str = ""
 
 
 class _TooLarge(Exception):
@@ -845,6 +850,7 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
     max_depth = 0 if seeds else config.max_depth
     results: list[PageResult] = []
     session = _http_session(config, root_url)
+    browser_only = render is not None and config.session_mode == "browser"
 
     #: Pages actually read as HTML. The budget counts these rather than
     #: `len(results)`, because a result is also recorded for an address that
@@ -872,75 +878,95 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
 
         diagnostics = PageDiagnostics()
         resp = None
-        try:
-            resp = session.get(url, timeout=config.timeout, stream=True)
-            if cancelled and cancelled():
-                _close(resp)
-                break
-            diagnostics.status_code = resp.status_code
-            diagnostics.final_url = resp.url
-            diagnostics.content_type = resp.headers.get("Content-Type", "")
-            diagnostics.headers = {k.lower(): v for k, v in resp.headers.items()}
-            applog.debug("crawl.page", url=url, depth=depth,
-                         status=resp.status_code,
-                         type=diagnostics.content_type[:40])
-            resp.raise_for_status()
-            content_type = diagnostics.content_type
-            if "text/html" not in content_type and not content_type.startswith("text/"):
-                # Recorded rather than skipped. Dropping it silently was
-                # indistinguishable from a page that was crawled and found
-                # clean, which is exactly the confusion this whole
-                # diagnostics path exists to remove.
-                diagnostics.reasons.append(EMPTY_NOT_HTML)
-                results.append(PageResult(url=url, depth=depth, diagnostics=diagnostics))
-                _close(resp)
-                continue
+        if browser_only:
+            # The session is the browser profile's: a `requests` fetch here
+            # would read the sign-in page. The browser reads the page.
             try:
-                html = _read_html(resp, config.max_page_bytes)
-            except _TooLarge:
-                applog.warning("crawl.page_too_large", url=url,
-                               limit=config.max_page_bytes)
-                diagnostics.reasons.append(EMPTY_TOO_LARGE)
-                results.append(PageResult(url=url, depth=depth, diagnostics=diagnostics))
+                html = _render_within(render, url, config.render_timeout) or ""
+                if not html:
+                    raise RuntimeError("the browser returned no page")
+            except Exception as exc:  # noqa: BLE001 - recorded on the page
+                diagnostics.render_error = str(exc)
+                diagnostics.reasons.append(EMPTY_ERROR)
+                results.append(PageResult(url=url, depth=depth, error=str(exc),
+                                          diagnostics=diagnostics))
                 continue
-            finally:
-                _close(resp)
-            landing = _normalize(resp.url)
-            if landing != _normalize(url):
-                # Three URLs redirecting to one page are one page. Analysing
-                # the landing page once per address counted the same copy
-                # three times, spent three AI calls on it, and reported a
-                # site larger than it is.
-                diagnostics.reasons.append(EMPTY_REDIRECTED)
-                if landing in visited:
-                    diagnostics.reasons.append(EMPTY_ALREADY_SEEN)
-                    results.append(
-                        PageResult(url=url, depth=depth, diagnostics=diagnostics))
+            diagnostics.final_url = url
+            diagnostics.html_bytes = len(html)
+            url_base = url
+        else:
+            try:
+                resp = session.get(url, timeout=config.timeout, stream=True)
+                if cancelled and cancelled():
+                    _close(resp)
+                    break
+                diagnostics.status_code = resp.status_code
+                diagnostics.final_url = resp.url
+                diagnostics.content_type = resp.headers.get("Content-Type", "")
+                diagnostics.headers = {k.lower(): v for k, v in resp.headers.items()}
+                applog.debug("crawl.page", url=url, depth=depth,
+                             status=resp.status_code,
+                             type=diagnostics.content_type[:40])
+                resp.raise_for_status()
+                content_type = diagnostics.content_type
+                if "text/html" not in content_type and not content_type.startswith("text/"):
+                    # Recorded rather than skipped. Dropping it silently was
+                    # indistinguishable from a page that was crawled and found
+                    # clean, which is exactly the confusion this whole
+                    # diagnostics path exists to remove.
+                    diagnostics.reasons.append(EMPTY_NOT_HTML)
+                    results.append(PageResult(url=url, depth=depth, diagnostics=diagnostics))
+                    _close(resp)
                     continue
-                visited.add(landing)
-                # Links on the page are relative to where it landed, not to
-                # where it was asked for.
-                url_base = resp.url
-            else:
-                url_base = url
-        except requests.RequestException as exc:
-            if resp is not None:
-                _close(resp)
-            applog.warning("crawl.page_failed", url=url, depth=depth,
-                           error=f"{type(exc).__name__}: {exc}")
-            diagnostics.reasons.append(EMPTY_ERROR)
-            results.append(
-                PageResult(url=url, depth=depth, error=str(exc), diagnostics=diagnostics)
-            )
-            continue
+                try:
+                    html = _read_html(resp, config.max_page_bytes)
+                except _TooLarge:
+                    applog.warning("crawl.page_too_large", url=url,
+                                   limit=config.max_page_bytes)
+                    diagnostics.reasons.append(EMPTY_TOO_LARGE)
+                    results.append(PageResult(url=url, depth=depth, diagnostics=diagnostics))
+                    continue
+                finally:
+                    _close(resp)
+                landing = _normalize(resp.url)
+                if landing != _normalize(url):
+                    # Three URLs redirecting to one page are one page. Analysing
+                    # the landing page once per address counted the same copy
+                    # three times, spent three AI calls on it, and reported a
+                    # site larger than it is.
+                    diagnostics.reasons.append(EMPTY_REDIRECTED)
+                    if landing in visited:
+                        diagnostics.reasons.append(EMPTY_ALREADY_SEEN)
+                        results.append(
+                            PageResult(url=url, depth=depth, diagnostics=diagnostics))
+                        continue
+                    visited.add(landing)
+                    # Links on the page are relative to where it landed, not to
+                    # where it was asked for.
+                    url_base = resp.url
+                else:
+                    url_base = url
+            except requests.RequestException as exc:
+                if resp is not None:
+                    _close(resp)
+                applog.warning("crawl.page_failed", url=url, depth=depth,
+                               error=f"{type(exc).__name__}: {exc}")
+                diagnostics.reasons.append(EMPTY_ERROR)
+                results.append(
+                    PageResult(url=url, depth=depth, error=str(exc), diagnostics=diagnostics)
+                )
+                continue
 
         blocks = _extract_text_blocks(html, url, diagnostics)
         _diagnose(diagnostics, url, html, blocks)
+        if browser_only:
+            diagnostics.reasons = [RENDERED] + diagnostics.reasons
 
         # The page was read as it arrived. If that reading is empty because the
         # copy is written by JavaScript, the browser is the only reader that can
         # answer - and the fetch already said so.
-        if (render is not None and not (cancelled and cancelled())
+        if (render is not None and not browser_only
+                and not (cancelled and cancelled())
                 and _should_render(config.render_mode, diagnostics)):
             rendered = ""
             try:

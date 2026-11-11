@@ -241,8 +241,9 @@ def has_session(host: str) -> bool:
     the sign-in page sets anything at all - a consent cookie, a tracker, a
     half-finished login - and a person who pressed Cancel must not be told
     they are signed in, nor have the crawl use what they walked away from.
-    The fetcher's copy of the cookies is written only by Done, so that file
-    is what makes a session.
+    Done writes the marker (`mark_signed_in`) and the fetcher's copy of the
+    cookies, so either file is what makes a session - the marker alone for a
+    site read by the browser (`SESSION_BROWSER`), whose copy may be empty.
     """
     try:
         path = profile_dir(host)
@@ -250,8 +251,11 @@ def has_session(host: str) -> bool:
         return False
     if not _profile_has_data(path):
         return False
-    cookies = path / _COOKIES
-    return cookies.is_file() and not cookies.is_symlink()
+    for name in (_COOKIES, _SIGNED_IN):
+        marker = path / name
+        if marker.is_file() and not marker.is_symlink():
+            return True
+    return False
 
 
 def known_hosts() -> list:
@@ -429,40 +433,25 @@ def _bare_host(host_or_url: str) -> str:
     return (parsed.hostname or "").lower().rstrip(".")
 
 
-#: SharePoint Online's session is two cookies, and a request carrying only
-#: one of them is answered `403` with `X-Forms_Based_Auth_Required` (checked
-#: live, all four combinations: only both together read a page). `FedAuth`
-#: is set on the tenant's host; `rtFa` on `.sharepoint.com`.
+#: SharePoint Online's session cookies: `FedAuth` on the tenant's host,
+#: `rtFa` on `.sharepoint.com`, both HttpOnly. They never leave the browser
+#: profile: a SharePoint site is read *by* the profile (`SESSION_BROWSER`,
+#: `audit.browser_fetch`), so the fetcher's copy has no use for them, and a
+#: file holding them is a copy of the person's session on disk.
 SHAREPOINT_SESSION_COOKIES = ("FedAuth", "rtFa")
-#: The one cookie the fetcher takes from the shared `.sharepoint.com`
-#: parent, narrowed to the tenant's host when it is kept.
-_SHAREPOINT_PARENT_COOKIES = ("rtFa",)
-
-
-def _sharepoint_parent(host: str) -> str:
-    """`sharepoint.com` for a tenant host on it, else `""`."""
-    from project_profile import SHAREPOINT_ONLINE_SUFFIXES, sharepoint_tenant
-
-    if not sharepoint_tenant(host):
-        return ""
-    for suffix in SHAREPOINT_ONLINE_SUFFIXES:
-        if host.endswith(suffix):
-            return suffix.lstrip(".")
-    return ""
 
 
 def cookie_is_for_fetcher(site_host: str, cookie_domain: str,
                           name: str = "") -> bool:
-    """Should a cookie set on `cookie_domain` reach the fetcher of `site_host`?
+    """Is a cookie set on `cookie_domain` in the scope of `site_host`?
 
     Yes for the site's own host and its parent domains (what a browser would
     send there), never for an identity provider, and for SharePoint Online
-    only the tenant's own hosts: `.sharepoint.com` is every tenant's parent,
-    so the one cookie SharePoint needs from it - `rtFa`, named - is the only
-    one taken, and `cookies_for_fetcher` narrows it to the tenant's host.
+    only the tenant's own hosts: `.sharepoint.com` is every tenant's parent.
     A Microsoft sign-in cookie (`ESTSAUTH*` on `login.microsoftonline.com`)
     is the person's whole Microsoft account; the browser profile keeps it
-    for a silent sign-in, the fetcher's copy never does.
+    for a silent sign-in, the fetcher's copy never does. `name` is accepted
+    for callers that have one; scope does not depend on it.
     """
     from audit.authwall import is_identity_provider_host
     from project_profile import sharepoint_tenant_hosts
@@ -475,10 +464,7 @@ def cookie_is_for_fetcher(site_host: str, cookie_domain: str,
         return False
     tenant_hosts = sharepoint_tenant_hosts(host)
     if tenant_hosts:
-        if domain in tenant_hosts:
-            return True
-        return (domain == _sharepoint_parent(host)
-                and name in _SHAREPOINT_PARENT_COOKIES)
+        return domain in tenant_hosts
     if host == domain:
         return True  # `localhost` included: a host is its own scope
     # A parent domain, but never a bare top-level one.
@@ -486,42 +472,89 @@ def cookie_is_for_fetcher(site_host: str, cookie_domain: str,
 
 
 def cookies_for_fetcher(site_host: str, records) -> list:
-    """The records the fetcher of `site_host` should be given.
+    """The records the fetcher's copy (`cookies.json`) of `site_host` gets.
 
-    A SharePoint parent-domain cookie that passes is copied as a host-only
-    cookie of the tenant's host: the fetcher must not offer it to every
-    tenant on `sharepoint.com`.
+    Those in scope (`cookie_is_for_fetcher`); for SharePoint Online also
+    never an HttpOnly cookie and never a session cookie by name - that
+    session stays in the browser profile (`SHAREPOINT_SESSION_COOKIES`).
     """
-    from project_profile import sharepoint_tenant_hosts
+    from project_profile import sharepoint_tenant
 
     host = _bare_host(site_host)
-    parent = _sharepoint_parent(host)
+    sharepoint = bool(sharepoint_tenant(host))
     kept = []
     for record in records or ():
         domain = str(record.get("domain", "") or "")
         name = str(record.get("name", "") or "")
         if not cookie_is_for_fetcher(site_host, domain, name):
             continue
-        if parent and domain.strip().lower().lstrip(".") == parent:
-            record = dict(record, domain=sharepoint_tenant_hosts(host)[0],
-                          host_only=True)
+        if sharepoint and (record.get("http_only")
+                           or name in SHAREPOINT_SESSION_COOKIES):
+            continue
         kept.append(record)
     return kept
 
 
-def missing_session_cookies(site_host: str, records) -> list:
-    """The session cookies a SharePoint Online host still lacks, by name.
+#: The marker Done writes: "this profile was signed in, confirmed by the
+#: person". Holds the host and a time, nothing secret.
+_SIGNED_IN = "signed_in.json"
 
-    `[]` for any other host - nothing is known to be required there - and
-    for a SharePoint session that has both. Names only, never values.
+#: How a run reads a signed-in site. `browser`: every request is made by the
+#: host's QtWebEngine profile (the hidden page of `audit.browser_fetch`, and
+#: the renderer) and no cookie leaves it. `cookies`: `requests` carries the
+#: copy Done wrote to `cookies.json`, the browser renders.
+SESSION_BROWSER = "browser"
+SESSION_COOKIES = "cookies"
+
+
+def mark_signed_in(host: str) -> None:
+    """Record that the person confirmed a sign-in to `host` with Done."""
+    import datetime
+
+    path = profile_dir(host, create=True) / _SIGNED_IN
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        json.dump({"version": 1, "host": _canonical_host(host),
+                   "at": datetime.datetime.now(datetime.timezone.utc)
+                   .isoformat(timespec="seconds")}, handle)
+
+
+def profile_signed_in(host: str) -> bool:
+    """Did Done confirm a sign-in in this host's browser profile?"""
+    try:
+        path = profile_dir(host) / _SIGNED_IN
+    except ValueError:
+        return False
+    return path.is_file() and not path.is_symlink()
+
+
+def session_mode(host: str) -> str:
+    """`SESSION_BROWSER`, `SESSION_COOKIES`, or `""` with no session.
+
+    SharePoint Online is always read by the browser: its session cookies are
+    never exported. Every other site keeps the cookie copy for now; a site
+    with a signed-in profile and no usable copy is where `browser` is the
+    one decision to change (see `should_switch_to_browser`).
     """
     from project_profile import sharepoint_tenant
 
-    if not sharepoint_tenant(_bare_host(site_host)):
-        return []
-    have = {str(record.get("name", "")) for record in records or ()
-            if record.get("value")}
-    return [name for name in SHAREPOINT_SESSION_COOKIES if name not in have]
+    if not has_session(host):
+        return ""
+    if sharepoint_tenant(_bare_host(host)):
+        return SESSION_BROWSER
+    return SESSION_COOKIES
+
+
+def should_switch_to_browser(host: str, auth_wall: bool) -> bool:
+    """Would the browser mode read what the cookie copy could not?
+
+    True when a cookie-mode run met a sign-in wall and the host's profile was
+    confirmed signed in - the copy is stale or incomplete, the profile is
+    not. The extension point for a run plan's automatic fallback; today a
+    caller says so rather than switching.
+    """
+    return (bool(auth_wall) and session_mode(host) == SESSION_COOKIES
+            and profile_signed_in(host))
 
 
 def _cookie_rows(path: Path):

@@ -554,11 +554,20 @@ def sharepoint_pages(target: str, config, *, page_tree: str = PAGE_TREE_LINKS,
     """
     from crawler import crawl
 
+    browser = _reads_with_browser(target)
+    if browser and render is not None:
+        # The session stays in the browser profile: pages are read by the
+        # renderer, never by a `requests` fetch of the sign-in page.
+        config.session_mode = "browser"
     tree = None
     seeds = None
     if page_tree == PAGE_TREE_SHAREPOINT:
         import sharepoint_tree
 
+        if discover is None and session is None and browser:
+            from audit import browser_fetch
+
+            discover = _browser_discover(browser_fetch)
         discover = discover or sharepoint_tree.discover
         if session is None:
             session = sharepoint_tree.session_from_cookies(config.cookies,
@@ -582,6 +591,35 @@ def sharepoint_pages(target: str, config, *, page_tree: str = PAGE_TREE_LINKS,
     if site_scope:
         kwargs["site_scope"] = site_scope
     return crawl(target, config, **kwargs), tree
+
+
+def _reads_with_browser(target: str) -> bool:
+    """Is `target` read by its signed-in browser profile (`SESSION_BROWSER`)?"""
+    import site_session
+
+    try:
+        return (site_session.session_mode(site_session.host_of(target))
+                == site_session.SESSION_BROWSER)
+    except Exception:  # noqa: BLE001 - a session that cannot be read is none
+        return False
+
+
+def _browser_discover(browser_fetch):
+    """`discover_in_browser`, or the cookie one off the Qt thread.
+
+    QtWebEngine runs only on the Qt thread. Off it - a GUI worker - the tree
+    is asked for with the (empty) cookie copy, which answers "sign in"
+    rather than crashing the browser.
+    """
+    import sharepoint_tree
+
+    def discover(target, session, **kwargs):
+        try:
+            return browser_fetch.discover_in_browser(target, session, **kwargs)
+        except browser_fetch.BrowserFetchError:
+            return sharepoint_tree.discover(target, session, **kwargs)
+
+    return discover
 
 
 def crawl_site(target: str, config, *, progress_cb=None, session_host: str = "",
@@ -735,6 +773,8 @@ def session_refusal(target: str, config, session_host: str,
         return ""
     if session_host and list(getattr(config, "cookies", None) or ()):
         return ""
+    if session_host and _reads_with_browser(target):
+        return ""  # the session is the profile's; an empty copy is normal
     return missing_session_message(target, project_profile._host_of(target),
                                    no_session)
 

@@ -12,10 +12,17 @@ Two things it must get right:
   profile is the right default for auditing a stranger's site and the wrong
   one here: the session would not survive the window closing. See
   `audit.driver.open_session_profile` and `site_session`.
-* **The fetcher gets the session too.** The crawl reads pages with
-  `requests`, which shares no storage with QtWebEngine, so the cookies are
-  copied across as they arrive. Without that half, the browser sees the
-  account and the crawl sees the login form - one run, two answers.
+* **Done means "this profile is signed in".** It is offered once the
+  window is back on the site, the page has loaded and it is not the
+  identity provider (for SharePoint Online exactly that; for other sites as
+  before, anywhere off the provider). Done writes the marker
+  (`site_session.mark_signed_in`) and the run reads the site *with this
+  profile* (`site_session.SESSION_BROWSER`, `audit.browser_fetch`).
+* **The fetcher's copy is a second, optional mode.** The cookies the
+  signals reported are copied for `requests` (`site_session.SESSION_COOKIES`)
+  - and whether any arrived never blocks Done: a cookie restored from the
+  profile's disk is not reported at all (checked, PySide6 6.12), so a
+  person signed in last time would otherwise be told they are not.
 
 * **The fetcher gets only the site's cookies.** The browser profile keeps
   everything, the identity provider's cookies included, because that is
@@ -62,26 +69,6 @@ STAGE_ELSEWHERE = "elsewhere"
 
 def _text(key: str, lang: str, **fields) -> str:
     return t(key, lang, **fields)
-
-
-def _later(ms: int, callback) -> None:
-    """Run `callback` on the event loop after `ms`. A seam for tests."""
-    from PySide6.QtCore import QTimer
-
-    QTimer.singleShot(ms, callback)
-
-
-#: How long the store gets to report what `loadAllCookies` asked for.
-RECHECK_MS = 1500
-
-
-def _profile_storage(host: str) -> str:
-    """The folder of `host`'s profile if it exists, else `""`. Creates nothing."""
-    try:
-        path = site_session.profile_dir(host)
-    except Exception:  # noqa: BLE001 - a profile of another host: no snapshot
-        return ""
-    return str(path) if path.is_dir() else ""
 
 
 def _bare_host(host_or_url: str) -> str:
@@ -222,6 +209,21 @@ def _nav_kind(qt_type) -> str:
     return NAV_OTHER
 
 
+def can_finish(url: str, site_host: str, loaded: bool) -> bool:
+    """May Done confirm the sign-in with the window where it is?
+
+    For SharePoint Online: on the tenant's host, the page loaded, not a
+    sign-in step - the only state in which the profile visibly holds the
+    session. Elsewhere as it always was: anywhere but the identity provider.
+    """
+    stage = sign_in_stage(url, site_host)
+    if stage == STAGE_IDENTITY_PROVIDER:
+        return False
+    if project_profile.sharepoint_tenant_hosts(_bare_host(site_host)):
+        return stage == STAGE_SITE and bool(loaded)
+    return True
+
+
 def sign_in_stage(url: str, site_host: str) -> str:
     """Is the window on the identity provider, back on the site, or elsewhere?"""
     if authwall.is_definite_login_url(url):
@@ -254,6 +256,9 @@ class SiteSignInDialog(QDialog):
         #: question a cookie store answers synchronously.
         self._cookies: dict[tuple[str, str, str], dict] = {}
         self._page = None
+        #: Where the window is, and whether that page finished loading.
+        self._current_url = ""
+        self._loaded = False
         #: Hosts this sign-in led to, kept for the window's life.
         self._learned_hosts: set[str] = set()
 
@@ -269,15 +274,6 @@ class SiteSignInDialog(QDialog):
 
         from audit import driver
 
-        # The session this profile already holds is read from its file
-        # *before* the profile is opened, for two reasons checked on
-        # Windows with PySide6 6.12: a cookie restored from disk is never
-        # reported by `cookieAdded`, `loadAllCookies()` included, so a person
-        # signed in last time is signed in here with nothing collected; and
-        # once QtWebEngine holds the profile, every other open of that file
-        # is refused, so reading it at Done finds nothing. What the site sets
-        # from now on arrives through the signals and replaces this.
-        self._take_from_profile_file(_profile_storage(self.host))
         self.profile = driver.open_session_profile(self.host, parent=self)
         self.view = QWebEngineView(self)
         self._attach_page()
@@ -321,6 +317,8 @@ class SiteSignInDialog(QDialog):
         page = _GuardedPage(self.profile, self)
         self._page = page
         self.view.setPage(page)
+        page.loadStarted.connect(self._on_load_started)
+        page.loadFinished.connect(self._on_load_finished)
         store = self.profile.cookieStore()
         store.cookieAdded.connect(self._on_cookie)
         store.cookieRemoved.connect(self._on_cookie_removed)
@@ -345,9 +343,16 @@ class SiteSignInDialog(QDialog):
                                   host=self.host, target=target))
         return False
 
+    def _on_load_started(self) -> None:
+        self._loaded = False
+
+    def _on_load_finished(self, ok) -> None:
+        self._loaded = bool(ok)
+
     def _on_url_changed(self, qurl) -> None:
         """Say where the sign-in is, and offer Done only off the provider."""
         url = qurl.toString() if hasattr(qurl, "toString") else str(qurl)
+        self._current_url = url
         stage = sign_in_stage(url, self.host)
         self.done_btn.setEnabled(stage != STAGE_IDENTITY_PROVIDER)
         if stage == STAGE_IDENTITY_PROVIDER:
@@ -405,66 +410,25 @@ class SiteSignInDialog(QDialog):
 
     # ------------------------------------------------------------- actions
     def _on_done(self) -> None:
-        """Keep what the browser was given, and say what was kept.
+        """Confirm the sign-in: mark the profile, keep the optional copy.
 
-        The count is the only thing shown - never a name and never a value.
-        A dialog that prints a session cookie has handed the session to
-        whoever is looking at the screen, and to whoever reads the
-        screenshot afterwards.
-
-        For SharePoint Online a session is known to need two cookies
-        (`site_session.SHAREPOINT_SESSION_COOKIES`). They come from the
-        signals, or from the profile's file read when the window opened.
-        When neither had both, three things are tried: ask the store for
-        everything it holds again and look once more after `RECHECK_MS`;
-        then read the two names from the profile's file again (works where
-        the open profile does not lock it - not on Windows); then say the
-        sign-in is not complete and save nothing - "session stored" over
-        half a session is a run that audits the sign-in page.
+        `can_finish` decides; when it says no, nothing is written and the
+        status says what to wait for. The count of copied cookies is the only
+        thing shown - never a name and never a value - and may be 0: a site
+        read by the browser does not need the copy.
         """
-        kept = cookies_for_fetcher(self.host, self._cookies.values())
-        missing = site_session.missing_session_cookies(self.host, kept)
-        if missing and not getattr(self, "_rechecked", False):
-            self._rechecked = True
-            self.done_btn.setEnabled(False)
-            self.status.setText(_text("sign_in_site_checking", self.lang,
-                                      host=self.host))
-            try:
-                self.profile.cookieStore().loadAllCookies()
-            except Exception:  # noqa: BLE001 - the file read below still runs
-                pass
-            _later(RECHECK_MS, self._on_done)
-            return
-        if missing:
-            self._take_from_profile_file()
-            kept = cookies_for_fetcher(self.host, self._cookies.values())
-            missing = site_session.missing_session_cookies(self.host, kept)
-        if missing:
-            self._rechecked = False
-            self.done_btn.setEnabled(True)
+        if not can_finish(getattr(self, "_current_url", ""), self.host,
+                          getattr(self, "_loaded", False)):
             self.status.setText(_text("sign_in_site_incomplete", self.lang,
                                       host=self.host))
             return
+        kept = cookies_for_fetcher(self.host, self._cookies.values())
         site_session.save_cookies(self.host, kept)
+        site_session.mark_signed_in(self.host)
         self.saved = True
         self.status.setText(t("sign_in_site_saved", self.lang,
                               host=self.host, count=len(kept)))
         self.accept()
-
-    def _take_from_profile_file(self, storage=None) -> None:
-        """Fill in the session cookies from the profile's cookie file.
-
-        Never over a cookie the signals reported: theirs is the newer value.
-        """
-        if storage is None:
-            try:
-                storage = self.profile.persistentStoragePath()
-            except Exception:  # noqa: BLE001 - an off-the-record profile has none
-                return
-        if not storage:
-            return
-        for record in site_session.read_profile_cookies(storage, self.host):
-            self._cookies.setdefault(self._cookie_key(record), record)
 
     def _on_forget(self) -> None:
         site_session.forget(self.host)

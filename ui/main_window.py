@@ -3630,6 +3630,14 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
             self.status_bar.showMessage(t("sign_in_site_needs_url", self.lang))
             return
         address = target if "://" in target else f"https://{target}"
+        # The window reads the session the profile holds from its file
+        # before opening it, and on Windows that file stays locked for as
+        # long as this process keeps the profile (a browser pass or an
+        # earlier window opened it). Let go of it first; a run still using
+        # it keeps it, and the window then sees only what the site sets.
+        from audit import driver
+
+        driver.release_session_profile(host)
         dialog = SiteSignInDialog(address, lang=self.lang, parent=self)
         accepted = dialog.exec() == QDialog.DialogCode.Accepted
         self._refresh_sign_in_button()
@@ -3641,6 +3649,9 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
         if accepted and dialog.saved:
             self.status_bar.showMessage(
                 t("sign_in_site_active", self.lang, host=host))
+        # Parented to this window, it would otherwise live as long as the
+        # app does, holding the profile it was given.
+        dialog.deleteLater()
 
     def _refresh_sign_in_button(self) -> None:
         """Say whether this host already has a session, on the button itself.

@@ -54,7 +54,7 @@ class TheReasonsAreTranslated(unittest.TestCase):
         keys = set(re.findall(r'_text\(\s*"([a-z_]+)"', source))
         keys |= set(re.findall(r'\bt\(\s*"([a-z_]+)"', source))
         self.assertTrue({"sign_in_site_on_idp", "sign_in_site_back",
-                         "sign_in_site_incomplete", "sign_in_site_checking",
+                         "sign_in_site_incomplete",
                          "sign_in_site_elsewhere"} <= keys)
         for key in keys:
             with self.subTest(key=key):
