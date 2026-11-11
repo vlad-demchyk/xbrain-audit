@@ -82,6 +82,12 @@ _OPTION_KINDS = {
     "max_pages": (KIND_SITE,),
     "site_controls": (KIND_SITE,),
     "no_session": (KIND_SITE,),
+    # Where the list of pages comes from: `""` follows links, `sharepoint`
+    # asks the site for its own page tree (`sharepoint_tree.discover`).
+    "page_tree": (KIND_SITE,),
+    # A path the crawl stays inside, such as one SharePoint site collection
+    # on a host that serves the whole tenant.
+    "site_scope": (KIND_SITE,),
     # The checkout behind a served page. A folder run is already reading the
     # files and has nothing to pair against; a page - fetched or saved to
     # disk - has a repository somewhere that wrote it, and `analyze_page_file`
@@ -171,10 +177,16 @@ class Suggestion:
 class Recipe:
     """A stack (or a kind) and the option it implies."""
     option: str
+    #: The value, or a callable taking the target and returning it - for an
+    #: option whose value is read off the address, such as a site's path.
     value: object
     reason: str
     stacks: tuple = ()
     kinds: tuple = KINDS
+    #: Only when no checkout is paired with the site. A run that names a
+    #: repository is about the parts that repository ships, not the site's
+    #: every page.
+    without_repo: bool = False
 
 
 #: Every stack that ships a dev server whose output is the page, not its
@@ -205,7 +217,27 @@ RECIPES = (
     # width that finds WCAG 1.4.10 overflow is not the default one.
     Recipe(option="breakpoints", value="all", reason="why_breakpoints_file",
            kinds=(KIND_FILE,)),
+    # SharePoint: every modern page is assembled in the browser, so a plain
+    # fetch reads an empty canvas - render every page rather than wait for
+    # each one to be diagnosed as a shell.
+    Recipe(option="render", value="always", reason="why_render_sharepoint",
+           stacks=("sharepoint",), kinds=(KIND_SITE,)),
+    # The site knows its pages: they are items in a library. Following links
+    # finds only what the navigation and the editors linked.
+    Recipe(option="page_tree", value="sharepoint",
+           reason="why_page_tree_sharepoint", stacks=("sharepoint",),
+           kinds=(KIND_SITE,), without_repo=True),
+    # One host serves every site of the tenant; the run is about one of them.
+    Recipe(option="site_scope", value=lambda target: _sharepoint_scope(target),
+           reason="why_site_scope_sharepoint", stacks=("sharepoint",),
+           kinds=(KIND_SITE,), without_repo=True),
 )
+
+
+def _sharepoint_scope(target: str) -> str:
+    import project_profile
+
+    return project_profile.sharepoint_site_path(target)
 
 
 @dataclass(frozen=True)
@@ -227,6 +259,11 @@ class Prompt:
 PROMPTS = (
     Recipe(option="site_url", value=None, reason="why_spfx_site_url",
            stacks=("spfx",), kinds=(KIND_REPO,)),
+    # A SharePoint site without a stored session answers every address with
+    # Microsoft's sign-in page. Asked for only when there is no session -
+    # see `build` - because the tool cannot sign in for the person.
+    Recipe(option="sign_in", value=None, reason="why_sign_in_sharepoint",
+           stacks=("sharepoint",), kinds=(KIND_SITE,)),
 )
 
 
@@ -343,8 +380,45 @@ def _profile_for(path: str):
         return None
 
 
+def _site_profile(target: str):
+    """What the address alone proves, or `None`: today, SharePoint Online."""
+    import project_profile
+
+    if not project_profile.is_sharepoint_online(target):
+        return None
+    return project_profile.detect_from_url(target)
+
+
+def _merged(first, second):
+    """Two profiles as one: the site's stacks, then the checkout's."""
+    if first is None:
+        return second
+    if second is None:
+        return first
+    import project_profile
+
+    merged = project_profile.Profile(root=getattr(second, "root", ""))
+    for source in (first, second):
+        for stack in source.stacks:
+            if stack.name not in merged.evidence:
+                merged.stacks.append(stack)
+                merged.evidence[stack.name] = source.evidence.get(stack.name, "")
+                merged.versions[stack.name] = source.versions.get(stack.name, "")
+    return merged
+
+
+def _has_session(target: str) -> bool:
+    import site_session
+
+    try:
+        return site_session.has_session(site_session.host_of(target))
+    except Exception:  # noqa: BLE001 - a session that cannot be read is none
+        return False
+
+
 def build(target: str, profile=None, forced_url: bool = False,
-          projects=None, repo: str = "", repo_profile=None) -> Plan:
+          projects=None, repo: str = "", repo_profile=None,
+          signed_in=None) -> Plan:
     """What to do about this target.
 
     `profile` and `projects` are passed in rather than detected here when the
@@ -354,7 +428,13 @@ def build(target: str, profile=None, forced_url: bool = False,
 
     `repo` is the checkout behind a site (`--repo`). Its stacks count as this
     run's stacks: a SharePoint page is not an SPFx project, and the thing
-    that knows it ships web parts is the repository, not the address.
+    that knows it ships web parts is the repository, not the address. The
+    address itself counts too where it proves something on its own: a
+    `*.sharepoint.com` host is SharePoint before a single page is read.
+
+    `signed_in` says whether a session is stored for the site's host;
+    `None` asks `site_session`. It only decides whether the sign-in prompt
+    is shown.
     """
     target = (target or "").strip()
     repo = (repo or "").strip()
@@ -364,7 +444,8 @@ def build(target: str, profile=None, forced_url: bool = False,
     if repo_profile is None and kind == KIND_SITE and repo:
         repo_profile = _profile_for(repo)
     if kind == KIND_SITE:
-        profile = repo_profile
+        profile = _merged(_site_profile(target) if target else None,
+                          repo_profile)
     if projects is None and kind == KIND_REPO and target:
         import project_profile
         try:
@@ -386,6 +467,8 @@ def build(target: str, profile=None, forced_url: bool = False,
         """The stack that asked, or `None`. `""` means the kind asked."""
         if kind not in recipe.kinds:
             return None
+        if recipe.without_repo and repo:
+            return None
         if not recipe.stacks:
             return ""
         for name in names:
@@ -398,14 +481,20 @@ def build(target: str, profile=None, forced_url: bool = False,
         name = _matches(recipe)
         if name is None:
             continue
+        value = recipe.value(target) if callable(recipe.value) else recipe.value
         suggestions.append(Suggestion(
-            option=recipe.option, value=recipe.value, reason=recipe.reason,
+            option=recipe.option, value=value, reason=recipe.reason,
             stack=name, evidence=evidence.get(name, "")))
     prompts = []
     for recipe in PROMPTS:
         name = _matches(recipe)
         if name is None:
             continue
+        if recipe.option == "sign_in":
+            if signed_in is None:
+                signed_in = _has_session(target)
+            if signed_in:
+                continue
         prompts.append(Prompt(field=recipe.option, reason=recipe.reason,
                               stack=name, evidence=evidence.get(name, "")))
     plan = Plan(kind=kind, target=target, profile=profile,
@@ -457,7 +546,7 @@ def choose_project(plan, name: str) -> str:
     """
     from pathlib import Path as _Path
 
-    wanted = (name or "").strip().rstrip("/")
+    wanted = (name or "").strip().rstrip("/\\")
     if not wanted:
         return ""
     target = _Path(plan.target) if plan.target else None
@@ -465,11 +554,11 @@ def choose_project(plan, name: str) -> str:
         root = _Path(profile.root)
         if wanted.lower() == root.name.lower():
             return str(root)
-        if str(root) == wanted:
+        if str(root) == wanted or root == _Path(wanted):
             return str(root)
         if target is not None:
             try:
-                if str(root.relative_to(target)) == wanted:
+                if root.relative_to(target) == _Path(wanted):
                     return str(root)
             except ValueError:  # pragma: no cover - not under the target
                 continue

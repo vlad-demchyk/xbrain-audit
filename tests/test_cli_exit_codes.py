@@ -18,7 +18,7 @@ EXIT_ERROR = 2
 
 def _cli(*args):
     return subprocess.run([sys.executable, str(ROOT / "cli.py"), *args],
-                          capture_output=True, text=True, timeout=180,
+                          capture_output=True, text=True, encoding="utf-8", timeout=180,
                           cwd=str(ROOT))
 
 

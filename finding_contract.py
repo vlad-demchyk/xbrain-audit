@@ -63,6 +63,12 @@ def serialize_issue(issue, *, source="") -> dict:
         # recomputing a hash.
         fingerprint=_fingerprint(issue, data["source"]),
     )
+    # Whose part of a SharePoint page this was found in. Only when a
+    # SharePoint run placed it, so every other record keeps its shape.
+    zone = (issue.details or {}).get("zone")
+    if zone is not None:
+        data["zone"] = zone
+        data["zone_name"] = (issue.details or {}).get("zone_name", "")
     return data
 
 

@@ -206,7 +206,7 @@ by `validation/corpus.py`, and a verdict is not one.
   confidence was lowered: the engine sets the severity, and what this tool
   does with an answer it doubts is mark it uncertain.
 - `source` - where the verdict came from: a named audit and task
-  (`Palmanova final audit, T-1961`) or `synthetic`, a shape written from the
+  (`municipal site final audit, T-1961`) or `synthetic`, a shape written from the
   rule's own definition. Synthetic entries guard a rule's edges; only the
   named ones say anything about real sites.
 

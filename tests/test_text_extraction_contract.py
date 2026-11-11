@@ -117,7 +117,7 @@ def test_hidden_aria_reference_is_a_declared_label_source_not_visible_body_copy(
 @pytest.mark.parametrize("platform", ["cms", "spa", "wordpress", "spfx"])
 def test_platform_fixtures_keep_known_unicode_spans_to_json(platform):
     root = Path(__file__).parent / "fixtures" / "text_extraction"
-    page = page_from_html((root / f"{platform}.html").read_text(), f"fixture://{platform}")
+    page = page_from_html((root / f"{platform}.html").read_text(encoding="utf-8"), f"fixture://{platform}")
     blocks = {b.block_id: b for b in page.blocks}
     records = [serialize_span(s, blocks[s.block_id]) for s in OfflineDetector().analyze_blocks(page.blocks)]
     assert any(r["text"] == "\u00a0" for r in json.loads(json.dumps(records)))

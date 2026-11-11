@@ -382,7 +382,7 @@ def _cache_path() -> Path:
 
 def _last_check() -> float:
     try:
-        data = json.loads(_cache_path().read_text())
+        data = json.loads(_cache_path().read_text(encoding="utf-8"))
         return float(data.get("at", 0))
     except (OSError, ValueError, TypeError):
         return 0.0
@@ -393,7 +393,7 @@ def _save_check(latest_version: str | None) -> None:
         _cache_path().write_text(json.dumps({
             "at": time.time(),
             "version": latest_version,
-        }))
+        }), encoding="utf-8")
     except OSError:
         pass
 

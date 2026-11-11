@@ -6,7 +6,7 @@ channel as a confirmed failure, and both were arriving at full weight.
 * HTML_CodeSniffer's contrast check emits `.Abs` - "this element is
   absolutely positioned and the background color can not be determined" - as
   a *serious* violation. On ten pages of `https://www.gov.uk/`, 60 of 61
-  `1_4_3` findings were that; on ten pages of the Palmanova site, 93 of 103.
+  `1_4_3` findings were that; on ten pages of a municipal WordPress site, 93 of 103.
 
 * axe puts a result in `incomplete` precisely when it cannot decide, and the
   entry still carries the `impact` of a real failure. That made "Unable to

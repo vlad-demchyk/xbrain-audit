@@ -99,12 +99,13 @@ def lighthouse(url: str, *, profile="mobile", repeats=1, run=None) -> dict:
             if profile == "desktop":
                 command.append("--preset=desktop")
             try:
-                completed = (run or subprocess.run)(command, capture_output=True, text=True, timeout=90)
+                completed = (run or subprocess.run)(command, capture_output=True, text=True,
+                                                    encoding="utf-8", errors="replace", timeout=90)
                 if completed.returncode:
                     runs.append({"status": "error", "reason": f"Lighthouse exit {completed.returncode}"})
                     samples.append({})
                     continue
-                payload = json.loads(output.read_text())
+                payload = json.loads(output.read_text(encoding="utf-8"))
                 if not isinstance(payload, dict):
                     raise ValueError("Lighthouse JSON is not an object")
                 if payload.get("runtimeError"):

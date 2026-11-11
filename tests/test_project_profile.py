@@ -135,7 +135,7 @@ class ExclusionsFollowFromTheStack(_Built):
     def test_bedrock_is_wordpress_installed_somewhere_else(self):
         """`web/wp/` is core and `web/app/` is the content directory, so
         every exclusion that knows WordPress by `wp-content/` misses all of
-        it. Measured on `~/repositories/illimity-bancaifis-it`: 106 of 129
+        it. Measured on a client's Bedrock repository: 106 of 129
         findings were about code the project does not write."""
         from repo_scanner import build_matcher, is_ignored
 
@@ -327,6 +327,76 @@ class ServedMarkupSaysWhatBuiltIt(_Built):
 
     def test_one_strong_signature_is_enough_on_its_own(self):
         self.assertIn("spfx", self._names("<script>_spPageContextInfo={}</script>"))
+
+
+class SharePointIsThePlatform(unittest.TestCase):
+    """SharePoint the platform, apart from SPFx the web parts on it."""
+
+    def test_the_online_host_is_sharepoint_before_any_markup(self):
+        profile = project_profile.detect_from_url(
+            "https://contoso.sharepoint.com/sites/ExampleSite")
+        self.assertEqual([s.name for s in profile.stacks], ["sharepoint"])
+        self.assertTrue(profile.stacks[0].hosted)
+        self.assertIn("contoso.sharepoint.com", profile.evidence["sharepoint"])
+
+    def test_tenant_hosts(self):
+        for host in ("contoso.sharepoint.com", "contoso-my.sharepoint.com",
+                     "contoso-admin.sharepoint.com",
+                     "https://CONTOSO.sharepoint.com/sites/x"):
+            with self.subTest(host=host):
+                self.assertEqual(project_profile.sharepoint_tenant(host),
+                                 "contoso")
+        for host in ("sharepoint.com", "example.com", "a.b.sharepoint.com",
+                     "contoso.sharepoint.com.evil.test"):
+            with self.subTest(host=host):
+                self.assertEqual(project_profile.sharepoint_tenant(host), "")
+        self.assertEqual(
+            project_profile.sharepoint_tenant_hosts("contoso.sharepoint.com"),
+            ("contoso.sharepoint.com", "contoso-my.sharepoint.com"))
+
+    def test_site_path(self):
+        cases = {
+            "https://contoso.sharepoint.com/sites/ExampleSite/SitePages/a.aspx":
+                "/sites/ExampleSite",
+            "https://contoso.sharepoint.com/teams/T": "/teams/T",
+            "https://contoso.sharepoint.com/": "/",
+            "https://contoso.sharepoint.com/SitePages/Home.aspx": "/",
+        }
+        for url, path in cases.items():
+            with self.subTest(url=url):
+                self.assertEqual(project_profile.sharepoint_site_path(url), path)
+
+    def test_on_premises_is_recognised_by_its_page_context(self):
+        for markup in ("<script>var _spPageContextInfo={};</script>",
+                       "<script>window.spClientSidePageContext={}</script>"):
+            with self.subTest(markup=markup):
+                names = [s.name for s in
+                         project_profile.detect_from_markup(markup).stacks]
+                self.assertIn("sharepoint", names)
+
+    def test_layouts_alone_is_not_enough(self):
+        names = [s.name for s in project_profile.detect_from_markup(
+            '<link href="/_layouts/15/a.css">').stacks]
+        self.assertNotIn("sharepoint", names)
+
+    def test_microsofts_chrome_is_owned_by_sharepoint_not_spfx(self):
+        markup = "<script>_spPageContextInfo={}</script>"
+        names = [s.name for s in
+                 project_profile.detect_from_markup(markup).stacks]
+        self.assertEqual(names[0], "sharepoint")
+        for snippet in ('<link href="/_layouts/15/odsp-next/suite.css">',
+                        '<script src="https://res-1.cdn.office.net/files/'
+                        'sp-client/sp-pages-assembly.js"></script>'):
+            with self.subTest(snippet=snippet):
+                self.assertEqual(
+                    project_profile.platform_owner(names, snippet),
+                    "sharepoint")
+        # The tenant's own SPFx bundle is the author's.
+        self.assertEqual(project_profile.platform_owner(
+            names, '<script src="/sites/x/ClientSideAssets/part.js">'), "")
+        self.assertEqual(project_profile.platform_owner(
+            names, '<script src="https://publiccdn.sharepointonline.com/'
+                   'contoso.sharepoint.com/x.js">'), "")
 
 
 if __name__ == "__main__":

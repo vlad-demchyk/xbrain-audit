@@ -95,6 +95,12 @@ class ReportFinding:
     #: report says which rows are not the reader's to fix. Empty is the
     #: author's own markup, which is most of them.
     owner: str = ""
+    #: Whose part of a SharePoint page this is: `custom` (an SPFx part or a
+    #: placeholder) or `author` (what the page's author wrote), and the
+    #: part's name. Empty on any other run. Microsoft's own zone never
+    #: appears here: it is not audited. See `audit.sharepoint_zones`.
+    zone: str = ""
+    zone_name: str = ""
     #: How many independent engines found this. 1 unless the browser pass ran
     #: and a second engine corroborated; the number the JSON already carried
     #: and the printed report did not.
@@ -179,6 +185,7 @@ class ReportFinding:
         import json
 
         return (self.category, self.severity, self.rule_id, self.confidence,
+                self.zone, self.zone_name,
                 self.title, self.found, self.why, self.fix,
                 mask_generated_ids(" ".join((self.snippet or "").split())),
                 self.replacement, self.engine, self.wcag,
@@ -251,6 +258,9 @@ class ReportModel:
     #: in it that would be a lie.
     auth: dict = field(default_factory=dict)
     coverage: dict = field(default_factory=dict)
+    #: A SharePoint run's split: `audit.sharepoint_zones.Summary.as_dict()`.
+    #: Empty for any other run, and then the template prints nothing.
+    sharepoint: dict = field(default_factory=dict)
 
     def counts_by_severity(self) -> dict:
         counts: dict[str, int] = {}
@@ -546,6 +556,8 @@ def from_accessibility(result, lang: str = "uk") -> ReportModel:
                 engine=issue.engine,
                 wcag=explanation.wcag,
                 owner=getattr(issue, "owner", ""),
+                zone=(issue.details or {}).get("zone", "") or "",
+                zone_name=(issue.details or {}).get("zone_name", "") or "",
                 agreement=(issue.details or {}).get("agreement", 1),
                 element=element_of(issue.snippet, issue.selector),
                 rule_id=issue.rule_id,
@@ -556,7 +568,8 @@ def from_accessibility(result, lang: str = "uk") -> ReportModel:
             ))
     return ReportModel(meta=ReportMeta(target=result.root, mode=f"audit-{result.mode}"),
                        findings=findings, auth=_auth_summary(result),
-                       coverage=json_value(getattr(result, "coverage", {})))
+                       coverage=json_value(getattr(result, "coverage", {})),
+                       sharepoint=dict(getattr(result, "sharepoint", None) or {}))
 
 
 def _auth_summary(result) -> dict:

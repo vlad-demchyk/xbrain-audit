@@ -33,6 +33,7 @@ to replace.
 from __future__ import annotations
 
 import shutil
+import sys
 import subprocess
 import time
 
@@ -56,6 +57,10 @@ def cpu_seconds(pid: int) -> float | None:
     """
     if not pid or pid <= 0:
         return None
+    if sys.platform == "win32":
+        # Windows has no `ps`, and the one Git for Windows puts on PATH is
+        # MSYS's, which knows neither `-o cputime=` nor Windows pids.
+        return _windows_cpu_seconds(pid)
     if not shutil.which("ps"):
         return None
     try:
@@ -64,6 +69,46 @@ def cpu_seconds(pid: int) -> float | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return parse_cputime(out.stdout)
+
+
+def _windows_cpu_seconds(pid: int) -> float | None:
+    """Kernel plus user time of `pid` from `GetProcessTimes`, or None."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except ImportError:  # pragma: no cover - ctypes ships with CPython
+        return None
+
+    query_limited_information = 0x1000
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    except (AttributeError, OSError):
+        return None
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
+    kernel32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (
+        ctypes.POINTER(wintypes.FILETIME),) * 4
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    try:
+        handle = kernel32.OpenProcess(query_limited_information, False, int(pid))
+    except (OverflowError, ctypes.ArgumentError):
+        return None
+    if not handle:
+        return None
+    try:
+        times = [wintypes.FILETIME() for _ in range(4)]
+        if not kernel32.GetProcessTimes(handle, *(ctypes.byref(t) for t in times)):
+            return None
+
+        def ticks(filetime) -> int:
+            return (filetime.dwHighDateTime << 32) | filetime.dwLowDateTime
+
+        _created, _exited, kernel, user = times
+        # FILETIME counts 100-nanosecond intervals.
+        return (ticks(kernel) + ticks(user)) / 10_000_000
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def parse_cputime(raw: str) -> float | None:

@@ -735,7 +735,7 @@ STATE_SCRIPT = r"""
     // them. It used to be the only one, in five languages, matched against
     // the link's text: measured on a live trilingual site, the German page
     // was reported as having no skip link while its own skip link -
-    // `<a id="palmanova-skip-to-content" class="…skiplink-link"
+    // `<a id="site-skip-to-content" class="…skiplink-link"
     // href="#main-container">Zum Inhalt springen</a>` - was quoted in the
     // finding. A page is not missing a skip link because the tool speaks
     // fewer languages than the page does.

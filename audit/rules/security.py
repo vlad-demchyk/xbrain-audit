@@ -78,7 +78,7 @@ class UnsandboxedFrame(SecurityRule):
     # page around it, and browsers already stop it from navigating the top
     # window or opening a popup without the person's own click. What is
     # left is hardening, and every YouTube and Google Maps embed on a site
-    # lacks it: 111 rows on one crawl of Palmanova, ranked beside contrast
+    # lacks it: 111 rows on one crawl of a municipal WordPress site, ranked beside contrast
     # failures a visitor actually meets.
     severity = MODERATE
     wcag = ()

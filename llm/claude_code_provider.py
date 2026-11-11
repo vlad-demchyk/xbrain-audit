@@ -157,7 +157,9 @@ class ClaudeCodeProvider(LLMProvider):
         try:
             completed = subprocess.run(
                 self._argv(system), input=user_text, capture_output=True,
-                text=True, timeout=self.timeout, cwd=self._neutral_workdir(),
+                # UTF-8 both ways: the locale default on Windows (cp1252)
+                # cannot even encode a Cyrillic prompt.
+                text=True, encoding="utf-8", errors="replace", timeout=self.timeout, cwd=self._neutral_workdir(),
             )
         except subprocess.TimeoutExpired as exc:
             raise LLMUnavailable(
@@ -196,7 +198,7 @@ class ClaudeCodeProvider(LLMProvider):
         try:
             completed = subprocess.run(
                 [self._binary, "auth", "status"], capture_output=True,
-                text=True, timeout=30,
+                text=True, encoding="utf-8", errors="replace", timeout=30,
             )
             payload = json.loads(completed.stdout or "{}")
         except (OSError, subprocess.TimeoutExpired, ValueError) as exc:

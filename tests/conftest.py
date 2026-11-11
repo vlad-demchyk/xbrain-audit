@@ -50,6 +50,11 @@ os.environ["XANALYZE_REPORT_ROOT"] = _REPORT_ROOT.name
 # Set this before pytest imports test modules, several of which create a
 # QApplication directly instead of going through audit.driver's helper.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Windows: the offscreen platform finds no fonts on its own (see the helper).
+if sys.platform == "win32":
+    from audit.driver import offscreen_fonts
+
+    offscreen_fonts()
 _CHROMIUM_FLAGS = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
 _HEADLESS_FLAGS = ("--disable-gpu", "--disable-software-rasterizer", "--no-sandbox")
 _MISSING_HEADLESS_FLAGS = [flag for flag in _HEADLESS_FLAGS

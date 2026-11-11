@@ -136,7 +136,8 @@ class TranslationCatalog(unittest.TestCase):
         for lang in LANGUAGES:
             with self.subTest(lang=lang):
                 shown = display_item(item, lang)
-                self.assertIn("/tmp/legacy", shown)
+                # The path as this OS writes it: `\tmp\legacy` on Windows.
+                self.assertIn(str(Path("/tmp/legacy")), shown)
                 self.assertNotIn("pre-rename settings", shown)
 
     def test_tui_header_subtitle_is_localized_in_every_language(self):

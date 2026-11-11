@@ -4,14 +4,14 @@ A stack pack is easy to write and hard to justify. The plan for this module
 listed five candidates - a missing `wp_head()`, a hardcoded `<script src>`
 instead of `wp_enqueue_script`, a thumbnail with no alt, an unlabelled search
 form, unescaped output - and four of them measured **zero** on the WordPress
-code available here: the theme at `~/Local Sites/palmanova` (two themes, 534
+code available here: the theme at `~/Local Sites/municipal-site` (two themes, 534
 PHP files) calls `wp_head()` in every file that opens a `<head>`, enqueues
 every script, and has no unlabelled search form. Shipping those four anyway
 would grow the rule list without growing what the tool can find, which is the
 way a rule list stops being trustworthy.
 
 The fifth one measured **592**: 577 in the installed `design-comuni` theme
-and 15 in the site's own `palmanova_wp`. That is `WordPress.Security.
+and 15 in the site's own `municipal_wp`. That is `WordPress.Security.
 EscapeOutput` in WPCS terms, and it is the defect a WordPress review actually
 finds.
 

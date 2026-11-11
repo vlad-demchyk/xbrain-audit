@@ -97,6 +97,10 @@ class AccessibilityResult:
     #: and the rules, so a surface can say so instead of presenting the shorter
     #: list as the whole answer. Empty when the target was not local.
     environment: dict = field(default_factory=dict)
+    #: How a SharePoint run split its pages: the zones audited, the parts
+    #: named, and what of Microsoft's markup was left out and how much
+    #: (`audit.sharepoint_zones.Summary.as_dict`). Empty for any other run.
+    sharepoint: dict = field(default_factory=dict)
 
     def issues(self) -> list:
         out = []
@@ -528,8 +532,17 @@ def analyze_pages(pages, root: str, rules=None, ai_review=None,
                   site_controls: bool = False,
                   within: str = "",
                   web_parts=(),
-                  include_environment: bool = False) -> AccessibilityResult:
+                  include_environment: bool = False,
+                  sharepoint: bool = False,
+                  ootb_registry=None) -> AccessibilityResult:
     """Web mode: run over what the crawler returned.
+
+    `sharepoint` reads every page as a modern SharePoint page: Microsoft's
+    chrome is left out and counted, SPFx parts and placeholders are audited
+    in full and named, and what the author put into Microsoft's own web
+    parts is held to the content rules only. See `audit.sharepoint_zones`;
+    `web_parts`, when given, names the repository's parts among them, and
+    `ootb_registry` is what is known of Microsoft's part ids.
 
     On a local address (`localhost`, `*.local`, a private IP) the findings that
     describe the server rather than the page - missing security headers, `http`
@@ -550,6 +563,11 @@ def analyze_pages(pages, root: str, rules=None, ai_review=None,
     rules = rules if rules is not None else RuleRegistry.all_rules()
     result = AccessibilityResult(root=root, mode="web",
                                  rules_run=[r.id for r in rules])
+    zone_summary = None
+    if sharepoint:
+        from audit import sharepoint_zones
+
+        zone_summary = sharepoint_zones.Summary()
     for page in pages:
         if page.error or not page.raw_html:
             result.documents.append(DocumentReport(
@@ -564,6 +582,11 @@ def analyze_pages(pages, root: str, rules=None, ai_review=None,
             # regex and not for reading.
             result.markup_sample = page.raw_html[:_MARKUP_SAMPLE]
         result.markup_by_source[page.url] = page.raw_html
+        if zone_summary is not None:
+            result.documents.extend(_documents_for_zones(
+                page, rules, ai_review, web_parts, zone_summary,
+                ootb_registry))
+            continue
         if web_parts:
             # One document per part *found on this page*, not one per page.
             # A repository ships thirty of them and a page carries three;
@@ -605,7 +628,11 @@ def analyze_pages(pages, root: str, rules=None, ai_review=None,
     # the pages anyone wanted audited. See `audit.authwall`.
     result.auth = authwall_pass.scan(pages)
 
-    result.documents.extend(header_pass.as_documents(pages))
+    if zone_summary is None:
+        # A SharePoint run leaves the response headers out: SharePoint
+        # Online's servers send them, and nothing a site owner or a part's
+        # developer does changes one.
+        result.documents.extend(header_pass.as_documents(pages))
     # The crawler already paid for these response codes and headers. Turn
     # confirmed noindex directives and links to reached HTTP failures into
     # SEO findings without treating unvisited, depth-limited URLs as broken.
@@ -628,10 +655,16 @@ def analyze_pages(pages, root: str, rules=None, ai_review=None,
         # image a crawl found rather than the first forty: on a 250-page
         # site that is minutes of requests, and a stage that prints nothing
         # for minutes reads as a hang.
-        scan = media_pass.scan_page_media(pages, fetch=media_fetch,
+        # On SharePoint only the images in audited zones: an icon in the
+        # suite bar is Microsoft's, and its provenance is nobody's question.
+        media_pages = (pages if zone_summary is None
+                       else _zone_markup_pages(pages, web_parts, ootb_registry))
+        scan = media_pass.scan_page_media(media_pages, fetch=media_fetch,
                                           progress_cb=media_progress)
         result.media = scan
         result.documents.extend(media_pass.as_web_documents(scan))
+    if zone_summary is not None:
+        result.sharepoint = zone_summary.as_dict()
     owned = attribute_ownership(result)
     environment.apply(result, include=include_environment)
     applog.info("audit.web_done", pages=len(pages),
@@ -658,10 +691,14 @@ def attribute_ownership(result) -> dict:
     severity is lowered - see `PLATFORM_ASSETS` for why suppression is the
     wrong answer here.
     """
-    from project_profile import detect_from_markup, platform_owner
+    from project_profile import detect_from_url, platform_owner
 
-    names = [stack.name for stack in
-             detect_from_markup(getattr(result, "markup_sample", "") or "").stacks]
+    # The address counts as well as the markup: a `*.sharepoint.com` host is
+    # SharePoint before a page is read, and the first page a run keeps may be
+    # one whose markup names no platform at all.
+    root = getattr(result, "root", "") or ""
+    markup = getattr(result, "markup_sample", "") or ""
+    names = [stack.name for stack in detect_from_url(root, markup).stacks]
     counts: dict = {}
     if not names:
         return counts
@@ -729,20 +766,80 @@ def _documents_for_parts(page, rules, ai_review, web_parts) -> list:
     found = []
     for part in web_parts:
         try:
-            element, how, selector = within_mod.narrow_any(document,
-                                                           part.selectors())
+            matches = within_mod.narrow_all(document, part.selectors())
         except within_mod.ScopeNotFound:
             continue
-        report = analyze_document(str(element), page.url, rules,
+        # Every placement, not only the first: a part put on a page twice is
+        # two deliveries of the same code, and the second one used to go
+        # unread without the report saying so.
+        for index, (element, how, selector) in enumerate(matches, 1):
+            report = analyze_document(str(element), page.url, rules,
+                                      ai_review=ai_review,
+                                      document_kind="fragment")
+            for issue in report.issues:
+                details = dict(issue.details or {})
+                details["web_part"] = part.alias
+                details["matched_by"] = f"{selector} ({how})"
+                if len(matches) > 1:
+                    details["instance"] = index
+                issue.details = details
+            found.append(report)
+    return found
+
+
+def _documents_for_zones(page, rules, ai_review, web_parts, summary,
+                         registry=None) -> list:
+    """One page of a SharePoint run: a document per zone, Microsoft's left out.
+
+    Each zone is audited as a fragment and its findings carry the zone, the
+    part's name and the evidence that placed it. A page on which no canvas
+    was recognised is reported with an error rather than audited whole -
+    auditing it whole is exactly the tenant's chrome this mode exists to
+    leave out, and auditing nothing without a word would read as clean.
+    """
+    from audit import sharepoint_zones
+
+    try:
+        _document, zone_map = sharepoint_zones.map_page(
+            page.raw_html or "", web_parts, registry)
+    except Exception as exc:  # noqa: BLE001 - malformed markup is not a crash
+        return [DocumentReport(source=page.url, error=str(exc))]
+    summary.add_page(zone_map, page.url)
+    if not zone_map.recognised:
+        return [DocumentReport(
+            source=page.url,
+            error="no SharePoint canvas recognised on this page; it was not "
+                  "audited (sharepoint mode reads web parts, not the chrome)")]
+    found = []
+    for zone in zone_map.zones:
+        report = analyze_document(str(zone.element), page.url, rules,
                                   ai_review=ai_review,
                                   document_kind="fragment")
-        for issue in report.issues:
-            details = dict(issue.details or {})
-            details["web_part"] = part.alias
-            details["matched_by"] = f"{selector} ({how})"
-            issue.details = details
+        report.issues = sharepoint_zones.apply_zone(report.issues, zone,
+                                                    summary)
         found.append(report)
     return found
+
+
+def _zone_markup_pages(pages, web_parts=(), registry=None) -> list:
+    """The pages with only their audited zones as markup, for the media pass."""
+    from dataclasses import replace as replace_page
+
+    from audit import sharepoint_zones
+
+    narrowed = []
+    for page in pages:
+        if page.error or not page.raw_html:
+            narrowed.append(page)
+            continue
+        _document, zone_map = sharepoint_zones.map_page(page.raw_html,
+                                                        web_parts, registry)
+        markup = "".join(str(zone.element) for zone in zone_map.zones)
+        try:
+            narrowed.append(replace_page(page, raw_html=markup))
+        except TypeError:  # not a dataclass: a test double
+            narrowed.append(page)
+    return narrowed
 
 
 def _mask_for_audit(markup: str, path: str) -> str:

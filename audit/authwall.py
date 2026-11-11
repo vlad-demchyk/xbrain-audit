@@ -24,6 +24,16 @@ What counts as evidence, and why each one:
 * **A redirect to something that looks like a sign-in address.** The status
   is 200 and the body is real, so nothing else in the pipeline notices; the
   only trace is that the final URL is not the one that was asked for.
+* **An identity provider.** A redirect that ends on Microsoft Entra ID
+  (`login.microsoftonline.com` and its siblings), an Azure AD B2C tenant
+  (`*.b2clogin.com`) or ADFS (`/adfs/ls`) is a sign-in by definition, and
+  so are the OAuth `authorize` endpoints and SharePoint's own hops
+  (`/_layouts/15/Authenticate.aspx`, `/_forms/default.aspx`). These count
+  as certain: the Microsoft sign-in page is built by script and carries no
+  `<input>` in its HTML, so the password-field signal never fires on it.
+* **SharePoint's 403.** SharePoint Online answers a request without a
+  session with `403` and `X-Forms_Based_Auth_Required` - a refusal that
+  does say how to get in, so it is certain rather than the weak 403.
 * **A password field.** `<input type="password">`, or a form posting to
   something with login in its name. This is the signal that catches a
   single-page app, where the address never changes at all.
@@ -36,7 +46,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
 
 #: The signals, weakest last. Also the translation-key stems.
 HTTP_401 = "http-401"
@@ -52,6 +62,26 @@ _LOGIN_PATH = re.compile(
     r"account/login|users/sign_in|wp-login\.php)(/|$|\.)", re.I)
 _RETURN_PARAM = re.compile(
     r"[?&](returnurl|return_to|redirect_uri|redirect_to|next|continue)=", re.I)
+
+#: Hosts that do nothing but sign people in. The single list: anything else
+#: that has to recognise a sign-in (`sharepoint_tree` among them) asks
+#: `is_definite_login_url` rather than keeping its own copy.
+IDENTITY_PROVIDER_HOSTS = (
+    "login.microsoftonline.com",
+    "login.microsoft.com",
+    "login.windows.net",
+    "login.live.com",
+)
+#: Host suffixes that are an identity provider whatever the tenant prefix.
+IDENTITY_PROVIDER_SUFFIXES = (".b2clogin.com",)
+#: Paths that are a sign-in step on any host: ADFS, the OAuth authorize
+#: endpoints, and SharePoint's own hops towards the identity provider.
+_DEFINITE_LOGIN_PATH = re.compile(
+    r"(^|/)(adfs/ls|oauth2/authorize|oauth2/v2\.0/authorize|"
+    r"_forms/default\.aspx|_layouts/15/authenticate\.aspx|_login|_trust)"
+    r"(/|$)", re.I)
+#: SharePoint's "no session" answer to a fetcher: 403 with this header.
+FORMS_AUTH_HEADER = "x-forms_based_auth_required"
 
 _PASSWORD_INPUT = re.compile(
     r"<input[^>]+type\s*=\s*[\"']?password", re.I)
@@ -70,6 +100,11 @@ class Wall:
     #: redirect target, the form's action. It is the line a reader checks
     #: the diagnosis against.
     detail: str = ""
+    #: Set when the evidence settles it even though the signal alone would
+    #: not: a 403 carrying `X-Forms_Based_Auth_Required`, a redirect that
+    #: ended on an identity provider. Kept beside `signal` rather than as new
+    #: signals so every surface that names the signal still knows its words.
+    definite: bool = False
 
     @property
     def certain(self) -> bool:
@@ -80,13 +115,66 @@ class Wall:
         an SSO hop that lands somewhere real - both are worth reporting and
         neither is proof.
         """
-        return self.signal in (HTTP_401, PASSWORD_FORM)
+        return self.definite or self.signal in (HTTP_401, PASSWORD_FORM)
+
+
+def is_identity_provider_host(host: str) -> bool:
+    host = (host or "").lower().rstrip(".")
+    if host in IDENTITY_PROVIDER_HOSTS:
+        return True
+    return any(host.endswith(suffix) for suffix in IDENTITY_PROVIDER_SUFFIXES)
+
+
+def is_definite_login_url(url: str) -> bool:
+    """Is this address a sign-in step, whatever page it is on?
+
+    True for an identity provider's host and for the paths that exist only
+    to sign someone in. Unlike `_looks_like_login_url` it never guesses from
+    a word in the path, which is what lets a caller treat it as proof.
+    """
+    parsed = urlparse(url or "")
+    if is_identity_provider_host(parsed.hostname or ""):
+        return True
+    return bool(_DEFINITE_LOGIN_PATH.search(parsed.path or ""))
+
+
+def forms_auth_required(headers) -> bool:
+    """Did SharePoint say "sign in" in the one header it uses for that?"""
+    if not headers:
+        return False
+    try:
+        items = headers.items()
+    except AttributeError:
+        return False
+    return any(str(key).lower() == FORMS_AUTH_HEADER for key, _value in items)
+
+
+def _query_keys(query: str) -> str:
+    """The query with its keys percent-decoded, values dropped.
+
+    Microsoft's sign-in redirect writes `redirect%5Furi=`: an encoded
+    underscore in the key, which the pattern would otherwise never see.
+    """
+    keys = [key for key, _value in parse_qsl(query or "", keep_blank_values=True)]
+    return "?" + "&".join(f"{key}=" for key in keys) if keys else ""
 
 
 def _looks_like_login_url(url: str) -> bool:
     parsed = urlparse(url or "")
-    return bool(_LOGIN_PATH.search(parsed.path or "")
-                or _RETURN_PARAM.search(f"?{parsed.query}" if parsed.query else ""))
+    return bool(is_definite_login_url(url)
+                or _LOGIN_PATH.search(parsed.path or "")
+                or _RETURN_PARAM.search(_query_keys(parsed.query)))
+
+
+def _without_query(url: str) -> str:
+    """Where a redirect went, without what it carried.
+
+    An identity provider's query holds `state`, `nonce` and the return
+    address: none of it is a secret on its own and none of it belongs in a
+    report a person forwards.
+    """
+    parsed = urlparse(url or "")
+    return parsed._replace(query="", fragment="").geturl()
 
 
 def inspect(page) -> Wall | None:
@@ -106,6 +194,10 @@ def inspect(page) -> Wall | None:
         scheme = (headers.get("www-authenticate") or "").split(" ")[0]
         return Wall(url, HTTP_401, scheme or "unnamed scheme")
 
+    if forms_auth_required(headers):
+        return Wall(url, HTTP_403 if status == 403 else LOGIN_REDIRECT,
+                    "X-Forms_Based_Auth_Required", definite=True)
+
     if markup:
         if _PASSWORD_INPUT.search(markup) or _CURRENT_PASSWORD.search(markup):
             match = _LOGIN_FORM_ACTION.search(markup)
@@ -114,13 +206,18 @@ def inspect(page) -> Wall | None:
 
     final = getattr(diagnostics, "final_url", "") or ""
     if final and final != url and _looks_like_login_url(final):
-        return Wall(url, LOGIN_REDIRECT, final)
+        return Wall(url, LOGIN_REDIRECT, _without_query(final),
+                    definite=is_definite_login_url(final))
+    # An identity provider's page reached directly, or a crawl that followed
+    # a link to one: no body check, because that page is built by script.
+    if is_definite_login_url(url):
+        return Wall(url, LOGIN_REDIRECT, _without_query(url), definite=True)
     # An address that *is* a login page, reached directly rather than by
     # redirect - a crawl that followed a "Sign in" link. Only when the body
     # gave nothing away, so a real page at `/account/login/help` that has no
     # password field is not called a wall on its name alone.
     if not markup and _looks_like_login_url(url):
-        return Wall(url, LOGIN_REDIRECT, url)
+        return Wall(url, LOGIN_REDIRECT, _without_query(url))
 
     if status == 403:
         return Wall(url, HTTP_403, "403 with no WWW-Authenticate")

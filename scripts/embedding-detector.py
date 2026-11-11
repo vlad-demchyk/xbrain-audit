@@ -84,7 +84,7 @@ def load_corpus(corpus_path: str) -> tuple[list[str], list[str]]:
     """Load labeled corpus."""
     texts = []
     labels = []
-    with open(corpus_path) as f:
+    with open(corpus_path, encoding="utf-8") as f:
         for line in f:
             if line.strip():
                 row = json.loads(line)

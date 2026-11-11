@@ -136,7 +136,7 @@ STACKS = (
     # `web/wp/`, the content directory is `web/app/`, and configuration is
     # Composer's and Roots' rather than WordPress's own.
     #
-    # Measured 2026-09-01 on `~/repositories/illimity-bancaifis-it`: 129
+    # Measured 2026-09-01 on a client's Bedrock repository: 129
     # findings, of which **106** were about code this project does not
     # write - 62 in WordPress's own `.l10n.php` translation tables, 37 in
     # core files under `web/wp/` (`xmlrpc.php`, `wp-mail.php`), 7 in the
@@ -159,7 +159,7 @@ STACKS = (
           # thinks of, and core is not only in directories: an installation
           # keeps a dozen entry points in its root, and its translation
           # tables in `wp-content/languages/`. Measured 2026-09-01 on
-          # `~/Local Sites/palmanova`: of 1217 findings, 47 came from
+          # `~/Local Sites/municipal-site`: of 1217 findings, 47 came from
           # `wp-login.php`, `wp-signup.php`, `wp-mail.php`, `xmlrpc.php` and
           # their siblings, 314 from GlotPress `.l10n.php` tables, and 11
           # from WordPress's own `readme.html`. None of that is written by
@@ -334,6 +334,13 @@ STACKS = (
           why="Carrd hosts and renders the page"),
     Stack("typo3", hosted=True,
           why="TYPO3 renders the page server-side"),
+    # Not the same thing as `spfx`. SPFx is a web part somebody wrote and
+    # deployed; SharePoint is the platform that serves the page around it -
+    # the suite bar, the navigation, the canvas. Recognised by the host for
+    # SharePoint Online and by the page context for an on-premises farm.
+    Stack("sharepoint", hosted=True,
+          why="Microsoft serves the page shell: the suite bar, the "
+              "navigation and the canvas around every web part"),
     Stack("storybook",
           markers=(".storybook/main.js", ".storybook/main.ts"),
           excludes=("storybook-static/",),
@@ -444,6 +451,16 @@ _SIGNATURES = (
     # also a plausible folder name anyone could pick; the literal `SPFx`
     # appears in prose about SharePoint as often as in a page built with it.
     # Neither is allowed to name a platform alone.
+    #
+    # SharePoint itself, listed before `spfx` so a page carrying both names
+    # the platform first: the order decides who owns `/_layouts/15/`.
+    # `/_layouts/15/` alone is a path anyone could create, so it needs one of
+    # the two context objects only SharePoint writes.
+    Signature("sharepoint", r'_spPageContextInfo', "SharePoint page context"),
+    Signature("sharepoint", r'spClientSidePageContext',
+              "modern page context"),
+    Signature("sharepoint", r'/_layouts/15/', "/_layouts/15/ path",
+              confidence=60),
     Signature("spfx", r'/ClientSideAssets/', "ClientSideAssets path", confidence=60),
     Signature("spfx", r'\bSPFx\b', "the string SPFx", confidence=40),
     Signature("spfx", r'_spPageContextInfo', "SharePoint page context", confidence=100),
@@ -556,8 +573,96 @@ PLATFORM_ASSETS: dict = {
     "wix": ("static.parastorage.com",),
     "squarespace": ("assets.squarespace.com/universal",),
     "ghost": ("/public/cards.min.",),
-    "spfx": ("/_layouts/15/",),
+    # What Microsoft serves on a SharePoint page and nobody in the tenant can
+    # change - the same part `audit.sharepoint_zones` calls the `microsoft`
+    # zone. Not the tenant's public CDN (`publiccdn.sharepointonline.com`)
+    # and not `/ClientSideAssets/`: those carry the tenant's own SPFx code.
+    # `spfx` owns nothing here for the same reason a Next.js build does not:
+    # a web part is the author's code, compiled.
+    "sharepoint": ("/_layouts/15/", "spoprod-a.akamaihd.net",
+                   "cdn.office.net/files/sp-client",
+                   "static.sharepointonline.com"),
 }
+
+
+#: Host suffixes of SharePoint Online, commercial and US government clouds.
+SHAREPOINT_ONLINE_SUFFIXES = (".sharepoint.com", ".sharepoint.us")
+#: The suffixes a tenant's own host carries besides the bare tenant name:
+#: OneDrive (`-my`) and the admin centre (`-admin`).
+_SHAREPOINT_TENANT_SUFFIXES = ("-my", "-admin")
+
+
+def _host_of(url_or_host: str) -> str:
+    from urllib.parse import urlparse
+
+    text = (url_or_host or "").strip()
+    parsed = urlparse(text if "://" in text else f"https://{text}")
+    return (parsed.hostname or "").lower().rstrip(".")
+
+
+def sharepoint_tenant(url_or_host: str) -> str:
+    """The tenant name of a SharePoint Online host, or `""`.
+
+    `contoso.sharepoint.com`, `contoso-my.sharepoint.com` and
+    `contoso-admin.sharepoint.com` are all the tenant `contoso`.
+    """
+    host = _host_of(url_or_host)
+    for suffix in SHAREPOINT_ONLINE_SUFFIXES:
+        if host.endswith(suffix):
+            label = host[: -len(suffix)]
+            if not label or "." in label:
+                return ""
+            for extra in _SHAREPOINT_TENANT_SUFFIXES:
+                if label.endswith(extra):
+                    return label[: -len(extra)]
+            return label
+    return ""
+
+
+def is_sharepoint_online(url_or_host: str) -> bool:
+    return bool(sharepoint_tenant(url_or_host))
+
+
+def sharepoint_tenant_hosts(url_or_host: str) -> tuple:
+    """The hosts a SharePoint Online sign-in for this tenant is good for.
+
+    The site host and the tenant's OneDrive. Never the identity provider's
+    host and never the bare `sharepoint.com`, which every tenant shares.
+    """
+    host = _host_of(url_or_host)
+    tenant = sharepoint_tenant(host)
+    if not tenant:
+        return ()
+    suffix = next(s for s in SHAREPOINT_ONLINE_SUFFIXES if host.endswith(s))
+    return (f"{tenant}{suffix}", f"{tenant}-my{suffix}")
+
+
+def sharepoint_site_path(url: str) -> str:
+    """The site collection path of a SharePoint address: `/sites/x`, `/teams/x`
+    or `/` for the root site. What a crawl of that site stays inside."""
+    from urllib.parse import unquote, urlparse
+
+    segments = [s for s in unquote(urlparse(url or "").path).split("/") if s]
+    if len(segments) >= 2 and segments[0].lower() in ("sites", "teams",
+                                                      "portals"):
+        return f"/{segments[0]}/{segments[1]}"
+    return "/"
+
+
+def detect_from_url(url: str, markup: str = "") -> Profile:
+    """What an address and its markup say built it.
+
+    The host settles SharePoint Online on its own - `*.sharepoint.com`
+    serves nothing else - which matters because the page that answers before
+    a sign-in is Microsoft's sign-in page, whose markup names no platform at
+    all. Everything else is `detect_from_markup`.
+    """
+    profile = detect_from_markup(markup)
+    if is_sharepoint_online(url) and "sharepoint" not in profile.evidence:
+        profile.stacks.insert(0, _stack_by_name("sharepoint"))
+        profile.evidence["sharepoint"] = f"host {_host_of(url)}"
+        profile.versions["sharepoint"] = "online"
+    return profile
 
 
 def platform_owner(stack_names, text: str) -> str:
@@ -727,7 +832,7 @@ def _content_marker_label(root: Path, base: Path, marker) -> str:
             except OSError:
                 continue
     try:
-        where = str((root / path_pattern).relative_to(base))
+        where = (root / path_pattern).relative_to(base).as_posix()
     except ValueError:  # pragma: no cover - root is always under base
         where = path_pattern
     return f"{where} -> {header}:"
@@ -738,7 +843,7 @@ def _marker_label(root: Path, base: Path, marker) -> str:
     if isinstance(marker, tuple):
         return " + ".join(_marker_label(root, base, part) for part in marker)
     try:
-        return str((root / marker).relative_to(base))
+        return (root / marker).relative_to(base).as_posix()
     except ValueError:  # pragma: no cover - root is always under base
         return str(marker)
 
@@ -820,7 +925,7 @@ def detect(root: str | Path, depth: int = None) -> Profile:
                 for name, stack_name in _DEPENDENCY_STACKS.items():
                     if stack_name == stack.name and name in dependencies:
                         try:
-                            rel = str((where / "package.json").relative_to(path))
+                            rel = (where / "package.json").relative_to(path).as_posix()
                         except ValueError:  # pragma: no cover - path is under root
                             rel = "package.json"
                         proof = f"{rel} -> {name}"
@@ -879,7 +984,7 @@ def projects(root: str | Path) -> list:
     for where in _search_roots(path):
         if matcher is not None and where != path:
             try:
-                rel = str(where.relative_to(path))
+                rel = where.relative_to(path).as_posix()
             except ValueError:  # pragma: no cover - `where` is under `path`
                 rel = ""
             if rel and is_ignored(rel + "/", matcher):

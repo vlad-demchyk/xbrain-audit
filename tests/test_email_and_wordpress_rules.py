@@ -126,7 +126,7 @@ def wp_findings(php: str, stacks=("wordpress",)):
 
 
 class WordPressEscaping(unittest.TestCase):
-    """Measured: 592 on `~/Local Sites/palmanova` - 577 in the installed
+    """Measured: 592 on `~/Local Sites/municipal-site` - 577 in the installed
     theme, 15 in the site's own. The four other candidates in the plan
     measured zero there and were not written."""
 

@@ -283,6 +283,39 @@ def _http_session(config: CrawlConfig, root_url: str):
     return session
 
 
+def http_session(config: CrawlConfig, root_url: str):
+    """A Requests session carrying `config.cookies` with their browser scope.
+
+    The public name for every reader of a signed-in site - the crawl itself
+    and `sharepoint_tree` - so both send the same cookies to the same hosts.
+    """
+    return _http_session(config, root_url)
+
+
+def _scope_key(path: str) -> str:
+    from urllib.parse import unquote
+
+    path = unquote(path or "/")
+    if len(path) > 1:
+        path = path.rstrip("/")
+    return path.casefold()
+
+
+def in_site_scope(url: str, site_scope: str) -> bool:
+    """Is `url` inside the path `site_scope` (`/sites/x`), ignoring case?
+
+    Segment-aware: `/sites/x2` is not inside `/sites/x`. SharePoint paths
+    are case-insensitive, so `/SITES/X/page.aspx` is.
+    """
+    if not site_scope:
+        return True
+    scope = _scope_key(site_scope)
+    if scope in ("", "/"):
+        return True
+    key = _scope_key(urlparse(url).path)
+    return key == scope or key.startswith(scope + "/")
+
+
 def _normalize(url: str) -> str:
     parsed = urlparse(url)
     # Drop fragments; keep query since some sites route content via query params.
@@ -330,6 +363,37 @@ def _should_render(mode: str, diagnostics) -> bool:
     return (EMPTY_JS_RENDERED in diagnostics.reasons
             or not diagnostics.blocks_kept
             or diagnostics.extraction.get("style_blocks") == 0)
+
+
+def _render_within(render, url: str, timeout: float) -> str:
+    """Render one page, bounded by `timeout` seconds where the renderer can be.
+
+    The bound used to be `SIGALRM`, which has two holes and both were silent,
+    because the `except` around the call swallowed what they raised:
+    Windows has no `SIGALRM` at all (`AttributeError`), and `signal.signal`
+    from any thread but the main one raises `ValueError` - the window crawls
+    on a worker. Either way `render` was never called and a JavaScript page
+    was reported as empty.
+
+    A signal could not have been the right tool anyway: the renderer is
+    QtWebEngine, which runs on the thread that called it and must not be
+    interrupted from outside. So the deadline is handed to the renderer,
+    which stops its own page load at the next turn of its event loop
+    (`audit.driver.html_renderer`). A plain `render(url)` callable - a test
+    double, a custom renderer - is called without one: nothing in the same
+    thread can stop it portably, and calling it unbounded beats not calling
+    it at all.
+    """
+    import inspect
+
+    try:
+        parameters = inspect.signature(render).parameters.values()
+    except (TypeError, ValueError):
+        parameters = ()
+    if any(p.name == "timeout" or p.kind is inspect.Parameter.VAR_KEYWORD
+           for p in parameters):
+        return render(url, timeout=timeout) or ""
+    return render(url) or ""
 
 
 CANDIDATE_TAGS = [
@@ -718,7 +782,8 @@ def page_from_html(html: str, url: str, depth: int = 0) -> PageResult:
 
 
 def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
-          render=None, walk=None, cancelled=None) -> list[PageResult]:
+          render=None, walk=None, cancelled=None, seeds=None,
+          site_scope: str | None = None) -> list[PageResult]:
     """Breadth-first crawl starting at root_url up to config.max_depth hops.
 
     progress_cb, if given, is called as progress_cb(url, depth) right before
@@ -748,12 +813,36 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
     pages, network responses and browser renders. It cannot interrupt a
     socket inside `requests`, but it prevents the next expensive unit from
     starting and gives every UI surface one cooperative stop contract.
+
+    seeds, when given, is the list of pages to read instead of a walk: every
+    seed is read at depth 0 and no link found on a page is followed. The
+    list comes from somewhere that knows the site's pages better than its
+    links do (`sharepoint_tree`). `max_pages` still applies, and what it left
+    unread is in `walk.queued_when_stopped` like any other stopped crawl.
+
+    site_scope, when given, is a path (`/sites/x`) the crawl stays inside,
+    compared without case and by whole segments. An address outside it is
+    neither fetched nor queued, and the distinct addresses turned away are
+    counted in `walk.out_of_scope`: one host serves a whole SharePoint
+    tenant, and a link into another site is not a page of this one.
     """
     config = config or CrawlConfig()
     root_url = _normalize(root_url)
 
     visited: set[str] = set()
-    queue: deque[tuple[str, int]] = deque([(root_url, 0)])
+    out_of_scope: set[str] = set()
+    if seeds:
+        start = [(_normalize(url), 0) for url in dict.fromkeys(seeds)]
+    else:
+        start = [(root_url, 0)]
+    queue: deque[tuple[str, int]] = deque()
+    for url, depth in start:
+        if in_site_scope(url, site_scope):
+            queue.append((url, depth))
+        else:
+            out_of_scope.add(url)
+    #: A seeded crawl reads its list and follows nothing.
+    max_depth = 0 if seeds else config.max_depth
     results: list[PageResult] = []
     session = _http_session(config, root_url)
 
@@ -855,19 +944,8 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
                 and _should_render(config.render_mode, diagnostics)):
             rendered = ""
             try:
-                import signal
-
-                def _timeout_handler(signum, frame):
-                    raise TimeoutError(f"render timed out after {config.render_timeout}s")
-
-                old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-                signal.setitimer(signal.ITIMER_REAL, config.render_timeout)
-                try:
-                    rendered = render(url) or ""
-                finally:
-                    signal.setitimer(signal.ITIMER_REAL, 0)
-                    signal.signal(signal.SIGALRM, old_handler)
-            except (TimeoutError, Exception) as exc:  # noqa: BLE001
+                rendered = _render_within(render, url, config.render_timeout)
+            except Exception as exc:  # noqa: BLE001
                 diagnostics.render_error = str(exc)
             if rendered:
                 html = rendered
@@ -892,12 +970,15 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
         )
         pages_read += 1
 
-        if depth < config.max_depth:
+        if depth < max_depth:
             taken = 0
             for link in links:
                 if link.url in visited:
                     continue
                 if config.same_domain_only and not _same_domain(link.url, root_url):
+                    continue
+                if not in_site_scope(link.url, site_scope):
+                    out_of_scope.add(link.url)
                     continue
                 if ((config.max_links_per_page
                      and taken >= config.max_links_per_page)
@@ -920,4 +1001,6 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
         # a site three times larger than it is.
         remaining = {url for url, _depth in queue if url not in visited}
         walk.queued_when_stopped = len(remaining)
+        # Not a field of `CrawlDiagnostics` yet; read with a default.
+        walk.out_of_scope = len(out_of_scope)
     return results

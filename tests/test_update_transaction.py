@@ -46,7 +46,9 @@ def test_bundle_transaction(tmp_path, monkeypatch, failure):
         updater._replace_gui_app(old, new)
         binary = old / "Contents/MacOS/XAnalyze"
         assert binary.read_text() == "new"
-        assert binary.stat().st_mode & 0o111
+        # A macOS bundle's executable bit; Windows has no such bit to keep.
+        if sys.platform != "win32":
+            assert binary.stat().st_mode & 0o111
     else:
         with pytest.raises((OSError, RuntimeError)):
             updater._replace_gui_app(old, new)

@@ -116,7 +116,7 @@ class AcrossThePages(unittest.TestCase):
         # the page they were built on, and nothing links back to them.
         alt = ('<link rel="alternate" hreflang="en" href="https://x/en/">')
         pages = [
-            PageResult(url="https://x/?s=palmanova", depth=0,
+            PageResult(url="https://x/?s=town", depth=0,
                        raw_html=f"<html><head>{alt}</head></html>"),
             PageResult(url="https://x/eventi?pgrado=3", depth=0, raw_html=(
                 f'<html><head><link rel="canonical" href="https://x/eventi">{alt}'

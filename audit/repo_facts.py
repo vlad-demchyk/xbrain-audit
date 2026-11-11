@@ -106,6 +106,10 @@ def _git(root: Path, *args: str) -> str | None:
     try:
         done = subprocess.run(("git", "-C", str(root)) + args,
                               capture_output=True, text=True,
+                              # git writes paths and messages as UTF-8; the
+                              # Windows locale default (cp1252) crashed the
+                              # reader thread on the first non-ASCII byte.
+                              encoding="utf-8", errors="replace",
                               timeout=_GIT_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -124,6 +128,10 @@ def _git_status(root: Path, *args: str) -> int | None:
     try:
         done = subprocess.run(("git", "-C", str(root)) + args,
                               capture_output=True, text=True,
+                              # git writes paths and messages as UTF-8; the
+                              # Windows locale default (cp1252) crashed the
+                              # reader thread on the first non-ASCII byte.
+                              encoding="utf-8", errors="replace",
                               timeout=_GIT_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return None

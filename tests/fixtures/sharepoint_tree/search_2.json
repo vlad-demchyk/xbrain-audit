@@ -1,0 +1,3 @@
+{"PrimaryQueryResult": {"RelevantResults": {"RowCount": 1, "TotalRows": 3, "Table": {"Rows": [
+  {"Cells": [{"Key": "Path", "Value": "https://contoso.sharepoint.com/sites/Portal/Rischi/SitePages/Mappa.aspx", "ValueType": "Edm.String"}, {"Key": "Title", "Value": "Mappa dei rischi", "ValueType": "Edm.String"}, {"Key": "SPWebUrl", "Value": "https://contoso.sharepoint.com/sites/Portal/Rischi", "ValueType": "Edm.String"}]}
+]}}}}

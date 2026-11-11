@@ -137,7 +137,7 @@ class EmbeddingDetector(Detector):
         texts = []
         labels = []
         if self.corpus_path.exists():
-            with open(self.corpus_path) as f:
+            with open(self.corpus_path, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         row = json.loads(line)

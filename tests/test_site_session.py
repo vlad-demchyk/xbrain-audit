@@ -16,6 +16,22 @@ import unittest
 from pathlib import Path
 
 
+def _can_symlink() -> bool:
+    """Windows creates a symlink only in Developer Mode or as an
+    administrator; without either there is no symlink to escape through,
+    and the escape tests have nothing to set up."""
+    with tempfile.TemporaryDirectory() as folder:
+        try:
+            (Path(folder) / "link").symlink_to(folder, target_is_directory=True)
+        except OSError:
+            return False
+    return True
+
+
+_NEEDS_SYMLINKS = unittest.skipUnless(
+    _can_symlink(), "this account cannot create symlinks (Windows without Developer Mode)")
+
+
 def _cookie(name="sid", value="x", domain="a.example", path="/",
             secure=False, http_only=False, same_site="Default",
             expires=None, host_only=True):
@@ -96,6 +112,7 @@ class WhichSessionBelongsToWhom(_Isolated):
                 with self.assertRaises(ValueError):
                     ss.profile_dir(host)
 
+    @_NEEDS_SYMLINKS
     def test_a_profile_symlink_cannot_escape_the_sessions_directory(self):
         import site_session as ss
 
@@ -256,6 +273,7 @@ class ItCanBeSeenAndRemoved(_Isolated):
         self.assertEqual(ss.known_hosts(), [])
         self.assertFalse(ss.forget(listed[0]))
 
+    @_NEEDS_SYMLINKS
     def test_a_legacy_symlink_is_unlinked_and_its_target_is_left_alone(self):
         import site_session as ss
 
@@ -305,7 +323,11 @@ class NothingLeaksOut(_Isolated):
 
         ss.save_cookies("a.example", {"sid": "secret"})
         mode = stat.S_IMODE(ss.cookies_path("a.example").stat().st_mode)
-        self.assertEqual(mode, 0o600)
+        # No POSIX modes on Windows (see tests/test_local_security.py); the
+        # file is under the user's own %APPDATA%, which NTFS restricts.
+        if os.name != "nt":
+            self.assertEqual(mode, 0o600)
+        self.assertTrue(ss.cookies_path("a.example").is_file())
 
     def test_cookie_scope_and_security_attributes_survive_storage(self):
         import site_session as ss

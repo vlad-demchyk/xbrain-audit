@@ -51,6 +51,32 @@ python cli.py fullscan https://example.com      # command line
 python cli.py                                   # terminal interface
 ```
 
+**Windows 10/11, from source**
+
+There is no Windows download yet; it runs from a checkout. Python 3.13 or
+newer from python.org (the `py` launcher comes with it), in PowerShell:
+
+```powershell
+git clone https://github.com/vlad-demchyk/xAnalyze-.git; cd xAnalyze-
+py -3.13 -m venv venv
+venv\Scripts\pip install -r requirements.txt
+venv\Scripts\python main.py                              # window
+venv\Scripts\python cli.py fullscan https://example.com  # command line
+venv\Scripts\python cli.py                               # terminal interface
+```
+
+The output is UTF-8 whatever the console code page, so it can be redirected
+to a file or piped into an agent. Settings, the credential fallback file and
+signed-in site sessions live in `%APPDATA%\xanalyze`, the app's own log in
+`%LOCALAPPDATA%\xanalyze\logs`, and keys go to the Windows Credential
+Manager. `xanalyze update` replaces a macOS app only; on Windows update the
+checkout with `git pull`.
+
+A Windows build (`dist\XAnalyze\XAnalyze.exe` for the window and
+`xanalyze-cli.exe` for the command line and the TUI) is made with
+`pip install pyinstaller` and then
+`powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1`.
+
 ## Use it
 
 ```bash
@@ -382,8 +408,8 @@ automatic fixes.
 
 ## Configuration
 
-Settings live in `~/.config/xanalyze/settings.json` - language, provider,
-`max_pages`, character categories.
+Settings live in `~/.config/xanalyze/settings.json` (`%APPDATA%\xanalyze\settings.json`
+on Windows) - language, provider, `max_pages`, character categories.
 
 `.xanalyze-ignore` in a project root uses gitignore syntax, and can also
 suppress by rule, selector or fingerprint:
@@ -490,7 +516,8 @@ or notarised yet.
 
 ## Requirements
 
-Python 3.14+, PySide6 for the window, QtWebEngine for browser rendering,
+Python 3.13+ (CI and the macOS release are built on 3.14; 3.13 is checked on
+Windows 11), PySide6 for the window, QtWebEngine for browser rendering,
 sentence-transformers for the embedding detector, and `c2pa-python` with
 `cryptography` for optional C2PA reading.
 

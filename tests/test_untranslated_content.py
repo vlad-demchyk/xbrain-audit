@@ -17,7 +17,7 @@ from audit import crosspage
 RULE = "seo-untranslated-content"
 
 IT_BODY = [
-    "Palmanova è una città fortezza patrimonio mondiale",
+    "Il borgo è una città fortezza patrimonio mondiale",
     "Gli eventi in programma nella città stellata",
     "Scopri i percorsi guidati tra i bastioni",
     "Il museo storico militare della fortezza",
@@ -25,7 +25,7 @@ IT_BODY = [
     "Come raggiungere la piazza principale",
 ]
 DE_BODY = [
-    "Palmanova ist eine Festungsstadt des Weltkulturerbes",
+    "Der Ort ist eine Festungsstadt des Weltkulturerbes",
     "Die geplanten Veranstaltungen in der Sternenstadt",
     "Entdecke die Führungen entlang der Bastionen",
     "Das historische Militärmuseum der Festung",
@@ -110,7 +110,7 @@ class WhereItMustStaySilent(unittest.TestCase):
         self.assertEqual(findings(pages), [])
 
     def test_numbers_and_addresses_are_not_prose(self):
-        for text in ("33057 Palmanova UD", "+39 0432 929106",
+        for text in ("33100 Esempio UD", "+39 0432 000000",
                      "info@example.com", "2026 - 2027"):
             with self.subTest(text=text):
                 node = f"<p>{text}</p>"

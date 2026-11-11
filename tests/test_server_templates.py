@@ -4,7 +4,7 @@ Two defects, one symptom: markup written by a server-side template reported
 critical accessibility failures against elements that are perfectly correct
 at runtime. Measured across three real projects, the pair accounted for the
 overwhelming majority of `control-name` criticals - on
-`~/repositories/illimity-bancaifis-it`, 471 became 30.
+a client's Bedrock repository, 471 became 30.
 
 1. `<?php echo esc_html($name); ?>` is a *processing instruction* to an HTML
    parser and carries no text, so a link named only by the server read as

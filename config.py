@@ -12,6 +12,8 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import platform_dirs
+
 APP_NAME = "xanalyze"
 APP_VERSION = "0.72.3"
 # Pre-rename config dir name. Only used to migrate an existing install's
@@ -47,7 +49,7 @@ def migrate_legacy_file(old_dir: Path, new_dir: Path, filename: str) -> None:
 
 
 def _config_dir() -> Path:
-    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    base = str(platform_dirs.config_home())
     path = Path(base) / APP_NAME
     path.mkdir(parents=True, exist_ok=True)
     migrate_legacy_file(Path(base) / OLD_APP_NAME, path, "settings.json")

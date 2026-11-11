@@ -52,6 +52,11 @@ LOAD_TIMEOUT_MS = 30_000
 
 COLOR_SCHEMES = ("light", "dark")
 _DARK_FLAG = "--blink-settings=preferredColorScheme=0"
+#: Light said out loud rather than left as Chromium's default. Chromium's
+#: default is the operating system's theme: on a Windows 11 machine in dark
+#: mode every audit without `--color-scheme` measured the page dark and
+#: reported dark-only focus-ring failures as the light result.
+_LIGHT_FLAG = "--blink-settings=preferredColorScheme=1"
 
 
 def apply_color_scheme(scheme: str) -> None:
@@ -64,8 +69,7 @@ def apply_color_scheme(scheme: str) -> None:
     """
     flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "").split()
     flags = [flag for flag in flags if not flag.startswith("--blink-settings=preferredColorScheme")]
-    if scheme == "dark":
-        flags.append(_DARK_FLAG)
+    flags.append(_DARK_FLAG if scheme == "dark" else _LIGHT_FLAG)
     os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = " ".join(flags)
 
 
@@ -93,6 +97,30 @@ _BUSY_SCRIPT = """(function() {
     var end = a.effect.getComputedTiming().endTime;
     return isFinite(end) && end > 0;
   });
+})()"""
+
+#: Lazy loading. SharePoint Online is believed to render a web part only
+#: when it scrolls into view (HYPOTHESIS, see `audit.sharepoint_zones`), so
+#: a page read without scrolling is missing everything below the fold - and
+#: an audit of what is missing comes back clean. On a page that says it is
+#: SharePoint (or when asked for), the page is scrolled to the bottom and
+#: back, and the run waits until the number of canvas controls stops
+#: changing. Bounded by `LAZY_WAIT_MS` in all, and by the runner's own
+#: cancellation and deadline, which keep polling throughout.
+LAZY_AUTO = "auto"
+LAZY_ALWAYS = "always"
+LAZY_NEVER = "never"
+LAZY_MODES = (LAZY_AUTO, LAZY_ALWAYS, LAZY_NEVER)
+LAZY_WAIT_MS = 15_000
+LAZY_POLL_MS = 250
+#: Equal answers in a row that count as "it stopped changing".
+LAZY_STABLE_POLLS = 3
+#: Is this page one whose web parts may load late? Read in the page, so the
+#: decision needs no plumbing from the caller: the same check
+#: `sharepoint_zones.is_sharepoint_page` makes on markup.
+_LAZY_DETECT_SCRIPT = """(function() {
+  return !!(window._spPageContextInfo || document.querySelector(
+    '[data-sp-feature-tag], [data-sp-placeholder], #spPageChromeAppDiv'));
 })()"""
 
 #: How long to let a viewport resize reach the renderer before asking the
@@ -132,6 +160,9 @@ class PageAudit:
     #: which is why it is not None.
     html: str = ""
     text_snapshot: dict = field(default_factory=dict)
+    #: What the lazy-loading wait did, when it ran: `{"scrolled", "waited_ms",
+    #: "canvas_controls", "stable"}`. Empty when the page did not ask for it.
+    lazy: dict = field(default_factory=dict)
 
 
 def ensure_headless_application():
@@ -168,6 +199,9 @@ def ensure_headless_application():
     from PySide6 import QtWebEngineCore  # noqa: F401
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    offscreen_fonts()
+    if "preferredColorScheme" not in os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", ""):
+        apply_color_scheme("light")
     flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
     additions = [flag for flag in HEADLESS_CHROMIUM_FLAGS.split()
                  if flag not in flags.split()]
@@ -176,6 +210,26 @@ def ensure_headless_application():
             f"{flags} {' '.join(additions)}").strip()
     _HEADLESS_APPLICATION = QApplication([])
     return _HEADLESS_APPLICATION
+
+
+def offscreen_fonts() -> None:
+    """Give Qt's offscreen platform the system fonts on Windows.
+
+    The offscreen plugin does not ask Windows for fonts: it reads a font
+    directory, by default one inside the Qt install that the PySide6 wheel
+    does not ship. Measured on Windows 11: `QFontDatabase.families()` came
+    back empty, every widget fell back to one generic face, and the window's
+    layout was measured with metrics nothing on screen uses. macOS and
+    Linux find their fonts through CoreText and fontconfig, so this is
+    Windows only. Must run before the QApplication exists.
+    """
+    import sys
+
+    if sys.platform != "win32" or os.environ.get("QT_QPA_PLATFORM") != "offscreen":
+        return
+    fonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+    if os.path.isdir(fonts):
+        os.environ.setdefault("QT_QPA_FONTDIR", fonts)
 
 
 def available() -> tuple:
@@ -253,9 +307,14 @@ class BrowserAuditRunner:
     """
 
     def __init__(self, options: browser.BrowserAuditOptions | None = None,
-                 profile=None, cancelled=None):
+                 profile=None, cancelled=None, lazy_scroll: str = LAZY_AUTO):
         self.options = options or browser.BrowserAuditOptions()
         self._profile = profile
+        if lazy_scroll not in LAZY_MODES:
+            raise ValueError(f"lazy_scroll must be one of {LAZY_MODES}")
+        #: Whether to scroll the page so lazily rendered parts exist before
+        #: it is read: `auto` does it on SharePoint pages only.
+        self._lazy_scroll = lazy_scroll
         self._page = None
         #: The widget that gives the page a size, when one was asked for.
         #: A page with no view has a viewport of 0x0, and a page that
@@ -599,9 +658,64 @@ class BrowserAuditRunner:
                     QTimer.singleShot(BUSY_POLL_MS, wait_until_idle)
                     return
                 busy["still_busy"] = bool(is_busy)
-                run_scripts()
+                settle_lazy(run_scripts)
 
             page.runJavaScript(_BUSY_SCRIPT, 0, answered)
+
+        def settle_lazy(then):
+            """Scroll lazily rendered parts into existence, then go on."""
+            from .sharepoint_zones import (CANVAS_COUNT_SCRIPT,
+                                           SCROLL_DONE_SCRIPT, SCROLL_SCRIPT)
+
+            mode = self._lazy_scroll
+            if mode == LAZY_NEVER:
+                then()
+                return
+            lazy = {"waited_ms": 0, "last": None, "same": 0}
+
+            def proceed(stable: bool):
+                result.lazy = {"scrolled": True, "waited_ms": lazy["waited_ms"],
+                               "canvas_controls": lazy["last"] or 0,
+                               "stable": stable}
+                then()
+
+            def counted(value):
+                if state["finished"]:
+                    return
+                # A JavaScript number arrives as a float through Qt.
+                count = (int(value) if isinstance(value, (int, float))
+                         and not isinstance(value, bool) else 0)
+                lazy["same"] = lazy["same"] + 1 if count == lazy["last"] else 0
+                lazy["last"] = count
+                if lazy["same"] >= LAZY_STABLE_POLLS - 1:
+                    proceed(True)
+                elif lazy["waited_ms"] >= LAZY_WAIT_MS:
+                    proceed(False)
+                else:
+                    lazy["waited_ms"] += LAZY_POLL_MS
+                    QTimer.singleShot(LAZY_POLL_MS, lambda: page.runJavaScript(
+                        CANVAS_COUNT_SCRIPT, 0, counted))
+
+            def scrolled(done):
+                if state["finished"]:
+                    return
+                if done is True or lazy["waited_ms"] >= LAZY_WAIT_MS:
+                    page.runJavaScript(CANVAS_COUNT_SCRIPT, 0, counted)
+                    return
+                lazy["waited_ms"] += LAZY_POLL_MS
+                QTimer.singleShot(LAZY_POLL_MS, lambda: page.runJavaScript(
+                    SCROLL_DONE_SCRIPT, 0, scrolled))
+
+            def detected(is_lazy_page):
+                if state["finished"]:
+                    return
+                if not (is_lazy_page or mode == LAZY_ALWAYS):
+                    then()
+                    return
+                page.runJavaScript(SCROLL_SCRIPT, 0,
+                                   lambda _started: scrolled(False))
+
+            page.runJavaScript(_LAZY_DETECT_SCRIPT, 0, detected)
 
         def run_scripts():
             from text_extraction import TEXT_SNAPSHOT_SCRIPT
@@ -837,7 +951,8 @@ class html_renderer:
     """
 
     def __init__(self, settle_ms: int = 1200, allow_local_files: bool = False,
-                 session_host: str = "", within: str = ""):
+                 session_host: str = "", within: str = "",
+                 lazy_scroll: str = LAZY_AUTO):
         self.options = browser.BrowserAuditOptions(
             run_axe=False, run_htmlcs=False, run_measurements=False,
             run_states=False, capture_html=True, capture_text=True, settle_ms=settle_ms,
@@ -847,12 +962,24 @@ class html_renderer:
         #: Render as the person who signed in, when they did. Empty - the
         #: normal case - keeps the off-the-record profile.
         self.session_host = session_host or ""
+        self.lazy_scroll = lazy_scroll
         self.runner = None
+        #: `time.monotonic()` past which the page in progress is abandoned,
+        #: or None. Checked by the runner's own cancellation poll, on the Qt
+        #: thread - see `__call__`.
+        self._deadline = None
+
+    def _expired(self) -> bool:
+        import time
+
+        return self._deadline is not None and time.monotonic() >= self._deadline
 
     def __enter__(self):
         ensure_headless_application()
         profile = session_profile(self.session_host) if self.session_host else None
-        self.runner = BrowserAuditRunner(self.options, profile=profile)
+        self.runner = BrowserAuditRunner(self.options, profile=profile,
+                                         cancelled=self._expired,
+                                         lazy_scroll=self.lazy_scroll)
         return self
 
     def __exit__(self, *_exc):
@@ -861,10 +988,26 @@ class html_renderer:
             self.runner = None
         return False
 
-    def __call__(self, url: str) -> str:
+    def __call__(self, url: str, timeout: float | None = None) -> str:
+        """Render `url`; with `timeout`, give up on it after that many seconds.
+
+        The timeout is a deadline the runner polls from its own event loop,
+        not a signal: this runs on the Qt thread, which nothing outside may
+        interrupt, and `SIGALRM` - what the crawler used before - does not
+        exist on Windows and cannot be set off the main thread anywhere.
+        """
+        import time
+
         if self.runner is None:
             raise RuntimeError("html_renderer used outside its context")
-        result = self.runner.audit(url)
+        self._deadline = time.monotonic() + timeout if timeout else None
+        try:
+            result = self.runner.audit(url)
+        finally:
+            timed_out = self._expired()
+            self._deadline = None
+        if timed_out and result.error == "cancelled":
+            raise TimeoutError(f"render timed out after {timeout}s")
         if result.error:
             # Raised rather than returned empty: the crawler records the reason
             # against the page, and "" would be indistinguishable from a page

@@ -17,6 +17,15 @@ Two things it must get right:
   copied across as they arrive. Without that half, the browser sees the
   account and the crawl sees the login form - one run, two answers.
 
+* **The fetcher gets only the site's cookies.** The browser profile keeps
+  everything, the identity provider's cookies included, because that is
+  what lets it sign in again silently next time. The copy written for the
+  fetcher is narrowed to the site's host and its parent domains - and for
+  SharePoint Online to the tenant's own two hosts (`<tenant>.sharepoint.com`
+  and `<tenant>-my.sharepoint.com`). A Microsoft sign-in cookie
+  (`ESTSAUTH*` on `login.microsoftonline.com`) is the person's whole
+  Microsoft account; it has no business in a file a crawl reads.
+
 What is deliberately *not* here: any attempt to fill the form, remember a
 password, or detect which field is which. The window is a browser and the
 person is the one signing in.
@@ -28,8 +37,59 @@ from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QVBoxLayout,
 )
 
+import project_profile
 import site_session
+from audit import authwall
 from i18n.translations import t
+
+#: Where the window is in a sign-in, as `sign_in_stage` reports it.
+STAGE_IDENTITY_PROVIDER = "identity-provider"
+STAGE_SITE = "site"
+STAGE_ELSEWHERE = "elsewhere"
+
+#: Sentences this window needs before the shared dictionary carries them.
+#: `t()` wins as soon as `i18n.translations` has the key.
+_FALLBACK = {
+    "sign_in_site_on_idp": {
+        "uk": "Завершіть вхід у цьому вікні. «Готово» стане доступною, коли сторінка повернеться на {host}.",
+        "it": "Completa l'accesso in questa finestra. «Fatto» sarà disponibile quando la pagina tornerà su {host}.",
+        "en": "Finish signing in in this window. \"Done\" becomes available once the page is back on {host}.",
+    },
+    "sign_in_site_back": {
+        "uk": "Ви знову на {host}. Якщо бачите сайт, а не форму входу, натисніть «Готово».",
+        "it": "Sei di nuovo su {host}. Se vedi il sito e non il modulo di accesso, premi «Fatto».",
+        "en": "You are back on {host}. If you see the site rather than a sign-in form, press \"Done\".",
+    },
+}
+
+
+def _text(key: str, lang: str, **fields) -> str:
+    text = t(key, lang, **fields)
+    if text != key:
+        return text
+    entry = _FALLBACK.get(key, {})
+    template = entry.get(lang) or entry.get("en") or key
+    return template.format(**fields)
+
+
+def _bare_host(host_or_url: str) -> str:
+    return project_profile._host_of(host_or_url)
+
+
+# The fetcher's filter lives where the file is written: `site_session`.
+from site_session import cookie_is_for_fetcher, cookies_for_fetcher  # noqa: E402,F401
+
+
+def sign_in_stage(url: str, site_host: str) -> str:
+    """Is the window on the identity provider, back on the site, or elsewhere?"""
+    if authwall.is_definite_login_url(url):
+        return STAGE_IDENTITY_PROVIDER
+    host = _bare_host(url)
+    target = _bare_host(site_host)
+    if host and (host == target
+                 or host in project_profile.sharepoint_tenant_hosts(target)):
+        return STAGE_SITE
+    return STAGE_ELSEWHERE
 
 
 class SiteSignInDialog(QDialog):
@@ -88,6 +148,7 @@ class SiteSignInDialog(QDialog):
         row.addWidget(buttons)
         layout.addLayout(row)
 
+        self.view.urlChanged.connect(self._on_url_changed)
         self.view.load(QUrl(self.url))
 
     def _attach_page(self) -> None:
@@ -99,6 +160,24 @@ class SiteSignInDialog(QDialog):
         store = self.profile.cookieStore()
         store.cookieAdded.connect(self._on_cookie)
         store.cookieRemoved.connect(self._on_cookie_removed)
+        # `cookieAdded` reports what is set from now on. A profile that was
+        # signed in last time already holds its cookies, and without this
+        # they never reach `_cookies`: Done would save an empty session for
+        # a person who is visibly signed in.
+        store.loadAllCookies()
+
+    def _on_url_changed(self, qurl) -> None:
+        """Say where the sign-in is, and offer Done only off the provider."""
+        url = qurl.toString() if hasattr(qurl, "toString") else str(qurl)
+        stage = sign_in_stage(url, self.host)
+        self.done_btn.setEnabled(stage != STAGE_IDENTITY_PROVIDER)
+        if stage == STAGE_IDENTITY_PROVIDER:
+            self.status.setText(_text("sign_in_site_on_idp", self.lang,
+                                      host=self.host))
+        elif stage == STAGE_SITE:
+            self.done_btn.setDefault(True)
+            self.status.setText(_text("sign_in_site_back", self.lang,
+                                      host=self.host))
 
     # ------------------------------------------------------------- cookies
     @staticmethod
@@ -143,10 +222,11 @@ class SiteSignInDialog(QDialog):
         whoever is looking at the screen, and to whoever reads the
         screenshot afterwards.
         """
-        site_session.save_cookies(self.host, list(self._cookies.values()))
+        kept = cookies_for_fetcher(self.host, self._cookies.values())
+        site_session.save_cookies(self.host, kept)
         self.saved = True
         self.status.setText(t("sign_in_site_saved", self.lang,
-                              host=self.host, count=len(self._cookies)))
+                              host=self.host, count=len(kept)))
         self.accept()
 
     def _on_forget(self) -> None:

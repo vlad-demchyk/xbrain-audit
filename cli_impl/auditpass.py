@@ -186,7 +186,7 @@ def _run_browser_pass(result, suppressions, args=None) -> None:
     if scenario_path:
         import json
         from pathlib import Path
-        scenario = validate_scenario(json.loads(Path(scenario_path).read_text()))
+        scenario = validate_scenario(json.loads(Path(scenario_path).read_text(encoding="utf-8")))
     options = browser_mod.BrowserAuditOptions(
         exclude=list(suppressions.selectors),
         disabled_rules=list(suppressions.rules),

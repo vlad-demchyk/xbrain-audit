@@ -78,8 +78,9 @@ def log_dir() -> Path:
     if override:
         path = Path(override)
     else:
-        base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-        path = Path(base) / APP_NAME / "logs"
+        import platform_dirs
+
+        path = platform_dirs.state_home() / APP_NAME / "logs"
     try:
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
         path.chmod(0o700)

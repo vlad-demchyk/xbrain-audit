@@ -423,8 +423,52 @@ def _cookie_records(host: str, cookies) -> list[dict]:
     return records
 
 
+def _bare_host(host_or_url: str) -> str:
+    text = (host_or_url or "").strip()
+    parsed = urlparse(text if "://" in text else f"https://{text}")
+    return (parsed.hostname or "").lower().rstrip(".")
+
+
+def cookie_is_for_fetcher(site_host: str, cookie_domain: str) -> bool:
+    """Should a cookie set on `cookie_domain` reach the fetcher of `site_host`?
+
+    Yes for the site's own host and its parent domains (what a browser would
+    send there), never for an identity provider, and for SharePoint Online
+    only the tenant's own hosts: `.sharepoint.com` is every tenant's parent.
+    A Microsoft sign-in cookie (`ESTSAUTH*` on `login.microsoftonline.com`)
+    is the person's whole Microsoft account; the browser profile keeps it
+    for a silent sign-in, the fetcher's copy never does.
+    """
+    from audit.authwall import is_identity_provider_host
+    from project_profile import sharepoint_tenant_hosts
+
+    host = _bare_host(site_host)
+    domain = (cookie_domain or "").strip().lower().lstrip(".")
+    if not host or not domain:
+        return False
+    if is_identity_provider_host(domain):
+        return False
+    tenant_hosts = sharepoint_tenant_hosts(host)
+    if tenant_hosts:
+        return domain in tenant_hosts
+    if host == domain:
+        return True  # `localhost` included: a host is its own scope
+    # A parent domain, but never a bare top-level one.
+    return "." in domain and host.endswith("." + domain)
+
+
+def cookies_for_fetcher(site_host: str, records) -> list:
+    """The records the fetcher of `site_host` should be given."""
+    return [record for record in records or ()
+            if cookie_is_for_fetcher(site_host, record.get("domain", ""))]
+
+
 def save_cookies(host: str, cookies) -> None:
-    """Write the fetcher's copy of the session, readable only by its owner."""
+    """Write the fetcher's copy of the session, readable only by its owner.
+
+    Only the cookies `cookie_is_for_fetcher` allows are written, whoever
+    calls: the filter lives where the file is written, not in one window.
+    """
     canonical = _canonical_host(host)
     path = profile_dir(host, create=True) / _COOKIES
     # Created with the mode set, not chmod'ed after: between the write and
@@ -435,7 +479,7 @@ def save_cookies(host: str, cookies) -> None:
         json.dump({
             "version": _COOKIE_STORE_VERSION,
             "host": canonical,
-            "cookies": _cookie_records(host, cookies),
+            "cookies": cookies_for_fetcher(host, _cookie_records(host, cookies)),
         }, handle)
 
 

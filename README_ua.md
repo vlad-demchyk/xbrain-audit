@@ -51,6 +51,31 @@ python cli.py fullscan https://example.com      # командний рядок
 python cli.py                                   # термінальний інтерфейс
 ```
 
+**Windows 10/11, з вихідників**
+
+Готового завантаження для Windows поки немає, запуск із чекауту. Потрібен
+Python 3.13 або новіший з python.org (лаунчер `py` іде з ним), у PowerShell:
+
+```powershell
+git clone https://github.com/vlad-demchyk/xAnalyze-.git; cd xAnalyze-
+py -3.13 -m venv venv
+venv\Scripts\pip install -r requirements.txt
+venv\Scripts\python main.py                              # вікно
+venv\Scripts\python cli.py fullscan https://example.com  # командний рядок
+venv\Scripts\python cli.py                               # термінальний інтерфейс
+```
+
+Вивід завжди в UTF-8, хоч яка кодова сторінка консолі, тож його можна
+перенаправити у файл чи передати агенту. Налаштування, резервний файл
+облікових даних і сесії сайтів із входом лежать у `%APPDATA%\xanalyze`,
+власний лог застосунку в `%LOCALAPPDATA%\xanalyze\logs`, ключі йдуть у
+Windows Credential Manager. `xanalyze update` оновлює лише застосунок для
+macOS; на Windows чекаут оновлюється через `git pull`.
+
+Збірка для Windows (`dist\XAnalyze\XAnalyze.exe` для вікна і
+`xanalyze-cli.exe` для командного рядка і TUI): `pip install pyinstaller`,
+потім `powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1`.
+
 ## Як користуватись
 
 ```bash
@@ -373,8 +398,8 @@ Settings, Account, Update, Logs. Стрілки, цифрові скорочен
 
 ## Конфігурація
 
-Налаштування живуть у `~/.config/xanalyze/settings.json` - мова, провайдер,
-`max_pages`, категорії символів.
+Налаштування живуть у `~/.config/xanalyze/settings.json` (на Windows
+`%APPDATA%\xanalyze\settings.json`) - мова, провайдер, `max_pages`, категорії символів.
 
 `.xanalyze-ignore` у корені проєкту використовує синтаксис gitignore і вміє
 глушити за правилом, селектором або відбитком:
@@ -474,7 +499,8 @@ make package        # XAnalyze.app.zip і маніфест, те, що шука�
 
 ## Вимоги
 
-Python 3.14+, PySide6 для вікна, QtWebEngine для рендерингу, sentence-transformers
+Python 3.13+ (CI і реліз для macOS збираються на 3.14; 3.13 перевірено
+на Windows 11), PySide6 для вікна, QtWebEngine для рендерингу, sentence-transformers
 для embedding-детектора, `c2pa-python` і `cryptography` для необовʼязкового
 читання C2PA.
 

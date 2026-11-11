@@ -1,4 +1,4 @@
-"""False positives the final Palmanova audit found (T-1961).
+"""False positives the final audit of a municipal WordPress site found (T-1961).
 
 Each test is the shape the 381-page crawl produced, checked against its HTML.
 """
@@ -58,14 +58,14 @@ class GalleryLinkNamedByAttribute(unittest.TestCase):
 
 
 class EnglishPageWithAnItalianName(unittest.TestCase):
-    """Palmanova's English pages: 23 of 24 `html-lang-mismatch` were false.
+    """The municipal site's English pages: 23 of 24 `html-lang-mismatch` were false.
 
-    The header and footer repeat "Youtube di Città di Palmanova" and the
-    footer says "Comune di Palmanova": ` di ` seven times in 300 words, the
+    The header and footer repeat "Youtube di Città di Esempio" and the
+    footer says "Comune di Esempio": ` di ` seven times in 300 words, the
     rate of Italian prose, from one repeated name.
     """
 
-    CHROME = ("Join us on: Instagramm Facebook Youtube di Città di Palmanova "
+    CHROME = ("Join us on: Instagramm Facebook Youtube di Città di Esempio "
               "Home Experiences Itineraries Places to visit Events Schools ")
 
     def test_a_repeated_name_does_not_make_a_page_italian(self):
@@ -73,9 +73,9 @@ class EnglishPageWithAnItalianName(unittest.TestCase):
 
         body = (self.CHROME * 4 + "Experiences Countermine Tunnels of the 2nd "
                 "Ravelin and Donato Bastion Multimedia Video Room Virtualift "
-                "Virtual Elevator Palmanova Talking Map Tools and machines for "
+                "Virtual Elevator Town Talking Map Tools and machines for "
                 "building the Fortress Museum of the Great War Civic Museum "
-                "Copyright 2026 Comune di Palmanova Privacy Policy ")
+                "Copyright 2026 Comune di Esempio Privacy Policy ")
         self.assertGreater(len(body.split()), 100)
         self.assertEqual(lang_detect.guess_language_safe(body), "en")
 
@@ -102,13 +102,13 @@ SKIP_LINK_PAGE = """<!DOCTYPE html><html lang="it"><head><title>t</title><style>
   .skip:focus { clip: auto; width: auto; height: auto; color: #333; background: #fff; }
   .faint { color: #9a9a9a; background: #ffffff; }
 </style></head><body><header><a class="skip" href="#main">Vai al contenuto</a>
-<span style="color:#fff">Palmanova</span></header>
+<span style="color:#fff">Town</span></header>
 <main id="main"><h1>Titolo</h1><p class="faint">Testo grigio chiaro su bianco.</p></main>
 </body></html>"""
 
 
 class HiddenSkipLinkContrast(unittest.TestCase):
-    """`htmlcs:1_4_3` on Palmanova's skip link, 327 times: measured while
+    """`htmlcs:1_4_3` on the municipal site's skip link, 327 times: measured while
     clipped to one pixel against the header's dark background (3.79:1); as
     shown on focus it is 12.63:1."""
 

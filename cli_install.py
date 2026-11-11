@@ -125,6 +125,13 @@ def install(source: Path | None = None, link_dir: Path = USER_BIN_DIR,
     there is no bundled CLI to link (dev run), the source is missing, or the
     filesystem operation itself fails.
     """
+    if sys.platform == "win32":
+        # A symlink on Windows needs Developer Mode or an administrator, and
+        # the Windows build does not need one: it ships the command as its
+        # own console executable (`packaging/XAnalyze-windows.spec`).
+        raise CliInstallError(
+            "on Windows the command is xanalyze-cli.exe in the XAnalyze "
+            "folder: add that folder to PATH to run it from any terminal")
     if source is None:
         source = bundled_cli_path()
     if source is None:
@@ -206,6 +213,9 @@ def offer_is_due(already_offered: bool,
     QApplication; the dialog it gates lives in `main.py`.
     """
     if already_offered:
+        return False
+    # Nothing to link on Windows: see `install`.
+    if sys.platform == "win32":
         return False
     if bundled_cli_path() is None:
         return False

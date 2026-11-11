@@ -35,7 +35,7 @@ class WhatAWordPressDeliveryLooksLike(unittest.TestCase):
 
     def test_a_theme_is_recognised_by_the_header_in_its_stylesheet(self):
         (self.root / "style.css").write_text(
-            "/*\nTheme Name: Palmanova\nVersion: 1.0\n*/\n", encoding="utf-8")
+            "/*\nTheme Name: Municipal\nVersion: 1.0\n*/\n", encoding="utf-8")
         profile = project_profile.detect(self.root)
         self.assertEqual([s.name for s in profile.stacks], ["wordpress-theme"])
         self.assertIn("style.css", profile.evidence["wordpress-theme"])
@@ -254,6 +254,52 @@ class ManyWebPartsInOneRepository(unittest.TestCase):
         self.assertIn("class", issues[0].details["matched_by"])
         self.assertIn("alsoOurs.png", str(issues[0].snippet)
                       + " ".join(str(i.snippet) for i in issues))
+
+    def test_every_placement_of_a_part_is_read_not_only_the_first(self):
+        """A part put on a page twice is two deliveries of the same code.
+        Only the first used to be audited, and the second went unread
+        without the report saying so."""
+        import audit
+        from audit.spfx import web_parts
+
+        guid = "bc4ab074-e95b-45ee-bfc1-3eaf0c0132ee"
+        page_markup = ('<!doctype html><html lang="en"><head><title>x</title>'
+                       '</head><body>'
+                       f'<div data-sp-web-part-id="{guid}"><img src="first.png"></div>'
+                       '<p>between</p>'
+                       f'<div data-sp-web-part-id="{guid}"><img src="second.png"></div>'
+                       '</body></html>')
+        with tempfile.TemporaryDirectory() as tmp:
+            self._repo(tmp, "OursWebPart", guid)
+            parts = web_parts(tmp)
+            page = Path(tmp) / "page.html"
+            page.write_text(page_markup, encoding="utf-8")
+            result = audit.analyze_page_file(str(page), web_parts=parts)
+        self.assertEqual(len(result.documents), 2)
+        snippets = " ".join(str(i.snippet) for d in result.documents
+                            for i in d.issues)
+        self.assertIn("first.png", snippets)
+        self.assertIn("second.png", snippets)
+        instances = {i.details.get("instance") for d in result.documents
+                     for i in d.issues}
+        self.assertEqual(instances, {1, 2})
+
+    def test_narrow_all_keeps_the_outermost_match_only(self):
+        """A part's wrapper and an element inside it that also matches are
+        one placement: reading both would report each defect twice."""
+        from bs4 import BeautifulSoup
+
+        from audit.within import narrow_all
+
+        document = BeautifulSoup(
+            '<div class="part_1a2b3c"><div class="part_9f8e7d">x</div></div>'
+            '<div class="part_4d5e6f">y</div>', "html.parser")
+        found = narrow_all(document, ['[data-none="1"]', ".part"])
+        self.assertEqual([element.get_text() for element, _how, _s in found],
+                         ["x", "y"])
+        self.assertEqual({how for _e, how, _s in found}, {"stem"})
+        with self.assertRaises(ScopeNotFound):
+            narrow_all(document, ['[data-none="1"]'])
 
     def test_a_page_carrying_none_of_them_produces_no_documents(self):
         """A repository ships thirty parts and a page carries three.

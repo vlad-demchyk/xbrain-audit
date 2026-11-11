@@ -1,0 +1,14 @@
+{"value": [
+  {"Title": "Home", "Url": "/sites/Portal", "Children": []},
+  {"Title": "Chi siamo", "Url": "/sites/portal/sitepages/chi-siamo.aspx", "Children": []},
+  {"Title": "Documenti", "Url": "http://linkless.header/", "Children": [
+    {"Title": "Regolamento", "Url": "/sites/Portal/Shared Documents/Regolamento.pdf"},
+    {"Title": "Tutti", "Url": "/sites/Portal/Shared Documents/Forms/AllItems.aspx"},
+    {"Title": "Condiviso", "Url": "https://contoso.sharepoint.com/:w:/r/sites/Portal/_layouts/15/Doc.aspx?sourcedoc=%7B1%7D"}
+  ]},
+  {"Title": "Altro sito", "Url": "https://contoso.sharepoint.com/sites/Altro/SitePages/Home.aspx", "Children": []},
+  {"Title": "Impostazioni", "Url": "/sites/Portal/_layouts/15/viewlsts.aspx", "Children": []},
+  {"Title": "Annunci", "Url": "/sites/Portal/Lists/Annunci", "Children": []},
+  {"Title": "Esterno", "Url": "https://www.example.org/", "Children": []},
+  {"Title": "Posta", "Url": "mailto:info@example.org", "Children": []}
+]}

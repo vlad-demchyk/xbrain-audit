@@ -13,7 +13,7 @@ METRICS = {"LCP": "largestContentfulPaint", "CLS": "cumulativeLayoutShift",
 
 
 def vendor_identity() -> dict:
-    identity = json.loads((VENDOR / "web-vitals.json").read_text())
+    identity = json.loads((VENDOR / "web-vitals.json").read_text(encoding="utf-8"))
     actual = hashlib.sha256((VENDOR / "web-vitals.attribution.iife.js").read_bytes()).hexdigest()
     if actual != identity["artifact_sha256"]:
         raise ValueError("web-vitals artifact hash differs from its manifest")
@@ -24,7 +24,7 @@ def vendor_identity() -> dict:
 def bootstrap_script() -> str:
     """Installed at document creation, before the page's scripts or inputs."""
     vendor_identity()
-    return (VENDOR / "web-vitals.attribution.iife.js").read_text() + BOOTSTRAP
+    return (VENDOR / "web-vitals.attribution.iife.js").read_text(encoding="utf-8") + BOOTSTRAP
 
 
 BOOTSTRAP = r"""

@@ -11,10 +11,13 @@ import json
 from pathlib import Path
 from typing import Any
 from cache_store import merge_cache
+from platform_dirs import default_config_home
 
 
 # Default cache location
-CACHE_DIR = Path.home() / ".config" / "xanalyze" / "cache"
+# The platform config base (`%APPDATA%` on Windows), not `$XDG_CONFIG_HOME`:
+# this is a module constant and kept its old, import-time-independent value.
+CACHE_DIR = default_config_home() / "xanalyze" / "cache"
 CACHE_FILE = CACHE_DIR / "scan_cache.json"
 
 
@@ -45,11 +48,11 @@ class ScanCache:
         """Load cache from disk."""
         if self.cache_path.exists():
             try:
-                with open(self.cache_path) as f:
+                with open(self.cache_path, encoding="utf-8") as f:
                     self._cache = json.load(f)
                     if not isinstance(self._cache, dict):
                         self._cache = {}
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 self._cache = {}
     
     def _save(self) -> None:

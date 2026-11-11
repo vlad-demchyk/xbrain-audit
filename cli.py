@@ -1812,7 +1812,32 @@ def _explicit_options(argv) -> set:
     return named
 
 
+def _utf8_streams() -> None:
+    """Read and write the standard streams as UTF-8 on Windows.
+
+    Python on Windows encodes a redirected or piped stream with the ANSI
+    code page (cp1252 on a western install), and the help text alone carries
+    `→`: `cli.py --help > help.txt`, or any run under an agent reading the
+    pipe, died with `UnicodeEncodeError` before printing a line. stdin is
+    the same stream turned round: `clean` and `agent-judge` read an agent's
+    UTF-8 from a pipe, and cp1252 turned every Cyrillic letter into two
+    wrong ones. A console is already handled as UTF-16 by Python itself, so
+    this changes nothing there. `errors="replace"` because a report line is
+    worth more than the one character a terminal cannot show.
+    """
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        encoding = (getattr(stream, "encoding", "") or "").lower().replace("-", "")
+        if encoding != "utf8" and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                pass
+
+
 def main(argv=None) -> int:
+    _utf8_streams()
     args = build_parser().parse_args(argv)
     # Recorded before anything reads it, because argparse cannot be asked
     # afterwards which values came from the command line and which are its

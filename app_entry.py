@@ -33,6 +33,22 @@ from pathlib import Path
 #: without following another module first.
 _CLI_INVOCATION_NAME = "xanalyze"
 
+#: The Windows build's console executable (`packaging/XAnalyze-windows.spec`).
+#: Not `xanalyze.exe`: Windows file names ignore case, so it would be the same
+#: file as the window's `XAnalyze.exe`. A second executable at all, because
+#: Windows decides console versus window when the program is linked, not
+#: when it is run - one binary cannot be both.
+_WINDOWS_CLI_STEM = "xanalyze-cli"
+
+
+def _invoked_as_cli() -> bool:
+    if sys.platform == "win32":
+        # The executable itself rather than argv[0]: what cmd puts in
+        # argv[0] is what was typed, and `XAnalyze` typed in lower case
+        # would otherwise be taken for the command line.
+        return Path(sys.executable).stem.lower() == _WINDOWS_CLI_STEM
+    return Path(sys.argv[0]).name == _CLI_INVOCATION_NAME
+
 
 def _warn_if_stale() -> None:
     """If this frozen binary was built from a different source version, say so."""
@@ -46,7 +62,7 @@ def _warn_if_stale() -> None:
         marker = candidate / ".build_version"
         if marker.exists():
             try:
-                build_ver = marker.read_text().strip()
+                build_ver = marker.read_text(encoding="utf-8").strip()
             except OSError:
                 return
             if build_ver != config.APP_VERSION:
@@ -93,12 +109,12 @@ def run() -> int:
 
     multiprocessing.freeze_support()
     _warn_if_stale()
-    invoked_as = Path(sys.argv[0]).name
+    as_cli = _invoked_as_cli()
 
-    if invoked_as != _CLI_INVOCATION_NAME and sys.argv[1:2] == ["--install-cli"]:
+    if not as_cli and sys.argv[1:2] == ["--install-cli"]:
         return _install_cli()
 
-    if invoked_as == _CLI_INVOCATION_NAME:
+    if as_cli:
         # No subcommand → interactive TUI
         if len(sys.argv) == 1:
             from tui.app import run_tui

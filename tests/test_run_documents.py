@@ -194,6 +194,10 @@ class WritingTheFolder(unittest.TestCase):
         self.addCleanup(self.home.cleanup)
         self.previous_home = os.environ.get("HOME")
         os.environ["HOME"] = self.home.name
+        # `Path.home()` reads USERPROFILE on Windows, not HOME: without this
+        # the test compared against, and wrote into, the real history.
+        self.previous_profile = os.environ.get("USERPROFILE")
+        os.environ["USERPROFILE"] = self.home.name
         self.addCleanup(self._restore_home)
         # And the working directory, because `_read_history` also merges in
         # the legacy `./.xanalyze/` files - this repository has its own, full
@@ -217,6 +221,10 @@ class WritingTheFolder(unittest.TestCase):
     def _restore_home(self):
         if self.previous_home is not None:
             os.environ["HOME"] = self.previous_home
+        if self.previous_profile is None:
+            os.environ.pop("USERPROFILE", None)
+        else:
+            os.environ["USERPROFILE"] = self.previous_profile
 
     def save(self, *, audit=True, text=True, target="https://example.com",
              timings=None):

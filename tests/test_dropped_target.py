@@ -129,7 +129,8 @@ class Formatting(unittest.TestCase):
     def test_a_path_under_home_is_written_from_home(self):
         inside = Path.home() / "Downloads" / "page.html"
         self.assertEqual(_under_home(inside), "~/Downloads/page.html")
-        self.assertEqual(_under_home(Path("/etc/hosts")), "/etc/hosts")
+        # Outside home the path is shown as the OS writes it.
+        self.assertEqual(_under_home(Path("/etc/hosts")), str(Path("/etc/hosts")))
 
 
 

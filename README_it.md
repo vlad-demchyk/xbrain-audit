@@ -52,6 +52,31 @@ python cli.py fullscan https://example.com      # riga di comando
 python cli.py                                   # interfaccia da terminale
 ```
 
+**Windows 10/11, dai sorgenti**
+
+Non c'è ancora un download per Windows: si avvia da un checkout. Serve
+Python 3.13 o successivo da python.org (con il launcher `py`), in PowerShell:
+
+```powershell
+git clone https://github.com/vlad-demchyk/xAnalyze-.git; cd xAnalyze-
+py -3.13 -m venv venv
+venv\Scripts\pip install -r requirements.txt
+venv\Scripts\python main.py                              # finestra
+venv\Scripts\python cli.py fullscan https://example.com  # riga di comando
+venv\Scripts\python cli.py                               # interfaccia da terminale
+```
+
+L'output è sempre UTF-8, qualunque sia la code page della console, quindi si
+può reindirizzare su file o passare a un agente. Impostazioni, file di riserva
+delle credenziali e sessioni dei siti con accesso stanno in
+`%APPDATA%\xanalyze`, il log dell'app in `%LOCALAPPDATA%\xanalyze\logs`, le
+chiavi vanno in Gestione credenziali di Windows. `xanalyze update` aggiorna
+solo l'app macOS; su Windows il checkout si aggiorna con `git pull`.
+
+La build per Windows (`dist\XAnalyze\XAnalyze.exe` per la finestra e
+`xanalyze-cli.exe` per riga di comando e TUI): `pip install pyinstaller`, poi
+`powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1`.
+
 ## Come si usa
 
 ```bash
@@ -391,8 +416,8 @@ automatiche.
 
 ## Configurazione
 
-Le impostazioni stanno in `~/.config/xanalyze/settings.json`: lingua, provider,
-`max_pages`, categorie di caratteri.
+Le impostazioni stanno in `~/.config/xanalyze/settings.json` (su Windows
+`%APPDATA%\xanalyze\settings.json`): lingua, provider, `max_pages`, categorie di caratteri.
 
 `.xanalyze-ignore` nella radice del progetto usa la sintassi di gitignore e può
 anche silenziare per regola, selettore o impronta:
@@ -497,7 +522,8 @@ non è ancora firmato né notarizzato.
 
 ## Requisiti
 
-Python 3.14+, PySide6 per la finestra, QtWebEngine per il rendering,
+Python 3.13+ (la CI e la release macOS usano 3.14; 3.13 è verificato
+su Windows 11), PySide6 per la finestra, QtWebEngine per il rendering,
 sentence-transformers per il detector a embedding, `c2pa-python` e `cryptography`
 per la lettura C2PA opzionale.
 
