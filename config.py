@@ -15,7 +15,7 @@ from pathlib import Path
 import platform_dirs
 
 APP_NAME = "xanalyze"
-APP_VERSION = "0.72.3"
+APP_VERSION = "0.73.0"
 # Pre-rename config dir name. Only used to migrate an existing install's
 # settings into the new location the first time this runs after upgrading;
 # see `migrate_legacy_file`.

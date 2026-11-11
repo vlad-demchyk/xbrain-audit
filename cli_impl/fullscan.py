@@ -24,7 +24,7 @@ from detectors.factory import DetectorFactory
 from cli_impl import EXIT_ERROR, EXIT_FINDINGS, EXIT_INCOMPLETE, EXIT_OK
 from cli_impl.agentcmds import _agent_detection_rules
 from cli_impl.auditpass import (
-    _crawl_maybe_rendering, _is_page_file, _run_browser_pass, looks_like_url,
+    _is_page_file, _run_browser_pass, looks_like_url,
     with_scheme,
 )
 from cli_impl.output import _public
@@ -605,21 +605,47 @@ def _read_diagnostics(walked) -> list:
     ]
 
 
+class SharePointRefused(Exception):
+    """The site's page tree said this sign-in cannot read it. Exit 2."""
+
+    def __init__(self, message: str, reason: str):
+        super().__init__(message)
+        self.reason = reason
+
+
 def _crawl_for_fullscan(target: str, args, no_browser: bool):
-    """Crawl a URL for the fullscan pass; returns (pages, resolved target)."""
+    """Crawl a URL for the fullscan pass; returns (pages, resolved target).
+
+    A SharePoint Online target is read the way `audit` reads it, through the
+    same functions: the plan (`plan_sharepoint`), the page tree and the site
+    scope (`crawl_site`), and the refusal when the tree says the sign-in is
+    missing or not enough (`SharePointRefused`). The plan, the tree and the
+    walk are kept on `args` for the audit and the JSON summary.
+    """
     from crawler import CrawlConfig, RENDER_ALWAYS, RENDER_NEVER
+    from models import CrawlDiagnostics
+
+    from cli_impl import auditpass
 
     if not target.startswith(("http://", "https://")):
         target = "https://" + target
+    sp = auditpass.plan_sharepoint(target, args)
+    auditpass.say_plan(sp)
     # Browser mode reads actual layout/text, including server-rendered pages
     # whose styles hide copy. A nonempty HTTP body is not visibility evidence.
     render_mode = RENDER_NEVER if no_browser else RENDER_ALWAYS
     config = CrawlConfig(max_depth=args.depth, max_pages=args.max_pages,
                          render_mode=render_mode)
-    from cli_impl.auditpass import apply_session
-
-    session_host = apply_session(
-        target, config, use_session=not getattr(args, "no_session", False))
+    no_session = bool(getattr(args, "no_session", False))
+    session_host = auditpass.apply_session(target, config,
+                                           use_session=not no_session)
+    # The same late check `audit` makes: a session that existed when the run
+    # started but was not applied, or gave the fetcher nothing.
+    message = auditpass.session_refusal(target, config, session_host,
+                                        no_session)
+    if message:
+        raise SharePointRefused(message, "sign-in-required")
+    # `--ootb-registry` was read before the run folder (`registry_refusal`).
     progress.stage(
         "crawl", "begin",
         f"# [stage crawl] depth={args.depth} "
@@ -636,9 +662,18 @@ def _crawl_for_fullscan(target: str, args, no_browser: bool):
         progress.page(crawled, args.max_pages or None, url, depth=depth,
                       human=f"# [crawl {crawled}{limit}] depth={depth} {url}")
 
-    extra = {"within": args.within} if getattr(args, "within", None) else {}
-    pages = _crawl_maybe_rendering(target, config, progress_cb=_crawl_progress,
-                                   session_host=session_host, **extra)
+    walk = CrawlDiagnostics()
+    pages, tree = auditpass.crawl_site(
+        target, config, progress_cb=_crawl_progress, session_host=session_host,
+        within=getattr(args, "within", None) or "", page_tree=sp.page_tree,
+        site_scope=sp.site_scope, walk=walk)
+    refusal = auditpass.tree_refusal(tree, target)
+    if refusal:
+        raise SharePointRefused(refusal, tree.status)
+    auditpass.say_tree(tree)
+    args._sharepoint_run = sp
+    args._page_tree = auditpass.page_tree_summary(
+        tree, walk, sp.site_scope, sp.page_tree) if sp.sharepoint else None
     progress.stage("crawl", "end", f"# [crawl done] {len(pages)} page(s)",
                    pages=len(pages))
     return pages, target
@@ -714,14 +749,26 @@ def _audit_fullscan_target(is_url: bool, is_page_file: bool, target: str,
                                 human=f"# [images {seen_images[0]}] {url}",
                                 n=seen_images[0], url=url)
 
-        from cli import _web_parts_for
+        from cli import _served_by_sharepoint, _web_parts_for
 
-        return audit.analyze_pages(
+        # Read once: the browser pass places its findings by the same parts.
+        args._web_parts_found = _web_parts_for(args)
+        sp = getattr(args, "_sharepoint_run", None)
+        extra = {}
+        if (sp is not None and sp.sharepoint) or _served_by_sharepoint(target, pages):
+            extra = {"sharepoint": True,
+                     "ootb_registry": getattr(args, "_ootb_registry", None)}
+        result = audit.analyze_pages(
             pages, target, media_progress=_image_progress,
             site_controls=getattr(args, "site_controls", False),
             within=getattr(args, "within", None) or "",
-            web_parts=_web_parts_for(args),
-            include_environment=bool(getattr(args, "include_environment", False)))
+            web_parts=args._web_parts_found,
+            include_environment=bool(getattr(args, "include_environment", False)),
+            **extra)
+        tree = getattr(args, "_page_tree", None)
+        if tree:
+            result.page_tree = tree
+        return result
     if is_page_file:
         return audit.analyze_page_file(
             target, within=getattr(args, "within", None) or "")
@@ -1335,6 +1382,23 @@ def cmd_fullscan(args) -> int:
         progress.notice("error", refusal, human=refusal)
         return EXIT_ERROR
 
+    # A SharePoint Online target without a sign-in, refused before the run
+    # folder exists - the same check `audit` makes, in the same place.
+    if is_url:
+        from cli_impl.auditpass import say_refusal, sign_in_refusal
+
+        sp_refusal = sign_in_refusal(target, args)
+        if sp_refusal:
+            say_refusal(sp_refusal, target, "sign-in-required")
+            return EXIT_ERROR
+    # A local file, so read before the folder: a typo leaves nothing behind.
+    from cli_impl.auditpass import registry_refusal
+
+    bad_registry = registry_refusal(args)
+    if bad_registry:
+        progress.notice("error", bad_registry, human=bad_registry)
+        return EXIT_ERROR
+
     # Before any work: what this run is about to leave undone, and the one
     # flag that would change it. See `cli_impl.prerun`.
     from cli_impl import prerun
@@ -1517,6 +1581,32 @@ def _run_phases_body(args, state, folder, timings, target, lang, is_url, is_page
         try:
             pages, target = _crawl_for_fullscan(target, args, no_browser=
                                                 getattr(args, "no_browser", False))
+        except SharePointRefused as refused:
+            # Not a crash and not a pause: the site said this sign-in cannot
+            # read it, and `resume` would get the same answer. Exit 2, as
+            # `audit` does, with the command that fixes it.
+            from cli_impl.auditpass import say_refusal
+
+            say_refusal(str(refused), target, refused.reason)
+            # The run folder already exists (the tree needs the network, so
+            # it is asked after the folder): it says why it is empty -
+            # `state.json`, `state.md` and the timings name the phase and the
+            # refusal, the same record `_stop_short` leaves.
+            if state is not None:
+                state.fail("crawl", str(refused))
+                state.write_feedback()
+                state.write_markdown()
+            timings.finish()
+            if folder is not None:
+                try:
+                    timings.write(folder.timings, target,
+                                  extra={"stopped in": "crawl",
+                                         "reason": str(refused)})
+                except Exception as exc:  # noqa: BLE001 - the state matters more
+                    progress.notice("warning", f"timings failed: {exc}",
+                                    human=f"# warning: timings failed: {exc}",
+                                    about="timings")
+            return EXIT_ERROR
         except Exception as exc:  # noqa: BLE001
             return _stop_short(state, folder, target, timings, "crawl",
                                f"the crawl failed: {exc}")
@@ -1688,6 +1778,13 @@ def _run_phases_body(args, state, folder, timings, target, lang, is_url, is_page
     combined = _build_combined(args, target, is_url, lang, scan_result,
                                clean_findings, audit_issues)
     combined["coverage"] = audit_result.coverage if audit_result is not None else {"status": "unknown"}
+    # The same two keys `audit --json` carries: how the page list was found,
+    # and the zones a SharePoint page was split into.
+    if audit_result is not None:
+        if getattr(audit_result, "page_tree", None):
+            combined["audit"]["page_tree"] = audit_result.page_tree
+        if getattr(audit_result, "sharepoint", None):
+            combined["audit"]["sharepoint"] = audit_result.sharepoint
 
     if agent_mode and agent_candidates:
         _attach_agent_payload(combined, agent_candidates, target)

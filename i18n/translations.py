@@ -3148,8 +3148,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
     "a11y_image_alt_filename_why": {
         "uk": "Атрибут є, тож автоматичні перевірки мовчать, але читач чує «логотип два ікс крапка пеенге» або «мапа дефіс парламанте дефіс пальманова». Це гірше за відсутній alt: помилка захована, а користі нуль. Слаг у alt зазвичай означає, що поле заповнив CMS, а не людина.",
-        "it": "L'attributo c'è, quindi i controlli automatici tacciono, ma chi ascolta sente «logo due per ics punto png» o «mappa trattino parlante trattino palmanova». È peggio di un alt assente: l'errore è nascosto e l'utilità è zero. Uno slug nell'alt di solito vuol dire che il campo l'ha riempito il CMS, non una persona.",
-        "en": "The attribute is there, so automated checks stay quiet, but the listener hears \"logo dash two x dot p n g\" or \"mappa dash parlante dash palmanova\". That is worse than a missing alt: the error is hidden and the value is nil. A slug in alt usually means the CMS filled the field, not a person.",
+        "it": "L'attributo c'è, quindi i controlli automatici tacciono, ma chi ascolta sente «logo due per ics punto png» o «mappa trattino parlante trattino example». È peggio di un alt assente: l'errore è nascosto e l'utilità è zero. Uno slug nell'alt di solito vuol dire che il campo l'ha riempito il CMS, non una persona.",
+        "en": "The attribute is there, so automated checks stay quiet, but the listener hears \"logo dash two x dot p n g\" or \"mappa dash parlante dash example\". That is worse than a missing alt: the error is hidden and the value is nil. A slug in alt usually means the CMS filled the field, not a person.",
     },
     "a11y_image_alt_filename_fix": {
         "uk": "Напишіть, що на зображенні або яку функцію воно виконує, а не як називається файл. Для логотипа це назва компанії: alt=\"xFormat\". Якщо зображення суто декоративне, поставте порожній alt=\"\" і нічого не вигадуйте.",
@@ -3828,9 +3828,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": 'The link "{text}" goes to {href}, while the link in the same position in the "{language}" version ("{other_text}") goes to {target}.',
     },
     "a11y_link_target_differs_across_translations_why": {
-        "uk": "Читач бачить те саме слово, а потрапляє на іншу сторінку: у прикладі з аудиту «Palmanova» в англійській і німецькій версіях вело до сусіднього села. Нічого не зламано технічно, тож жодна перевірка однієї сторінки цього не бачить, а людина, яка користується програмою читання з екрана, не має способу це помітити, поки не перейде.",
-        "it": "Chi legge vede la stessa parola e finisce su un'altra pagina: nell'esempio dell'audit «Palmanova» nelle versioni inglese e tedesca portava a un paese vicino. Tecnicamente nulla è rotto, quindi nessun controllo su una singola pagina lo vede, e chi usa uno screen reader non ha modo di accorgersene prima di seguire il link.",
-        "en": "The reader sees the same word and lands on a different page: in the audit's example \"Palmanova\" led to a neighbouring village in the English and German versions. Nothing is technically broken, so no single-page check sees it, and a screen reader user has no way to notice until they follow the link.",
+        "uk": "Читач бачить те саме слово, а потрапляє на іншу сторінку: у прикладі з аудиту «назва міста» в англійській і німецькій версіях вело до сусіднього села. Нічого не зламано технічно, тож жодна перевірка однієї сторінки цього не бачить, а людина, яка користується програмою читання з екрана, не має способу це помітити, поки не перейде.",
+        "it": "Chi legge vede la stessa parola e finisce su un'altra pagina: nell'esempio dell'audit «il nome della città» nelle versioni inglese e tedesca portava a un paese vicino. Tecnicamente nulla è rotto, quindi nessun controllo su una singola pagina lo vede, e chi usa uno screen reader non ha modo di accorgersene prima di seguire il link.",
+        "en": "The reader sees the same word and lands on a different page: in the audit's example \"the town's name\" led to a neighbouring village in the English and German versions. Nothing is technically broken, so no single-page check sees it, and a screen reader user has no way to notice until they follow the link.",
     },
     "a11y_link_target_differs_across_translations_fix": {
         "uk": "Звірте обидві адреси. Якщо різниця випадкова, виправте її в мовній версії, де вона хибна. Якщо вона навмисна (інший сайт для іншої мови), закрийте знахідку: інструмент бачить, що адреси різні, але не те, яка з них задумана.",
@@ -6530,6 +6530,39 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "the page belongs to somebody else's site and only the web "
               "part is yours: the audit narrows to what those parts draw",
     },
+    "why_render_sharepoint": {
+        "uk": "сучасна сторінка SharePoint збирається в браузері: без "
+              "рендеру читається порожнє полотно",
+        "it": "una pagina moderna di SharePoint si compone nel browser: "
+              "senza rendering si legge una tela vuota",
+        "en": "a modern SharePoint page is assembled in the browser: "
+              "without rendering the run reads an empty canvas",
+    },
+    "why_page_tree_sharepoint": {
+        "uk": "сайт сам знає свої сторінки - це елементи бібліотеки; за "
+              "посиланнями знайдеться лише те, на що послались",
+        "it": "il sito conosce le proprie pagine, sono elementi di una "
+              "raccolta: seguendo i link si trova solo ciò che è collegato",
+        "en": "the site knows its own pages - they are library items; "
+              "following links finds only what somebody linked to",
+    },
+    "why_site_scope_sharepoint": {
+        "uk": "один хост обслуговує всі сайти тенанта, а прогін стосується "
+              "одного з них",
+        "it": "un solo host serve tutti i siti del tenant, e la scansione "
+              "riguarda uno di essi",
+        "en": "one host serves every site of the tenant, and the run is "
+              "about one of them",
+    },
+    "why_sign_in_sharepoint": {
+        "uk": "без збереженого входу SharePoint на кожну адресу відповідає "
+              "сторінкою входу Microsoft: спершу увійдіть на сайт",
+        "it": "senza un accesso salvato SharePoint risponde a ogni "
+              "indirizzo con la pagina di accesso Microsoft: accedete prima "
+              "al sito",
+        "en": "without a stored sign-in SharePoint answers every address "
+              "with Microsoft's sign-in page: sign in to the site first",
+    },
     "why_devserver": {
         "uk": "без сервера з диска читаються шаблони, які збірка ще не "
               "виконала: `<App />` не є заголовком",
@@ -6996,6 +7029,46 @@ _STRINGS: dict[str, dict[str, str]] = {
         "uk": "Це справжнє вікно браузера на {host}. Увійдіть так, як звикли - разом із 2FA, SSO чи капчею. Інструмент не бачить ні логіна, ні пароля: він збереже лише те, що сайт видав цьому браузеру, і використає це в наступному прогоні. Натисніть «Готово», коли опинитесь усередині.",
         "it": "Questa è una vera finestra del browser su {host}. Accedi come fai di solito, anche con 2FA, SSO o captcha. Lo strumento non vede né nome utente né password: conserverà solo ciò che il sito ha dato a questo browser e lo userà nella prossima scansione. Premi «Fatto» quando sei dentro.",
         "en": "This is a real browser window on {host}. Sign in the way you normally do - including 2FA, SSO or a captcha. The tool sees neither your username nor your password: it keeps only what the site gave this browser, and uses that on the next run. Press \"Done\" once you are inside.",
+    },
+    "sign_in_site_incomplete": {
+        "uk": "Вхід на {host} ще не завершено: SharePoint не видав цьому вікну сесію. Відкрийте в цьому вікні будь-яку сторінку сайту, дочекайтеся, поки вона завантажиться, і знову натисніть «Готово». Нічого не збережено.",
+        "it": "L'accesso a {host} non è ancora completo: SharePoint non ha dato a questa finestra la sessione. Apri in questa finestra una pagina qualsiasi del sito, attendi che si carichi e premi di nuovo «Fatto». Non è stato salvato nulla.",
+        "en": "Signing in to {host} is not complete yet: SharePoint has not given this window its session. Open any page of the site in this window, wait for it to load, then press \"Done\" again. Nothing was saved.",
+    },
+    "sign_in_site_checking": {
+        "uk": "Перевіряю, чи сесія для {host} уже є…",
+        "it": "Verifico se la sessione per {host} è già presente…",
+        "en": "Checking whether the session for {host} is there yet…",
+    },
+    "sign_in_site_elsewhere": {
+        "uk": "{target} не належить до входу на {host}, тому відкрито в системному браузері. У цьому вікні лишаються лише сайт і вхід.",
+        "it": "{target} non fa parte dell'accesso a {host}, quindi è stato aperto nel browser di sistema. In questa finestra restano solo il sito e l'accesso.",
+        "en": "{target} is not part of signing in to {host}, so it was opened in the system browser. This window stays on the site and its sign-in.",
+    },
+    "sign_in_site_on_idp": {
+        "uk": "Завершіть вхід у цьому вікні. «Готово» стане доступною, коли сторінка повернеться на {host}.",
+        "it": "Completa l'accesso in questa finestra. «Fatto» sarà disponibile quando la pagina tornerà su {host}.",
+        "en": "Finish signing in in this window. \"Done\" becomes available once the page is back on {host}.",
+    },
+    "sign_in_site_back": {
+        "uk": "Ви знову на {host}. Якщо бачите сайт, а не форму входу, натисніть «Готово».",
+        "it": "Sei di nuovo su {host}. Se vedi il sito e non il modulo di accesso, premi «Fatto».",
+        "en": "You are back on {host}. If you see the site rather than a sign-in form, press \"Done\".",
+    },
+    "sign_in_site_required": {
+        "uk": "{host} - це SharePoint Online без збереженого входу. Натисніть «Увійти на сайт», увійдіть самі, і прогін прочитає весь сайт як ви.",
+        "it": "{host} è SharePoint Online senza un accesso salvato. Premi «Accedi al sito», accedi di persona e la scansione leggerà tutto il sito come te.",
+        "en": "{host} is SharePoint Online with no stored sign-in. Press \"Sign in to the site\", sign in yourself, and the run reads the whole site as you.",
+    },
+    "sharepoint_tree_reading": {
+        "uk": "Читаю дерево сторінок SharePoint на {host}...",
+        "it": "Lettura dell'albero delle pagine SharePoint su {host}...",
+        "en": "Reading the SharePoint page tree on {host}...",
+    },
+    "tui_sharepoint_login": {
+        "uk": "{host} - SharePoint Online, а збереженого входу немає: кожна адреса відповість сторінкою входу Microsoft. Спершу увійдіть: {command}",
+        "it": "{host} è SharePoint Online e non c'è un accesso salvato: ogni indirizzo risponderà con la pagina di accesso Microsoft. Accedete prima: {command}",
+        "en": "{host} is SharePoint Online with no stored sign-in: every address would answer with Microsoft's sign-in page. Sign in first: {command}",
     },
     "sign_in_site_done": {"uk": "Готово", "it": "Fatto", "en": "Done"},
     "sign_in_site_forget": {

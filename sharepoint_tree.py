@@ -104,8 +104,11 @@ _MANAGED_PATHS = ("sites", "teams", "personal", "portals")
 
 _PAGE_LIBRARY_TEMPLATES = (119, 850)
 _DOCUMENT_LIBRARY_TEMPLATE = 101
-_LIST_FORMS = {"allitems.aspx", "dispform.aspx", "editform.aspx",
-               "newform.aspx", "upload.aspx", "allpages.aspx"}
+#: A list's or library's views: a table of its items, not a page.
+_LIST_VIEWS = {"allitems.aspx", "allpages.aspx"}
+#: A list's item forms.
+_LIST_FORMS = {"dispform.aspx", "editform.aspx", "newform.aspx",
+               "upload.aspx"}
 _SYSTEM_SEGMENTS = {"_layouts", "_vti_bin", "_api", "_catalogs", "_forms",
                     "_vti_pvt", "_cts", "_private"}
 _RETRY_STATUSES = {429, 503}
@@ -642,7 +645,8 @@ class _Walk:
                 continue
             try:
                 rows = list(self._paged(self._api(
-                    parent.url, "web/webs?$select=Url,Title,ServerRelativeUrl")))
+                    parent.url,
+                    "web/webs?$select=Url,Title,ServerRelativeUrl,Language")))
             except RestError as exc:
                 self._error(SOURCE_WEBS, exc)
                 continue
@@ -666,6 +670,7 @@ class _Walk:
                 child = TreeWeb(url=url.rstrip("/"),
                                 title=str(row.get("Title") or ""),
                                 server_relative_url=srv,
+                                language=_int_or_none(row.get("Language")),
                                 depth=parent.depth + 1, parent=parent.url)
                 if child.depth > self.max_web_depth:
                     self.tree.skipped.append(SkippedUrl(url, SKIP_WEB_DEPTH,
@@ -963,6 +968,8 @@ class _Walk:
         # `Lists`, `Forms` and `SitePages` mean something only inside a web:
         # a subsite may itself be called `Lists`.
         inner = lowered[self._web_depth_of(key):]
+        if inner and inner[-1] in _LIST_VIEWS:
+            return "skip", SKIP_LIST_VIEW
         if "forms" in inner or (inner and inner[-1] in _LIST_FORMS):
             return "skip", SKIP_LIST_FORM
         if "lists" in inner:

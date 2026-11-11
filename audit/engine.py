@@ -101,6 +101,11 @@ class AccessibilityResult:
     #: named, and what of Microsoft's markup was left out and how much
     #: (`audit.sharepoint_zones.Summary.as_dict`). Empty for any other run.
     sharepoint: dict = field(default_factory=dict)
+    #: How the page list was found and what it left out
+    #: (`cli_impl.auditpass.page_tree_summary`). A field, not an attribute
+    #: set afterwards: `narrowed` copies fields only, and a set-afterwards
+    #: page tree vanished from every narrowed view.
+    page_tree: dict = field(default_factory=dict)
 
     def issues(self) -> list:
         out = []

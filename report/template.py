@@ -82,7 +82,9 @@ _LABELS = {
         sharepoint_col_part="Part", sharepoint_col_kind="Whose",
         sharepoint_col_places="Placements",
         sharepoint_kind={"custom": "Custom (SPFx)", "author": "Author content",
-            "author_ootb": "Author content in a Microsoft web part"},
+            "author_ootb": "Author content in a Microsoft web part",
+            "custom_unrendered": "Custom, not rendered: nothing audited",
+            "custom_heuristic": "Custom (SPFx) outside the canvas, inferred from its CSS module"},
         pages_examined="Pages examined", ai_patterns="AI-generated text patterns",
         typography="Typography issues (non-keyboard characters)",
         confidence="Confidence", text="Text", explanation="Explanation",
@@ -139,7 +141,9 @@ _LABELS = {
         sharepoint_col_part="Частина", sharepoint_col_kind="Чия",
         sharepoint_col_places="Розміщень",
         sharepoint_kind={"custom": "Кастом (SPFx)", "author": "Контент автора",
-            "author_ootb": "Контент автора у web part від Microsoft"},
+            "author_ootb": "Контент автора у web part від Microsoft",
+            "custom_unrendered": "Кастом, не відрендерилась: нічого не аудитовано",
+            "custom_heuristic": "Кастом (SPFx) поза канвасом, визначено за CSS-модулем"},
         pages_examined="Переглянуті сторінки", ai_patterns="AI-згенеровані текстові патерни",
         typography="Проблеми типографіки (символи без клавіатури)",
         confidence="Впевненість", text="Текст", explanation="Пояснення",
@@ -196,7 +200,9 @@ _LABELS = {
         sharepoint_col_part="Parte", sharepoint_col_kind="Di chi",
         sharepoint_col_places="Posizionamenti",
         sharepoint_kind={"custom": "Personalizzata (SPFx)", "author": "Contenuto dell'autore",
-            "author_ootb": "Contenuto dell'autore in una web part Microsoft"},
+            "author_ootb": "Contenuto dell'autore in una web part Microsoft",
+            "custom_unrendered": "Personalizzata, non renderizzata: nulla verificato",
+            "custom_heuristic": "Personalizzata (SPFx) fuori dal canvas, dedotta dal modulo CSS"},
         pages_examined="Pagine esaminate", ai_patterns="Pattern di testo generati da AI",
         typography="Problemi di tipografia (caratteri non da tastiera)",
         confidence="Confidenza", text="Testo", explanation="Spiegazione",
@@ -705,6 +711,12 @@ def _sharepoint_section(model: ReportModel, labels: dict) -> str:
         kind = part.get("kind", "")
         if kind == "author" and part.get("content_only"):
             kind = "author_ootb"
+        elif part.get("rendered") is False:
+            # A part SharePoint placed and did not draw: a fact about the
+            # site, shown rather than folded into "no findings".
+            kind = "custom_unrendered"
+        elif part.get("heuristic"):
+            kind = "custom_heuristic"
         rows.append(
             f'<tr><td>{_esc(name)}</td>'
             f'<td>{_esc(labels["sharepoint_kind"].get(kind, kind))}</td>'

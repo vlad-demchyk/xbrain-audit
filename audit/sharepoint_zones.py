@@ -8,39 +8,42 @@ and only two of them are anybody's to fix:
   canvas puts around a web part. Nobody involved in the site can change a
   line of it. It is **not audited**, and what was left out is counted, so a
   short list is never mistaken for a clean page.
-* **custom** - SPFx web parts and application customizer placeholders. Code
-  somebody wrote and deployed into the tenant: audited with every rule and
-  named by the part that owns it.
+* **custom** - SPFx web parts, application customizer placeholders, and the
+  markup an SPFx part moves out of the canvas into the chrome. Code somebody
+  wrote and deployed into the tenant: audited with every rule and named by
+  the part that owns it.
 * **author** - what the page's author typed or chose: the Text web part
-  (the rich-text editor), the page header (title, banner), and the content
-  inside Microsoft's own web parts - an image's alt text, a quick link's
-  title, a heading. For a Microsoft web part only the rules about that
+  (the rich-text editor), the title area (the `PageTitle` web part), and the
+  content inside Microsoft's own web parts - an image's alt text, a quick
+  link's title, a heading. For a Microsoft web part only the rules about that
   content apply (`OOTB_CONTENT_RULES`); a structural or ARIA defect in the
   part's own markup is Microsoft's, and is counted as skipped, not reported.
 
-**What is verified and what is not.** Nothing here has yet been checked
-against a live tenant's DOM: the site this was written for needs a sign-in
-this code has not had. Every selector below carries one of two marks:
+**What is verified and what is not.** The structure below was checked
+against the rendered DOM of a live SharePoint Online tenant (seven modern
+pages, after scrolling every lazy web part into view). Each selector carries
+one of three marks:
 
-* ``VERIFIED`` - checked against something real (Microsoft's documentation
-  or a live response);
-* ``HYPOTHESIS`` - SharePoint's DOM as it is commonly documented by the
-  community and remembered, to be confirmed on a live page after sign-in.
+* ``VERIFIED`` - seen on that live DOM;
+* ``HYPOTHESIS`` - SharePoint's DOM as commonly documented, not seen there
+  (a part type or a region those pages did not have);
+* ``HEURISTIC`` - an inference from evidence that is usually right and can
+  be wrong (`SPFx outside the canvas`, below).
 
-The classification is built so that a wrong hypothesis fails loudly rather
-than quietly: a page on which no canvas is recognised is reported as such
-(`ZoneMap.recognised` is false) instead of being audited whole or not at
-all, and an unknown web part is treated as **custom** - audited in full -
-rather than as Microsoft's and dropped.
+**How a web part is recognised (VERIFIED).** Every web part sits in a canvas
+control - `[data-automation-id="CanvasControl"]`, `id` = its instance id -
+which is the zone's root. Inside it, the part's element carries
+`data-sp-feature-tag="<Alias> web part (<title>)"`: the alias is the part's
+English, stable code name, the title is localised. `data-sp-web-part-id` is
+the part type's GUID. `data-viewport-id="WebPart.<Alias>.internal.<id>"`
+marks a part Microsoft ships, `.external.` one deployed from an app catalog,
+and `WebPart.unknown.<id>` one that did not render (its tag then reads
+`undefined web part (<title>)`).
 
-**Recognising Microsoft's web parts without a list of their GUIDs.** There
-is no official list of the out-of-the-box web part ids, and inventing one
-from memory would be worse than having none. So the primary signal is the
-name SharePoint writes into `data-sp-feature-tag`, matched against
-`OOTB_FEATURE_NAMES`; a GUID registry (`OotbRegistry`) exists beside it and
-starts empty, to be filled from a live page (`?maintenancemode=true`, or a
-page's `CanvasContent1`) with `register()` or `load_file()`. A web part whose
-id is in neither, and whose tag names nothing Microsoft ships, is custom.
+**What is not a web part (VERIFIED).** `data-sp-feature-tag` is on the
+chrome too - "Page Chrome", "Suite Navigation Placeholder", "Site header
+host", "Comments", `CanvasComponent.internal.<guid>` - and the chrome's
+`data-sp-feature-instance-id` starts with `_`. Neither is ever a zone.
 """
 from __future__ import annotations
 
@@ -56,77 +59,129 @@ ZONES = (ZONE_MICROSOFT, ZONE_CUSTOM, ZONE_AUTHOR)
 
 # --------------------------------------------------------------- the page
 
-#: Literals that say "this document is a SharePoint page". `_spPageContextInfo`
-#: is the one `project_profile` already relies on (VERIFIED as a signature
-#: used there; its presence in every modern page is a HYPOTHESIS). The rest
-#: are the canvas attributes below.
+#: Literals that say "this document is a SharePoint page". VERIFIED: a
+#: modern page's raw HTML carries `spClientSidePageContext` (not always
+#: `_spPageContextInfo`, which classic pages and `project_profile` use); the
+#: rendered DOM carries the canvas and chrome attributes. Not
+#: `data-sp-canvascontrol`: it turns up inside JSON on pages that are not
+#: canvases, so it proves nothing.
 _PAGE_SIGNALS = re.compile(
-    r"_spPageContextInfo|data-sp-feature-tag|data-sp-canvascontrol|"
-    r"data-automation-id=[\"']?CanvasZone|id=[\"']?spPageChromeAppDiv",
+    r"spClientSidePageContext|_spPageContextInfo|data-sp-feature-tag|"
+    r"data-automation-id=[\"']?Canvas(?:Zone|Control)|"
+    r"id=[\"']?spPageChromeAppDiv",
     re.I)
 
-#: The attribute SharePoint writes on the container of every canvas control
-#: (web part or text), naming what it is. HYPOTHESIS: the value is the web
-#: part's title, sometimes followed by "web part"; the Text web part is
-#: "Rich Text Editor".
+#: The attribute SharePoint writes on every web part, and on the chrome.
+#: VERIFIED: a web part's value is `<Alias> web part (<title>)`; the Text
+#: web part's is "Rich Text Editor" (seen inside the title area).
 FEATURE_TAG = "data-sp-feature-tag"
 
+#: `<Alias> web part (<title>)`. VERIFIED.
+FEATURE_TAG_PATTERN = re.compile(r"^\s*(\S+)\s+web\s*part\s*\((.*)\)\s*$", re.I)
+
 #: Attributes that carry a web part's *type* id (the manifest GUID), in the
-#: order they are trusted. HYPOTHESIS for every one: `audit/spfx.py` looks
-#: for the same names when it finds a repository's parts in a page.
+#: order they are trusted. VERIFIED: `data-sp-web-part-id`, on the same
+#: element as the feature tag. The rest are older spellings `audit/spfx.py`
+#: also looks for - HYPOTHESIS.
 WEB_PART_ID_ATTRIBUTES = ("data-sp-web-part-id", "data-webpart-id",
                           "data-sp-componentid", "data-sp-component-id")
 
-#: The attribute that identifies one placement of a part on the page.
-#: HYPOTHESIS.
+#: One placement of a part on the page. VERIFIED; the chrome's values start
+#: with `_` ("_Page Chrome").
 INSTANCE_ATTRIBUTE = "data-sp-feature-instance-id"
 
-#: Application customizer placeholders. VERIFIED: the placeholders are
-#: called `Top` and `Bottom` (Microsoft Learn, "Use page placeholders from
-#: Application Customizer"). HYPOTHESIS: the DOM marks them with
-#: `data-sp-placeholder`.
+#: The root of every web part's zone. VERIFIED: `div.ControlZone`, `id` =
+#: the instance id, inside `CanvasSection` inside `CanvasZone`.
+CANVAS_CONTROL = '[data-automation-id="CanvasControl"]'
+
+#: `WebPart.<Alias>.internal|external.<instance>` or
+#: `WebPart.unknown.<instance>`. VERIFIED.
+VIEWPORT_ATTRIBUTE = "data-viewport-id"
+VIEWPORT_PATTERN = re.compile(
+    r"^WebPart\.(?:(?P<alias>[^.]+)\.(?P<origin>internal|external)|"
+    r"(?P<unknown>unknown))\.", re.I)
+ORIGIN_MICROSOFT = "internal"
+ORIGIN_CATALOG = "external"
+
+#: Feature tags that are the chrome, normalised by `_norm`. VERIFIED.
+CHROME_FEATURE_TAGS = frozenset({"pagechrome", "suitenavigationplaceholder",
+                                 "siteheaderhost", "comments"})
+CHROME_FEATURE_PREFIXES = ("CanvasComponent.",)
+
+#: Application customizer placeholders. VERIFIED: `data-sp-placeholder`
+#: `Top`, `TopContent` and `Bottom` (`#spTopPlaceholder`,
+#: `#spTopContentPlaceholder`, `#spBottomPlaceholder`). They are always in
+#: the page, empty unless an extension filled them - so only a placeholder
+#: with something in it is a zone.
 PLACEHOLDER_ATTRIBUTE = "data-sp-placeholder"
 
-#: The page header: title, banner image, author byline. The words are the
-#: author's, the markup is Microsoft's - so it is an author zone with the
-#: content rules only. HYPOTHESIS for the selector.
-PAGE_HEADER_SELECTORS = ('[data-automation-id="pageHeader"]',)
+#: Kept for callers; there is no page-header element (VERIFIED): the title
+#: area is the `PageTitle` web part, whose text is
+#: `[data-automation-id="TitleTextId"]`.
+PAGE_HEADER_SELECTORS = ()
+PAGE_TITLE_TEXT = '[data-automation-id="TitleTextId"]'
 
 #: Microsoft's chrome, named so the report can say *what* was left out.
 #: Naming is all these do: anything outside a recognised zone is Microsoft's
 #: whether or not it matched one of them, which is what keeps a selector
-#: that has changed from leaking chrome into the findings. HYPOTHESIS, all.
+#: that has changed from leaking chrome into the findings. VERIFIED unless
+#: marked.
 PLATFORM_REGIONS = (
-    ("suite-bar", ("#SuiteNavWrapper", "#SuiteNavPlaceholder", "#O365_NavHeader")),
-    ("app-bar", ("#sp-appBar", '[data-automation-id="appBar"]')),
-    ("site-header", ('[data-automationid="SiteHeader"]',
-                     '[data-automation-id="SiteHeader"]', "#spSiteHeader")),
-    ("hub-nav", ('[data-automationid="HubNav"]', '[data-automation-id="HubNav"]')),
-    ("command-bar", ("#spCommandBar", '[data-automation-id="pageCommandBar"]')),
-    ("site-nav", ("#spLeftNav", '[data-automation-id="spNav"]')),
-    ("comments", ('[data-automation-id="CommentsWrapper"]', "#CommentsWrapper")),
-    ("footer", ('[data-automation-id="SiteFooter"]', "#spSiteFooter")),
+    ("suite-bar", ("#SuiteNavWrapper", "#O365_NavHeader")),
+    ("app-bar", ("#sp-appBar",)),
+    # `data-automationid`, no hyphen, on the site header.
+    ("site-header", ('[data-automationid="SiteHeader"]', "#spSiteHeader")),
+    ("hub-nav", ('[data-automationid="HubNav"]',)),               # HYPOTHESIS
+    ("command-bar", ("#spCommandBar",)),
+    ("site-nav", ("#spLeftNav",)),
+    ("comments", ("#CommentsWrapper",)),
+    ("footer", ('[data-automation-id="SiteFooter"]', "#spSiteFooter")),  # HYPOTHESIS
 )
 
-#: What axe is confined to in the browser pass: every zone that can hold
-#: anything somebody other than Microsoft wrote. A selector that matches
-#: nothing is dropped by the script before axe runs (see
-#: `audit.browser.axe_script`), so a wrong guess here narrows nothing
-#: rather than failing the pass.
-AXE_INCLUDE = (f"[{FEATURE_TAG}]", f"[{PLACEHOLDER_ATTRIBUTE}]") + PAGE_HEADER_SELECTORS
+#: The wrapper of the whole page, canvas included. Counted by name, never
+#: excluded: excluding it would exclude every web part with it.
+PAGE_CHROME = ("page-chrome", ("#spPageChromeAppDiv",))
 
-#: What axe is told to leave alone even inside an included zone: the chrome,
-#: in case a region above is nested in the canvas.
+#: What axe is confined to in the browser pass. Empty on purpose: an SPFx
+#: part can move its markup out of the canvas into the chrome (see
+#: `SPFX_MODULE_CLASS`), and no CSS selector names "an element with a CSS
+#: module class". So axe reads the page minus the chrome regions below, and
+#: `classify_browser_issues` drops and counts whatever it found outside a
+#: zone.
+AXE_INCLUDE = ()
+
+#: The chrome axe is told to leave alone.
 AXE_EXCLUDE = tuple(selector for _name, selectors in PLATFORM_REGIONS
                     for selector in selectors)
 
+#: An SPFx CSS-module class: `<name>_<8 hex>`, the hash the SPFx build
+#: appends (VERIFIED on the live pages: the custom header an SPFx part draws
+#: into the chrome is `header.<name>_<hash>`). Microsoft's own generated
+#: classes are a different shape (`f_xxxxx_y`, `root-123`). HEURISTIC: a
+#: Microsoft bundle built the SPFx way would match too.
+SPFX_MODULE_CLASS = re.compile(r"^([A-Za-z][A-Za-z0-9]+)_([0-9a-f]{8})$")
+
 # ----------------------------------------------------- Microsoft's parts
 
-#: Feature-tag names of the web parts Microsoft ships, normalised by
-#: `_norm` (lower case, letters and digits only, a trailing "web part"
-#: removed). HYPOTHESIS: taken from the names the web part toolbox shows,
-#: not from a live DOM. A custom part that happens to share one of these
-#: names is recognised by its GUID first when a repository is given.
+#: Microsoft's web part type ids. VERIFIED on live pages; ids not here are
+#: learned with `OotbRegistry.register` / `--ootb-registry`.
+OOTB_WEB_PART_IDS = {
+    "cbe7b0a9-3504-44dd-a3a3-0e5cacd07788": "Title area",
+    "8c88f208-6c77-4bdb-86a0-0c47b4316588": "News",
+    "eb95c819-ab8f-4689-bd03-0c2d65d47b1f": "Site activity",
+    "c70391ea-0b10-4ee9-b2b4-006d3fcad0cd": "Quick links",
+    "f92bf067-bc19-489e-a556-7fe95f508720": "List",
+}
+
+#: The title area's type id. VERIFIED.
+PAGE_TITLE_ID = "cbe7b0a9-3504-44dd-a3a3-0e5cacd07788"
+
+#: Aliases and toolbox names of the web parts Microsoft ships, normalised
+#: by `_norm` (lower case, letters and digits only, a trailing "web part"
+#: removed). VERIFIED for `pagetitle`, `news`, `siteactivity`, `quicklinks`,
+#: `list`; HYPOTHESIS for the rest. Matched against the **alias**, never the
+#: localised title. A part whose viewport says `.external.` is custom
+#: whatever its alias.
 OOTB_FEATURE_NAMES = frozenset({
     "richtexteditor", "text", "image", "hero", "news", "newsreel",
     "quicklinks", "events", "highlightedcontent", "contentrollup",
@@ -144,8 +199,13 @@ OOTB_FEATURE_NAMES = frozenset({
 })
 
 #: Feature-tag names of the Text web part, whose content is the author's
-#: own rich text and is audited with every rule. HYPOTHESIS.
+#: own rich text and is audited with every rule. VERIFIED: "Rich Text
+#: Editor" (seen nested in the title area; a standalone Text part is the
+#: same editor - HYPOTHESIS).
 TEXT_FEATURE_NAMES = frozenset({"richtexteditor", "text", "rte"})
+
+#: The alias SharePoint writes for a part that has not rendered. VERIFIED.
+UNRENDERED_ALIAS = "undefined"
 
 
 def _norm(name: str) -> str:
@@ -161,15 +221,16 @@ def _guid(value: str) -> str:
 class OotbRegistry:
     """Microsoft's web part ids and names, as far as this run knows them.
 
-    Starts with no ids on purpose (see the module docstring). `register`
-    and `load_file` are how it grows: a file of the shape
+    Starts with the ids seen on live pages (`OOTB_WEB_PART_IDS`), never with
+    ones typed from memory. `register` and `load_file` are how it grows: a
+    file of the shape
 
         {"web_parts": [{"id": "<guid>", "name": "Quick links"}],
          "feature_tags": ["Some new part"]}
 
-    read from a live page, never typed from memory.
+    read from a live page.
     """
-    ids: dict = field(default_factory=dict)
+    ids: dict = field(default_factory=lambda: dict(OOTB_WEB_PART_IDS))
     names: set = field(default_factory=lambda: set(OOTB_FEATURE_NAMES))
 
     def register(self, web_part_id: str = "", name: str = "") -> None:
@@ -195,7 +256,9 @@ class OotbRegistry:
         return self.ids.get(_guid(web_part_id), "")
 
     def knows_name(self, feature_tag: str) -> bool:
-        return _norm(feature_tag) in self.names
+        """Is this alias (or legacy tag) one of Microsoft's parts?"""
+        match = FEATURE_TAG_PATTERN.match(feature_tag or "")
+        return _norm(match.group(1) if match else feature_tag) in self.names
 
 
 #: The registry used when the caller passes none.
@@ -267,8 +330,8 @@ def is_content_finding(issue) -> bool:
 class Zone:
     """One part of the page somebody other than Microsoft is answerable for."""
     kind: str
-    #: What a reader calls it: the part's alias or title, "Text", "Page
-    #: header", "Application customizer (Top)".
+    #: What a reader calls it: the part's title or alias, "Text", "Title
+    #: area", "Application customizer (Top)".
     name: str
     element: object = field(repr=False, compare=False, default=None)
     #: Only `OOTB_CONTENT_RULES` apply: the markup is Microsoft's, the
@@ -280,6 +343,14 @@ class Zone:
     web_part_id: str = ""
     #: The manifest the part came from, when a repository named it.
     manifest: str = ""
+    #: The part's code name (`QuickLinksWebPart`), when the page said it.
+    alias: str = ""
+    #: False for a part SharePoint placed and did not render
+    #: (`undefined web part`, `WebPart.unknown`): nothing of it was audited,
+    #: and that is a fact about the site the report has to show.
+    rendered: bool = True
+    #: True when the zone was inferred rather than read (`HEURISTIC`).
+    heuristic: bool = False
 
     def details(self) -> dict:
         """What every finding in this zone carries."""
@@ -291,6 +362,8 @@ class Zone:
             out["manifest"] = self.manifest
         if self.content_only:
             out["zone_content_only"] = True
+        if self.heuristic:
+            out["zone_heuristic"] = True
         return out
 
 
@@ -334,15 +407,39 @@ def _web_part_id(element) -> str:
     return ""
 
 
+def _is_chrome_tag(element) -> bool:
+    """A `data-sp-feature-tag` on Microsoft's chrome rather than a part."""
+    tag = str(element.get(FEATURE_TAG) or "")
+    if not tag:
+        return False
+    if str(element.get(INSTANCE_ATTRIBUTE) or "").startswith("_"):
+        return True
+    return _norm(tag) in CHROME_FEATURE_TAGS or tag.startswith(CHROME_FEATURE_PREFIXES)
+
+
+#: Elements whose presence makes a placeholder worth auditing.
+_SUBSTANCE = ("img", "svg", "a", "button", "input", "select", "textarea",
+              "iframe", "video", "audio", "picture", "canvas", "object")
+
+
+def _has_content(element) -> bool:
+    if element.get_text(strip=True):
+        return True
+    return element.find(_SUBSTANCE) is not None
+
+
 def _repo_match(element, web_parts):
     """The repository part `element` is (or contains), or `None`."""
     if not web_parts:
         return None
     from audit import within as within_mod
 
-    own_id = _web_part_id(element)
+    ids = {_web_part_id(element)}
+    for tagged in element.select(f"[{FEATURE_TAG}]"):
+        ids.add(_web_part_id(tagged))
+    ids.discard("")
     for part in web_parts:
-        if own_id and part.id and own_id == _guid(part.id):
+        if part.id and _guid(part.id) in ids:
             return part
     for part in web_parts:
         selectors = part.selectors()
@@ -367,43 +464,85 @@ def _matches_self(element, selector: str) -> bool:
         return False
 
 
-def _classify(element, web_parts, registry: OotbRegistry) -> Zone:
-    """Decide one candidate's zone. Strongest evidence first."""
-    part = _repo_match(element, web_parts)
-    if part is not None:
-        return Zone(ZONE_CUSTOM, part.title or part.alias, element,
-                    evidence=f"manifest {part.manifest}",
-                    web_part_id=_guid(part.id), manifest=part.manifest)
+def _part_element(root):
+    """The element inside a canvas control that says which part it is.
 
-    placeholder = element.get(PLACEHOLDER_ATTRIBUTE)
+    The outermost feature tag that is not chrome: the title area holds a
+    "Rich Text Editor" inside it, and the part is the title area.
+    """
+    if root.get(FEATURE_TAG) and not _is_chrome_tag(root):
+        return root
+    for element in root.select(f"[{FEATURE_TAG}]"):
+        if not _is_chrome_tag(element):
+            return element
+    return None
+
+
+def _viewport(root):
+    """`(alias, origin)` from the part's viewport id; origin `unknown` for a
+    part that did not render, `("", "")` without one."""
+    elements = [root] if root.get(VIEWPORT_ATTRIBUTE) else []
+    elements.extend(root.select(f"[{VIEWPORT_ATTRIBUTE}]"))
+    for element in elements:
+        match = VIEWPORT_PATTERN.match(str(element.get(VIEWPORT_ATTRIBUTE) or ""))
+        if match:
+            if match.group("unknown"):
+                return "", "unknown"
+            return match.group("alias"), match.group("origin").lower()
+    return "", ""
+
+
+def _classify(root, web_parts, registry: OotbRegistry) -> Zone:
+    """Decide one candidate's zone. Strongest evidence first."""
+    part = _repo_match(root, web_parts)
+    if part is not None:
+        return Zone(ZONE_CUSTOM, part.title or part.alias, root,
+                    evidence=f"manifest {part.manifest}",
+                    web_part_id=_guid(part.id), manifest=part.manifest,
+                    alias=part.alias)
+
+    placeholder = root.get(PLACEHOLDER_ATTRIBUTE)
     if placeholder:
         return Zone(ZONE_CUSTOM, f"Application customizer ({placeholder})",
-                    element, evidence=f'{PLACEHOLDER_ATTRIBUTE}="{placeholder}"')
+                    root, evidence=f'{PLACEHOLDER_ATTRIBUTE}="{placeholder}"')
 
-    tag = str(element.get(FEATURE_TAG) or "")
-    web_part_id = _web_part_id(element)
-    if tag:
-        evidence = f'{FEATURE_TAG}="{tag}"'
-        if _norm(tag) in TEXT_FEATURE_NAMES:
-            return Zone(ZONE_AUTHOR, "Text", element, evidence=evidence)
-        known = registry.name_for_id(web_part_id) if web_part_id else ""
-        if known or registry.knows_name(tag):
-            return Zone(ZONE_AUTHOR, known or _display(tag), element,
-                        content_only=True, evidence=evidence,
-                        web_part_id=web_part_id)
-        return Zone(ZONE_CUSTOM, _display(tag), element, evidence=evidence,
-                    web_part_id=web_part_id)
-    if web_part_id:
-        known = registry.name_for_id(web_part_id)
-        evidence = f"web part id {web_part_id}"
-        if known:
-            return Zone(ZONE_AUTHOR, known, element, content_only=True,
-                        evidence=evidence, web_part_id=web_part_id)
-        return Zone(ZONE_CUSTOM, web_part_id, element, evidence=evidence,
-                    web_part_id=web_part_id)
-    # Only the page header is left among the candidates.
-    return Zone(ZONE_AUTHOR, "Page header", element, content_only=True,
-                evidence=PAGE_HEADER_SELECTORS[0])
+    tagged = _part_element(root)
+    tag = str(tagged.get(FEATURE_TAG) or "") if tagged is not None else ""
+    web_part_id = _web_part_id(tagged) if tagged is not None else ""
+    web_part_id = web_part_id or _web_part_id(root)
+    match = FEATURE_TAG_PATTERN.match(tag)
+    alias = match.group(1) if match else ""
+    title = (match.group(2).strip() if match else "") or ""
+    view_alias, origin = _viewport(root)
+    alias = alias or view_alias
+    evidence = "; ".join(bit for bit in (
+        f'{FEATURE_TAG}="{tag}"' if tag else "",
+        f"{VIEWPORT_ATTRIBUTE} {origin}" if origin else "",
+        f"web part id {web_part_id}" if web_part_id else "") if bit)
+    name = title or (_display(tag) if tag and not match else "") or alias \
+        or web_part_id or "Web part"
+
+    if _norm(alias) == UNRENDERED_ALIAS or origin == "unknown":
+        return Zone(ZONE_CUSTOM, f"{title or name} (not rendered)", root,
+                    evidence=evidence, web_part_id=web_part_id, alias="",
+                    rendered=False)
+    if tag and not match and _norm(tag) in TEXT_FEATURE_NAMES:
+        return Zone(ZONE_AUTHOR, "Text", root, evidence=evidence)
+    if origin == ORIGIN_CATALOG:
+        return Zone(ZONE_CUSTOM, name, root, evidence=evidence,
+                    web_part_id=web_part_id, alias=alias)
+    known = registry.name_for_id(web_part_id) if web_part_id else ""
+    if web_part_id == PAGE_TITLE_ID or _norm(alias) == "pagetitle":
+        return Zone(ZONE_AUTHOR, "Title area", root, content_only=True,
+                    evidence=evidence, web_part_id=web_part_id, alias=alias)
+    if (known or origin == ORIGIN_MICROSOFT
+            or (alias and _norm(alias) in registry.names)
+            or (tag and not match and registry.knows_name(tag))):
+        return Zone(ZONE_AUTHOR, name if (title or not known) else known, root,
+                    content_only=True, evidence=evidence,
+                    web_part_id=web_part_id, alias=alias)
+    return Zone(ZONE_CUSTOM, name, root, evidence=evidence,
+                web_part_id=web_part_id, alias=alias)
 
 
 def _display(tag: str) -> str:
@@ -412,36 +551,132 @@ def _display(tag: str) -> str:
     return text or tag
 
 
-def _candidates(document, web_parts) -> list:
-    selectors = [f"[{FEATURE_TAG}]", f"[{PLACEHOLDER_ATTRIBUTE}]",
-                 *PAGE_HEADER_SELECTORS,
-                 *(f"[{attribute}]" for attribute in WEB_PART_ID_ATTRIBUTES)]
-    for part in web_parts or ():
-        selectors.extend(part.selectors())
-    found = []
-    for selector in selectors:
-        try:
-            found.extend(document.select(selector))
-        except Exception:  # noqa: BLE001 - one bad selector is not the map
-            continue
+def _in_page_order(document, elements) -> list:
     from audit.within import _outermost
 
     unique, seen = [], set()
-    for element in found:
+    for element in elements:
         if id(element) not in seen:
             seen.add(id(element))
             unique.append(element)
-    # Page order, then outermost: a part's wrapper and the part inside it
-    # are one zone, and the wrapper is the one whose markup includes both.
     order = {id(element): index
              for index, element in enumerate(document.find_all(True))}
     unique.sort(key=lambda element: order.get(id(element), 0))
     return _outermost(unique)
 
 
+def _select(document, selectors) -> list:
+    found = []
+    for selector in selectors:
+        try:
+            found.extend(document.select(selector))
+        except Exception:  # noqa: BLE001 - one bad selector is not the map
+            continue
+    return found
+
+
+def _candidates(document, web_parts) -> list:
+    """The roots of the zones read off the page, outermost, in page order.
+
+    A canvas control is the root of its part. Outside a canvas (a page
+    without `CanvasControl`, an older layout) a web part's own tagged
+    element is; the chrome's tags are never candidates.
+    """
+    found = _select(document, [CANVAS_CONTROL])
+    found.extend(element for element in _select(document, [f"[{FEATURE_TAG}]"])
+                 if not _is_chrome_tag(element))
+    found.extend(element for element in _select(
+                     document, [f"[{attribute}]" for attribute in WEB_PART_ID_ATTRIBUTES])
+                 if not _is_chrome_tag(element))
+    found.extend(element for element in _select(document, [f"[{PLACEHOLDER_ATTRIBUTE}]"])
+                 if _has_content(element))
+    for part in web_parts or ():
+        found.extend(_select(document, part.selectors()))
+    return _in_page_order(document, found)
+
+
+def _module_class(element) -> tuple:
+    """`(stem, hash, class)` of the first SPFx CSS-module class, or `()`."""
+    for value in element.get("class") or ():
+        match = SPFX_MODULE_CLASS.match(str(value))
+        if match:
+            return match.group(1), match.group(2), str(value)
+    return ()
+
+
+def _in_region(element, regions: set) -> bool:
+    node = element
+    while node is not None:
+        if id(node) in regions:
+            return True
+        node = getattr(node, "parent", None)
+    return False
+
+
+def _outside_canvas(document, zones, web_parts) -> list:
+    """SPFx markup that left the canvas: `custom`, named by what built it.
+
+    HEURISTIC. An SPFx part may render into the chrome (a custom header in
+    the app chrome, a pop-up on `body`); what it leaves behind is its CSS
+    module classes, `<name>_<hash>`, where the hash is one per stylesheet of
+    one bundle. Microsoft builds some of its own chrome the same way (the
+    left navigation, the persona card), so:
+
+    * an element inside a named chrome region (`PLATFORM_REGIONS`) is never
+      taken - an SPFx extension renders into placeholders, not there;
+    * an element is bound to a part on the page when its stem is the part's
+      alias (`fooHeader_…` -> `FooHeaderWebPart`) or its hash is one the
+      part's own markup in the canvas uses;
+    * one bound to nothing is still `custom`, named by its stem: a part
+      nobody recognised is audited rather than dropped.
+    """
+    inside = set()
+    for zone in zones:
+        inside.add(id(zone.element))
+        inside.update(id(element) for element in zone.element.find_all(True))
+    regions = {id(element) for element in _select(document, AXE_EXCLUDE)}
+    roots = [element for element in document.find_all(True)
+             if id(element) not in inside and _module_class(element)
+             and not _in_region(element, regions)]
+    if not roots:
+        return []
+    by_stem, by_hash = {}, {}
+    for zone in zones:
+        if zone.kind != ZONE_CUSTOM:
+            continue
+        if zone.alias:
+            by_stem.setdefault(_norm(zone.alias), zone.name)
+        for element in (zone.element, *zone.element.find_all(True)):
+            found = _module_class(element)
+            if found:
+                by_hash.setdefault(found[1], zone.name)
+    for part in web_parts or ():
+        if part.alias:
+            by_stem.setdefault(_norm(part.alias), part.title or part.alias)
+    roots = _in_page_order(document, roots)
+    # A stem names its own bundle's hash: the header that is
+    # `fooHeader_1a2b3c4d` makes every other `*_1a2b3c4d` the same part's.
+    for root in roots:
+        stem, digest, _value = _module_class(root)
+        if _norm(stem) in by_stem:
+            by_hash.setdefault(digest, by_stem[_norm(stem)])
+    out = []
+    for root in roots:
+        stem, digest, value = _module_class(root)
+        owner = by_stem.get(_norm(stem)) or by_hash.get(digest)
+        name = f"{owner} (outside the canvas)" if owner             else f"SPFx outside the canvas ({stem})"
+        evidence = f"HEURISTIC: CSS module class {value} outside the canvas"
+        if owner:
+            how = "stem" if _norm(stem) in by_stem else "bundle hash"
+            evidence += f"; bound to {owner} by its {how}"
+        out.append(Zone(ZONE_CUSTOM, name, root, evidence=evidence,
+                        heuristic=True))
+    return out
+
+
 def _count_regions(document) -> dict:
     regions = {}
-    for name, selectors in PLATFORM_REGIONS:
+    for name, selectors in (*PLATFORM_REGIONS, PAGE_CHROME):
         for selector in selectors:
             try:
                 if document.select_one(selector) is not None:
@@ -457,6 +692,13 @@ def map_document(document, web_parts=(), registry: OotbRegistry | None = None) -
     registry = registry or DEFAULT_REGISTRY
     zones = [_classify(element, web_parts, registry)
              for element in _candidates(document, web_parts)]
+    if zones:
+        # Only on a page this module recognised: a CSS module class on an
+        # ordinary page says nothing about SharePoint.
+        zones.extend(_outside_canvas(document, zones, web_parts))
+        order = {id(element): index
+                 for index, element in enumerate(document.find_all(True))}
+        zones.sort(key=lambda zone: order.get(id(zone.element), 0))
     total = len(document.find_all(True))
     inside = sum(1 + len(zone.element.find_all(True)) for zone in zones)
     return ZoneMap(zones=zones, platform_elements=max(0, total - inside),
@@ -581,11 +823,13 @@ def classify_browser_issues(issues, markup: str, web_parts=(),
 def browser_options(options):
     """`options` confined to the zones, for the browser pass on SharePoint.
 
-    axe is given the zones as `include` and the chrome as `exclude`. The
+    axe is told to leave the chrome regions alone (`AXE_EXCLUDE`) and reads
+    the rest; nothing is `include`d, because the markup an SPFx part moves
+    out of the canvas has no selector (see `AXE_INCLUDE`). What it finds
+    outside a zone is dropped and counted by `classify_browser_issues`. The
     other three engines read the whole document by construction - the same
-    reason `--within` switches them off - so they are switched off here too,
-    and the DOM is captured so `classify_browser_issues` can place what axe
-    found.
+    reason `--within` switches them off - so they are switched off here, and
+    the DOM is captured so each finding can be placed.
     """
     from dataclasses import replace
 
@@ -629,12 +873,27 @@ SCROLL_DONE_SCRIPT = "(function() { return window.__xaScrollDone === true; })();
 #: How many canvas controls are in the DOM now. Polled until it stops
 #: changing, which is how "every web part has rendered" can be asked
 #: without knowing how many there are.
+#: Counts canvas controls plus the parts that have rendered (a tag that is
+#: no longer `undefined web part`), so a part that renders late changes the
+#: number even when no control was added. VERIFIED on a live home page: 17
+#: parts before scrolling, 24 after, stable within 750-2000 ms.
 CANVAS_COUNT_SCRIPT = (
     "(function() { return document.querySelectorAll("
-    f"'[{FEATURE_TAG}], [{PLACEHOLDER_ATTRIBUTE}]').length; }})();")
+    f"'{CANVAS_CONTROL}').length + document.querySelectorAll("
+    f"'[{FEATURE_TAG}]:not([{FEATURE_TAG}^=\"undefined\"])').length; }})();")
 
 
 # -------------------------------------------------------------- summary
+
+def _part_entry(zone: Zone) -> dict:
+    entry = {"kind": zone.kind, "placements": 0, "findings": 0,
+             "evidence": zone.evidence, "content_only": zone.content_only}
+    if not zone.rendered:
+        entry["rendered"] = False
+    if zone.heuristic:
+        entry["heuristic"] = True
+    return entry
+
 
 @dataclass
 class Summary:
@@ -663,15 +922,11 @@ class Summary:
             self.platform_regions[name] = self.platform_regions.get(name, 0) + count
         for zone in zone_map.zones:
             self.zones[zone.kind] = self.zones.get(zone.kind, 0) + 1
-            part = self.parts.setdefault(zone.name, {
-                "kind": zone.kind, "placements": 0, "findings": 0,
-                "evidence": zone.evidence, "content_only": zone.content_only})
+            part = self.parts.setdefault(zone.name, _part_entry(zone))
             part["placements"] += 1
 
     def count_findings(self, zone: Zone, count: int) -> None:
-        part = self.parts.setdefault(zone.name, {
-            "kind": zone.kind, "placements": 0, "findings": 0,
-            "evidence": zone.evidence, "content_only": zone.content_only})
+        part = self.parts.setdefault(zone.name, _part_entry(zone))
         part["findings"] += count
 
     def skip_finding(self, issue, platform: bool = False) -> None:

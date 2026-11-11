@@ -1,107 +1,179 @@
 <!doctype html>
 <!--
-  SYNTHETIC FIXTURE. Not captured from a tenant.
+  SYNTHETIC FIXTURE. Not captured from a tenant: every name, text, address
+  and custom GUID here is invented. Microsoft's own web part type ids
+  (PageTitle, QuickLinks) are the public ones.
 
-  Written to look like a modern SharePoint Online page as it is commonly
-  documented, so `audit.sharepoint_zones` has something realistic to split.
-  The attribute names and ids here are the module's HYPOTHESES (see its
-  docstring); replace this file with a real capture once a signed-in run can
-  save one, and keep the expectations in tests/test_sharepoint_zones.py.
+  The *structure* follows the rendered DOM of a live SharePoint Online page
+  after every lazy web part was scrolled into view: the chrome carries
+  `data-sp-feature-tag` too (with instance ids starting with `_`), every web
+  part sits in a `CanvasControl`, its tag reads `<Alias> web part (<title>)`,
+  its viewport id says `internal` (Microsoft) / `external` (app catalog) /
+  `unknown` (not rendered), placeholders are present and empty unless an
+  extension filled them, and an SPFx part may draw its markup into the chrome
+  where only its CSS module classes (`<name>_<8 hex>`) say whose it is.
 
   Planted defects, and whose they are:
   * suite bar, app bar, site header, command bar, comments, footer, canvas
     wrappers: Microsoft's - never reported;
   * Text web part: the author's rich text - every rule (heading jump h2->h4,
     a vague link);
-  * page header: author content in Microsoft markup - its banner has no alt
-    (reported), its structure is not the author's;
+  * title area (PageTitle): author content in Microsoft markup - its banner
+    has no alt (reported), a positive tabindex on the byline (skipped);
   * Quick links: author content in a Microsoft part - an empty link
     (reported), a positive tabindex in the part's own markup (skipped);
   * "Contoso News Carousel": a custom SPFx part placed twice - image without
     alt and a positive tabindex in both (reported, named);
-  * Top / Bottom placeholders: an application customizer - image without
-    alt (reported).
+  * "Contoso Header": a custom part whose canvas control is empty because it
+    draws its header into the chrome - the header's image has no alt
+    (reported, bound to the part by its CSS module stem);
+  * "Contoso Events": placed and not rendered - nothing to audit, listed;
+  * a pop-up an SPFx part appends to <body>: a button with no name
+    (reported, named by its CSS module);
+  * TopContent / Bottom placeholders filled by an application customizer:
+    image without alt (reported); the empty Top placeholder is not a zone.
 -->
 <html lang="it" dir="ltr">
 <head>
 <meta charset="utf-8">
 <title>Home - Contoso Intranet (synthetic)</title>
-<script>var _spPageContextInfo = {"webAbsoluteUrl": "https://contoso.sharepoint.com/sites/ExampleSite", "siteServerRelativeUrl": "/sites/ExampleSite"};</script>
+<script>var spClientSidePageContext = {"webAbsoluteUrl": "https://contoso.sharepoint.com/sites/ExampleSite"};</script>
 <link rel="stylesheet" href="/_layouts/15/odsp-next/suite.css">
 </head>
 <body>
-<div id="SuiteNavWrapper">
-  <div id="O365_NavHeader" role="banner">
-    <button class="o365sx-button" tabindex="5"><span class="ms-Icon"></span></button>
-    <img src="/_layouts/15/images/suite-logo.png">
-    <input type="search" placeholder="Cerca">
-  </div>
-</div>
-<div id="sp-appBar" data-automation-id="appBar">
-  <a href="https://contoso.sharepoint.com/_layouts/15/sharepoint.aspx" tabindex="3"><i class="ms-Icon"></i></a>
-</div>
-<div id="spPageChromeAppDiv">
-  <div data-sp-placeholder="Top">
-    <div class="contosoBanner_4f2a91"><img src="/sites/ExampleSite/SiteAssets/alert.png"><span>Avviso ai colleghi</span></div>
-  </div>
-  <div id="spSiteHeader" data-automationid="SiteHeader">
-    <div data-automationid="HubNav"><a href="/sites/Hub" tabindex="4"><span></span></a></div>
-    <img src="/sites/ExampleSite/SiteAssets/logo.png">
-    <h1 class="ms-siteHeader-siteName">Contoso Intranet</h1>
-  </div>
-  <div id="spCommandBar" data-automation-id="pageCommandBar">
-    <button class="ms-Button" tabindex="2"><i class="ms-Icon"></i></button>
-  </div>
-  <div class="mainContent">
-    <div data-automation-id="pageHeader">
-      <div class="ms-pageTitle"><h1>Benvenuti nella intranet</h1></div>
-      <div class="banner"><img src="/sites/ExampleSite/SiteAssets/banner.jpg"></div>
-      <div class="byline" tabindex="7">Redazione</div>
+<div id="SPPageChrome">
+<div id="spPageChromeAppDiv" data-sp-feature-tag="Page Chrome" data-sp-feature-instance-id="_Page Chrome">
+  <div id="SuiteNavWrapper" data-sp-feature-tag="Suite Navigation Placeholder" data-sp-feature-instance-id="_Suite Navigation Placeholder">
+    <div id="O365_NavHeader" role="banner">
+      <button class="o365sx-button" tabindex="5"><span class="ms-Icon"></span></button>
+      <img src="/_layouts/15/images/suite-logo.png">
+      <input type="search" placeholder="Cerca">
     </div>
-    <div data-automation-id="CanvasZone" class="CanvasZone">
-      <div data-automation-id="CanvasSection" class="CanvasSection">
-        <div data-automation-id="CanvasControl" class="ControlZone ControlZone_7c1d2e" id="a1b2">
-          <div data-sp-feature-tag="Rich Text Editor" data-sp-feature-instance-id="a1b2">
-            <div class="rte-webpart">
-              <h2>Notizie della settimana</h2>
-              <h4>Dettagli</h4>
-              <p>Per tutte le informazioni <a href="/sites/ExampleSite/SitePages/Info.aspx">clicca qui</a>.</p>
+  </div>
+  <div id="sp-appBar">
+    <a href="https://contoso.sharepoint.com/_layouts/15/sharepoint.aspx" tabindex="3"><i class="ms-Icon"></i></a>
+  </div>
+  <div id="AppChrome">
+    <div id="spSiteHeader" data-sp-feature-tag="Site header host" data-sp-feature-instance-id="_Site header host">
+      <div data-automationid="SiteHeader">
+        <div data-automationid="HubNav"><a href="/sites/Hub" tabindex="4"><span></span></a></div>
+        <img src="/sites/ExampleSite/SiteAssets/logo.png">
+        <h1 class="ms-siteHeader-siteName">Contoso Intranet</h1>
+      </div>
+    </div>
+    <div id="spCommandBar">
+      <button class="ms-Button" tabindex="2"><i class="ms-Icon"></i></button>
+    </div>
+    <div id="spTopPlaceholder" data-sp-placeholder="Top"><div></div></div>
+    <section class="mainContent b_kLmNo_1p2q3">
+      <div id="spTopContentPlaceholder" data-sp-placeholder="TopContent">
+        <div class="contosoBanner_4f2a91c7"><img src="/sites/ExampleSite/SiteAssets/alert.png"><span>Avviso ai colleghi</span></div>
+      </div>
+      <header id="contosoheader" role="navigation" class="contosoHeader_5e6f7a8b sticky_5e6f7a8b">
+        <div class="headerDesktop_5e6f7a8b">
+          <a href="https://contoso.sharepoint.com/sites/ExampleSite"><img src="/sites/ExampleSite/SiteAssets/brand.png"></a>
+          <span class="menuLabel_5e6f7a8b">Menu</span>
+        </div>
+      </header>
+      <div id="contentScrollRegion">
+        <div id="spPageCanvasContent">
+          <div data-sp-feature-tag="CanvasComponent.internal.0b1c2d3e-0000-4000-8000-000000000001">
+            <div id="Canvas" class="SPCanvas">
+              <div data-automation-id="CanvasZone" class="CanvasZone">
+                <div data-automation-id="CanvasSection" class="CanvasSection">
+                  <div data-automation-id="CanvasControl" class="ControlZone ControlZone--clean f_aBcDe_y" id="10000000-0000-4000-8000-000000000001">
+                    <div id="vpc_WebPart.PageTitle.internal.10000000-0000-4000-8000-000000000001">
+                      <div data-viewport-id="WebPart.PageTitle.internal.10000000-0000-4000-8000-000000000001">
+                        <div data-sp-feature-tag="PageTitle web part (Titolo)" data-sp-feature-instance-id="10000000-0000-4000-8000-000000000001" data-sp-web-part-id="cbe7b0a9-3504-44dd-a3a3-0e5cacd07788">
+                          <div data-automation-id="TitleTextId"><h1>Benvenuti nella intranet</h1></div>
+                          <div class="banner"><img src="/sites/ExampleSite/SiteAssets/banner.jpg"></div>
+                          <div data-sp-feature-tag="Rich Text Editor"><p>Notizie dalla redazione</p></div>
+                          <div class="byline" tabindex="7">Redazione</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div data-automation-id="CanvasControl" class="ControlZone ControlZone--clean f_aBcDe_y" id="10000000-0000-4000-8000-000000000002">
+                    <div data-sp-feature-tag="Rich Text Editor" data-sp-feature-instance-id="10000000-0000-4000-8000-000000000002">
+                      <div class="rte-webpart">
+                        <h2>Notizie della settimana</h2>
+                        <h4>Dettagli</h4>
+                        <p>Per tutte le informazioni <a href="/sites/ExampleSite/SitePages/Info.aspx">clicca qui</a>.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div data-automation-id="CanvasControl" class="ControlZone ControlZone--clean f_aBcDe_y" id="10000000-0000-4000-8000-000000000003">
+                    <div id="vpc_WebPart.QuickLinksWebPart.internal.10000000-0000-4000-8000-000000000003">
+                      <div data-viewport-id="WebPart.QuickLinksWebPart.internal.10000000-0000-4000-8000-000000000003">
+                        <div data-sp-feature-tag="QuickLinksWebPart web part (Collegamenti rapidi)" data-sp-feature-instance-id="10000000-0000-4000-8000-000000000003" data-sp-web-part-id="c70391ea-0b10-4ee9-b2b4-006d3fcad0cd">
+                          <div class="quickLinks" tabindex="6">
+                            <a href="/sites/ExampleSite/Shared%20Documents"><span></span></a>
+                            <a href="/sites/ExampleSite/SitePages/Policy.aspx">Policy aziendali</a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div data-automation-id="CanvasControl" class="ControlZone ControlZone--clean f_aBcDe_y" id="10000000-0000-4000-8000-000000000004">
+                    <div id="vpc_WebPart.ContosoNewsCarouselWebPart.external.10000000-0000-4000-8000-000000000004">
+                      <div data-viewport-id="WebPart.ContosoNewsCarouselWebPart.external.10000000-0000-4000-8000-000000000004">
+                        <div data-sp-feature-tag="ContosoNewsCarouselWebPart web part (Contoso News Carousel)" data-sp-feature-instance-id="10000000-0000-4000-8000-000000000004" data-sp-web-part-id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee">
+                          <div class="newsCarousel_1a2b3c4d" tabindex="8"><img src="/sites/ExampleSite/news/1.jpg"><p>Prima notizia</p></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div data-automation-id="CanvasSection" class="CanvasSection">
+                  <div data-automation-id="CanvasControl" class="ControlZone ControlZone--clean f_aBcDe_y" id="10000000-0000-4000-8000-000000000005">
+                    <div id="vpc_WebPart.ContosoNewsCarouselWebPart.external.10000000-0000-4000-8000-000000000005">
+                      <div data-viewport-id="WebPart.ContosoNewsCarouselWebPart.external.10000000-0000-4000-8000-000000000005">
+                        <div data-sp-feature-tag="ContosoNewsCarouselWebPart web part (Contoso News Carousel)" data-sp-feature-instance-id="10000000-0000-4000-8000-000000000005" data-sp-web-part-id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee">
+                          <div class="newsCarousel_1a2b3c4d" tabindex="9"><img src="/sites/ExampleSite/news/2.jpg"><p>Seconda notizia</p></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div data-automation-id="CanvasControl" class="ControlZone ControlZone--clean f_aBcDe_y" id="10000000-0000-4000-8000-000000000006">
+                    <div id="vpc_WebPart.ContosoHeaderWebPart.external.10000000-0000-4000-8000-000000000006">
+                      <div data-viewport-id="WebPart.ContosoHeaderWebPart.external.10000000-0000-4000-8000-000000000006">
+                        <div data-sp-feature-tag="ContosoHeaderWebPart web part (Contoso Header)" data-sp-feature-instance-id="10000000-0000-4000-8000-000000000006" data-sp-web-part-id="bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div data-automation-id="CanvasControl" class="ControlZone ControlZone--clean f_fGhIj_y" id="10000000-0000-4000-8000-000000000007">
+                    <div id="vpc_WebPart.unknown.10000000-0000-4000-8000-000000000007">
+                      <div data-viewport-id="WebPart.unknown.10000000-0000-4000-8000-000000000007">
+                        <div data-sp-feature-tag="undefined web part (Contoso Events)" data-sp-feature-instance-id="10000000-0000-4000-8000-000000000007"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <div data-automation-id="CanvasControl" class="ControlZone ControlZone_8d2e3f" id="c3d4">
-          <div data-sp-feature-tag="Quick links web part" data-sp-feature-instance-id="c3d4" data-sp-web-part-id="11111111-2222-3333-4444-555555555555">
-            <div class="quickLinks" tabindex="6">
-              <a href="/sites/ExampleSite/Shared%20Documents"><span></span></a>
-              <a href="/sites/ExampleSite/SitePages/Policy.aspx">Policy aziendali</a>
+        <div id="CommentsWrapper">
+          <div id="vpc_Page.CommentsWrapper.internal.20000000-0000-4000-8000-000000000001">
+            <div data-viewport-id="Page.CommentsWrapper.internal.20000000-0000-4000-8000-000000000001">
+              <div data-sp-feature-tag="Comments" data-sp-feature-instance-id="_Comments">
+                <input type="text" placeholder="Aggiungi un commento">
+                <button tabindex="10"></button>
+              </div>
             </div>
           </div>
         </div>
-        <div data-automation-id="CanvasControl" class="ControlZone ControlZone_9e3f4a" id="e5f6">
-          <div data-sp-feature-tag="Contoso News Carousel web part" data-sp-feature-instance-id="e5f6" data-sp-web-part-id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee">
-            <div class="newsCarousel_1a2b3c" tabindex="8"><img src="/sites/ExampleSite/news/1.jpg"><p>Prima notizia</p></div>
-          </div>
-        </div>
       </div>
-      <div data-automation-id="CanvasSection" class="CanvasSection">
-        <div data-automation-id="CanvasControl" class="ControlZone ControlZone_0a1b2c" id="g7h8">
-          <div data-sp-feature-tag="Contoso News Carousel web part" data-sp-feature-instance-id="g7h8" data-sp-web-part-id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee">
-            <div class="newsCarousel_1a2b3c" tabindex="9"><img src="/sites/ExampleSite/news/2.jpg"><p>Seconda notizia</p></div>
-          </div>
-        </div>
-      </div>
+    </section>
+    <div id="spBottomPlaceholder" data-sp-placeholder="Bottom">
+      <footer class="contosoFooter_77aa11c2"><img src="/sites/ExampleSite/SiteAssets/footer.png"></footer>
     </div>
-    <div data-automation-id="CommentsWrapper" id="CommentsWrapper">
-      <input type="text" placeholder="Aggiungi un commento">
-      <button tabindex="10"></button>
+    <div data-automation-id="SiteFooter">
+      <img src="/_layouts/15/images/footer-logo.png">
     </div>
-  </div>
-  <div data-automation-id="SiteFooter">
-    <img src="/_layouts/15/images/footer-logo.png">
-  </div>
-  <div data-sp-placeholder="Bottom">
-    <footer class="contosoFooter_77aa11"><img src="/sites/ExampleSite/SiteAssets/footer.png"></footer>
   </div>
 </div>
+</div>
+<div class="contosoPopup_9a8b7c6d"><button class="closePopup_9a8b7c6d"><span class="ms-Icon"></span></button><p>Buone feste</p></div>
 </body>
 </html>

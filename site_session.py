@@ -429,12 +429,37 @@ def _bare_host(host_or_url: str) -> str:
     return (parsed.hostname or "").lower().rstrip(".")
 
 
-def cookie_is_for_fetcher(site_host: str, cookie_domain: str) -> bool:
+#: SharePoint Online's session is two cookies, and a request carrying only
+#: one of them is answered `403` with `X-Forms_Based_Auth_Required` (checked
+#: live, all four combinations: only both together read a page). `FedAuth`
+#: is set on the tenant's host; `rtFa` on `.sharepoint.com`.
+SHAREPOINT_SESSION_COOKIES = ("FedAuth", "rtFa")
+#: The one cookie the fetcher takes from the shared `.sharepoint.com`
+#: parent, narrowed to the tenant's host when it is kept.
+_SHAREPOINT_PARENT_COOKIES = ("rtFa",)
+
+
+def _sharepoint_parent(host: str) -> str:
+    """`sharepoint.com` for a tenant host on it, else `""`."""
+    from project_profile import SHAREPOINT_ONLINE_SUFFIXES, sharepoint_tenant
+
+    if not sharepoint_tenant(host):
+        return ""
+    for suffix in SHAREPOINT_ONLINE_SUFFIXES:
+        if host.endswith(suffix):
+            return suffix.lstrip(".")
+    return ""
+
+
+def cookie_is_for_fetcher(site_host: str, cookie_domain: str,
+                          name: str = "") -> bool:
     """Should a cookie set on `cookie_domain` reach the fetcher of `site_host`?
 
     Yes for the site's own host and its parent domains (what a browser would
     send there), never for an identity provider, and for SharePoint Online
-    only the tenant's own hosts: `.sharepoint.com` is every tenant's parent.
+    only the tenant's own hosts: `.sharepoint.com` is every tenant's parent,
+    so the one cookie SharePoint needs from it - `rtFa`, named - is the only
+    one taken, and `cookies_for_fetcher` narrows it to the tenant's host.
     A Microsoft sign-in cookie (`ESTSAUTH*` on `login.microsoftonline.com`)
     is the person's whole Microsoft account; the browser profile keeps it
     for a silent sign-in, the fetcher's copy never does.
@@ -450,7 +475,10 @@ def cookie_is_for_fetcher(site_host: str, cookie_domain: str) -> bool:
         return False
     tenant_hosts = sharepoint_tenant_hosts(host)
     if tenant_hosts:
-        return domain in tenant_hosts
+        if domain in tenant_hosts:
+            return True
+        return (domain == _sharepoint_parent(host)
+                and name in _SHAREPOINT_PARENT_COOKIES)
     if host == domain:
         return True  # `localhost` included: a host is its own scope
     # A parent domain, but never a bare top-level one.
@@ -458,9 +486,115 @@ def cookie_is_for_fetcher(site_host: str, cookie_domain: str) -> bool:
 
 
 def cookies_for_fetcher(site_host: str, records) -> list:
-    """The records the fetcher of `site_host` should be given."""
-    return [record for record in records or ()
-            if cookie_is_for_fetcher(site_host, record.get("domain", ""))]
+    """The records the fetcher of `site_host` should be given.
+
+    A SharePoint parent-domain cookie that passes is copied as a host-only
+    cookie of the tenant's host: the fetcher must not offer it to every
+    tenant on `sharepoint.com`.
+    """
+    from project_profile import sharepoint_tenant_hosts
+
+    host = _bare_host(site_host)
+    parent = _sharepoint_parent(host)
+    kept = []
+    for record in records or ():
+        domain = str(record.get("domain", "") or "")
+        name = str(record.get("name", "") or "")
+        if not cookie_is_for_fetcher(site_host, domain, name):
+            continue
+        if parent and domain.strip().lower().lstrip(".") == parent:
+            record = dict(record, domain=sharepoint_tenant_hosts(host)[0],
+                          host_only=True)
+        kept.append(record)
+    return kept
+
+
+def missing_session_cookies(site_host: str, records) -> list:
+    """The session cookies a SharePoint Online host still lacks, by name.
+
+    `[]` for any other host - nothing is known to be required there - and
+    for a SharePoint session that has both. Names only, never values.
+    """
+    from project_profile import sharepoint_tenant
+
+    if not sharepoint_tenant(_bare_host(site_host)):
+        return []
+    have = {str(record.get("name", "")) for record in records or ()
+            if record.get("value")}
+    return [name for name in SHAREPOINT_SESSION_COOKIES if name not in have]
+
+
+def _cookie_rows(path: Path):
+    """The rows of a Chromium cookie file, or `None` when it cannot be read.
+
+    Read-only with ordinary locking first, which sees a consistent file and
+    leaves a rollback journal to its owner; `immutable` second, for a file
+    whose leftover journal a read-only connection may not roll back. Neither
+    writes. A file an open browser holds is refused by Windows to both -
+    `None` then, and the caller reads it before the browser opens it.
+    """
+    import sqlite3
+
+    query = ("SELECT host_key, name, value, path, is_secure, "
+             "is_httponly, expires_utc FROM cookies")
+    for mode in ("mode=ro", "mode=ro&immutable=1"):
+        db = None
+        try:
+            uri = path.resolve().as_uri() + "?" + mode
+            db = sqlite3.connect(uri, uri=True, timeout=0.5)
+            return db.execute(query).fetchall()
+        except Exception:  # noqa: BLE001 - see `read_profile_cookies`
+            continue
+        finally:
+            if db is not None:
+                db.close()
+    return None
+
+
+#: Chromium counts cookie expiry in microseconds since 1601-01-01.
+_CHROMIUM_EPOCH_OFFSET = 11_644_473_600
+
+
+def read_profile_cookies(storage_path, site_host: str,
+                         names=SHAREPOINT_SESSION_COOKIES) -> list:
+    """The named cookies of `site_host` from a browser profile's own store.
+
+    How the sign-in window learns a session the profile already holds: the
+    cookie store never reports a cookie restored from disk. Read before the
+    profile is opened - an open profile's file is refused on Windows (see
+    `_cookie_rows`). Only `names`, only the hosts `cookie_is_for_fetcher`
+    allows, and only a value stored in clear: a value Chromium encrypted is
+    left alone rather than guessed at. Never writes, never raises; `[]` on
+    anything unexpected, and no value is ever logged.
+    """
+    base = Path(storage_path or "")
+    candidates = [base / "Cookies", base / "Network" / "Cookies"]
+    wanted = set(names or ())
+    out: list = []
+    for path in candidates:
+        if not path.is_file():
+            continue
+        rows = _cookie_rows(path)
+        if rows is None:
+            continue
+        for host_key, name, value, cookie_path, secure, http_only, expires in rows:
+            if name not in wanted or not value:
+                continue
+            if not cookie_is_for_fetcher(site_host, host_key, name):
+                continue
+            seconds = None
+            if expires:
+                seconds = int(expires // 1_000_000 - _CHROMIUM_EPOCH_OFFSET)
+            out.append({
+                "name": str(name), "value": str(value),
+                "domain": str(host_key).lower(), "path": cookie_path or "/",
+                "secure": bool(secure), "http_only": bool(http_only),
+                "same_site": "Default", "expires": seconds,
+                "host_only": not str(host_key).startswith("."),
+            })
+        if out:
+            break
+    return out
 
 
 def save_cookies(host: str, cookies) -> None:

@@ -5,6 +5,8 @@ with fullscan - when to render, how to turn a source into a URL.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import applog
 import progress
@@ -208,6 +210,16 @@ def _run_browser_pass(result, suppressions, args=None) -> None:
         performance_scenario=scenario,
         performance_fresh=getattr(args, "performance_fresh", False),
     )
+    # A SharePoint run reads the zones, not the chrome: axe is confined to
+    # them, the whole-document engines are off, and the DOM is kept so each
+    # finding can be placed. See `audit.sharepoint_zones`.
+    sharepoint = bool(getattr(result, "sharepoint", None))
+    zone_summary = None
+    if sharepoint:
+        from audit import sharepoint_zones
+
+        options = sharepoint_zones.browser_options(options)
+        zone_summary = sharepoint_zones.Summary()
     if within:
         progress.notice(
             "within",
@@ -280,6 +292,12 @@ def _run_browser_pass(result, suppressions, args=None) -> None:
             result.browser_coverage.append({"source": document.source, "engine": engine,
                 "status": "skipped" if not enabled else "error" if error else "checked",
                 "reason": "excluded by scope/options" if not enabled else str(error or "")})
+        if zone_summary is not None and not page_audit.error:
+            page_audit.issues = sharepoint_zones.classify_browser_issues(
+                page_audit.issues, page_audit.html,
+                getattr(args, "_web_parts_found", ()) if args is not None else (),
+                getattr(args, "_ootb_registry", None) if args is not None else None,
+                summary=zone_summary)
         browser_mod.merge_page_audit(result, document, page_audit)
         if page_audit.error:
             progress.notice(
@@ -295,6 +313,8 @@ def _run_browser_pass(result, suppressions, args=None) -> None:
                 human=f"# {document.source}: {name} {message}",
                 source=str(document.source), engine=name,
                 error=str(message))
+    if zone_summary is not None:
+        _add_skipped(result, zone_summary)
     # Again, because the findings the browser brought arrived after the crawl
     # attributed the ones it had. A second engine's finding is owned by
     # whoever emitted the element, exactly as the first engine's is.
@@ -302,6 +322,25 @@ def _run_browser_pass(result, suppressions, args=None) -> None:
         from audit.engine import attribute_ownership
 
         attribute_ownership(result)
+
+
+def _add_skipped(result, zone_summary) -> None:
+    """Fold the browser's skipped findings into the run's SharePoint summary.
+
+    The static pass counted what it left out of Microsoft's markup; the
+    browser pass leaves out more, and a summary that showed only the first
+    half would understate how much of the page was not reported.
+    """
+    summary = result.sharepoint if isinstance(result.sharepoint, dict) else {}
+    skipped = summary.setdefault("skipped", {})
+    skipped["findings"] = (skipped.get("findings", 0)
+                           + zone_summary.skipped_findings)
+    by_rule = dict(skipped.get("by_rule") or {})
+    for rule, count in zone_summary.skipped_by_rule.items():
+        by_rule[rule] = by_rule.get(rule, 0) + count
+    skipped["by_rule"] = dict(sorted(by_rule.items(),
+                                     key=lambda kv: (-kv[1], kv[0])))
+    result.sharepoint = summary
 
 
 #: Extensions that make a file a page rather than a piece of a project.
@@ -487,31 +526,361 @@ def apply_session(target: str, config, use_session: bool = True) -> str:
     return host
 
 
-def _crawl_maybe_rendering(target: str, config, progress_cb=None,
-                           session_host: str = "", within: str = ""):
-    """Crawl, starting a browser only if the configuration can use one."""
-    from crawler import RENDER_NEVER, crawl
+#: How the list of pages is found. `links` follows them from the target;
+#: `sharepoint` asks the site for its page tree (`sharepoint_tree`).
+PAGE_TREE_LINKS = "links"
+PAGE_TREE_SHAREPOINT = "sharepoint"
+PAGE_TREES = (PAGE_TREE_LINKS, PAGE_TREE_SHAREPOINT)
+
+
+def sharepoint_pages(target: str, config, *, page_tree: str = PAGE_TREE_LINKS,
+                     site_scope: str = "", progress_cb=None, cancelled=None,
+                     render=None, walk=None, discover=None, session=None):
+    """The pages of a run, found the way `page_tree` says. Qt-free, silent.
+
+    Returns `(pages, tree)`. With `page_tree="sharepoint"` the site's own
+    page tree is read first (`sharepoint_tree.discover`, signed in with
+    `config.cookies`) and the crawl reads exactly those pages; `tree` is the
+    `SiteTree`, and the caller decides what its status means. When the tree
+    says the sign-in is missing or not enough (`auth-required`,
+    `access-denied`) nothing is crawled and `pages` is empty - auditing the
+    sign-in page would be the wrong answer. When the tree came back with no
+    pages for another reason the crawl falls back to following links, inside
+    `site_scope`, and `tree` still says why.
+
+    `discover` and `session` are injectable for tests and for a caller that
+    already holds a session; `render`, `walk` and `cancelled` go to
+    `crawler.crawl` unchanged.
+    """
+    from crawler import crawl
+
+    tree = None
+    seeds = None
+    if page_tree == PAGE_TREE_SHAREPOINT:
+        import sharepoint_tree
+
+        discover = discover or sharepoint_tree.discover
+        if session is None:
+            session = sharepoint_tree.session_from_cookies(config.cookies,
+                                                           target)
+        tree = discover(target, session, cancelled=cancelled)
+        if tree.status in (sharepoint_tree.STATUS_AUTH,
+                           sharepoint_tree.STATUS_ACCESS_DENIED):
+            return [], tree
+        if tree.status in (sharepoint_tree.STATUS_OK,
+                           sharepoint_tree.STATUS_PARTIAL):
+            seeds = sharepoint_tree.seed_urls(tree) or None
+    kwargs = {"progress_cb": progress_cb}
+    if render is not None:
+        kwargs["render"] = render
+    if walk is not None:
+        kwargs["walk"] = walk
+    if cancelled is not None:
+        kwargs["cancelled"] = cancelled
+    if seeds:
+        kwargs["seeds"] = seeds
+    if site_scope:
+        kwargs["site_scope"] = site_scope
+    return crawl(target, config, **kwargs), tree
+
+
+def crawl_site(target: str, config, *, progress_cb=None, session_host: str = "",
+               within: str = "", page_tree: str = PAGE_TREE_LINKS,
+               site_scope: str = "", walk=None):
+    """`sharepoint_pages` with a browser started when the config can use one.
+
+    Returns `(pages, tree)`, like `sharepoint_pages`.
+    """
+    from crawler import RENDER_NEVER
+
+    def _pages(render=None):
+        return sharepoint_pages(target, config, page_tree=page_tree,
+                                site_scope=site_scope, progress_cb=progress_cb,
+                                render=render, walk=walk)
 
     if config.render_mode == RENDER_NEVER:
-        return crawl(target, config, progress_cb=progress_cb)
+        return _pages()
 
     from audit import driver
 
     usable, reason = driver.available()
     if not usable:
-        progress.notice(
-            "browser",
-            f"browser rendering unavailable: {reason}. SPA/React/Vue pages "
-            f"may return empty results; install PySide6 and QtWebEngine for "
-            f"full SPA support.",
-            human=f"# Browser rendering unavailable: {reason}\n"
-                  f"# SPA/React/Vue pages may return empty results.\n"
-                  f"# Install PySide6 and QtWebEngine for full SPA support.",
-            available=False, reason=str(reason))
-        return crawl(target, config, progress_cb=progress_cb)
+        _say_no_renderer(reason)
+        return _pages()
     extra = {"within": within} if within else {}
     with driver.html_renderer(session_host=session_host, **extra) as render:
-        return crawl(target, config, render=render, progress_cb=progress_cb)
+        return _pages(render)
+
+
+def _say_no_renderer(reason) -> None:
+    progress.notice(
+        "browser",
+        f"browser rendering unavailable: {reason}. SPA/React/Vue pages "
+        f"may return empty results; install PySide6 and QtWebEngine for "
+        f"full SPA support.",
+        human=f"# Browser rendering unavailable: {reason}\n"
+              f"# SPA/React/Vue pages may return empty results.\n"
+              f"# Install PySide6 and QtWebEngine for full SPA support.",
+        available=False, reason=str(reason))
+
+
+@dataclass
+class SharePointRun:
+    """What a SharePoint target changes about a run, and who decided it."""
+    #: Read as SharePoint: zones in the audit, the sign-in required.
+    sharepoint: bool = False
+    page_tree: str = PAGE_TREE_LINKS
+    site_scope: str = ""
+    #: `always` when the run should render every page; `None` leaves
+    #: `--render` / the default alone.
+    render: str | None = None
+    #: The options set by the target rather than by hand, for a notice.
+    automatic: tuple = ()
+
+
+def plan_sharepoint(target: str, args) -> SharePointRun:
+    """Read the SharePoint recipes of `run_profile` for this target.
+
+    A flag the person typed always wins: `--page-tree links` keeps the walk
+    on a SharePoint host, `--render never` keeps the fetch. What the target
+    decided is listed in `automatic`, so the CLI can say it out loud.
+    """
+    import project_profile
+    import run_profile
+
+    run = SharePointRun(sharepoint=project_profile.is_sharepoint_online(target))
+    plan = run_profile.build(target, forced_url=True,
+                             repo=getattr(args, "repo", None) or "",
+                             signed_in=True)
+    automatic = []
+    chosen = getattr(args, "page_tree", None)
+    if chosen:
+        run.page_tree = chosen
+    else:
+        item = plan.suggestion("page_tree")
+        if item is not None:
+            run.page_tree = item.value
+            automatic.append("page_tree")
+    scope = getattr(args, "site_scope", None)
+    if scope:
+        run.site_scope = scope
+    else:
+        item = plan.suggestion("site_scope")
+        if item is not None:
+            run.site_scope = item.value
+            automatic.append("site_scope")
+    item = plan.suggestion("render")
+    if (item is not None and not getattr(args, "render", None)
+            and not getattr(args, "no_browser", False)):
+        run.render = item.value
+        automatic.append("render")
+    if run.page_tree == PAGE_TREE_SHAREPOINT:
+        run.sharepoint = True
+    run.automatic = tuple(automatic)
+    return run
+
+
+def login_hint(target: str) -> str:
+    return f"xanalyze login {target}"
+
+
+def missing_session_message(target: str, host: str, no_session: bool) -> str:
+    """Why a SharePoint run without a sign-in stops before it starts."""
+    if no_session:
+        return (f"{host} is SharePoint Online, and --no-session reads it as a "
+                f"stranger: every address answers with Microsoft's sign-in "
+                f"page, and auditing that is not auditing the site. Drop "
+                f"--no-session, or sign in first: {login_hint(target)}")
+    return (f"{host} is SharePoint Online and there is no stored sign-in for "
+            f"it: every address would answer with Microsoft's sign-in page. "
+            f"Sign in first, then run again: {login_hint(target)}")
+
+
+def sign_in_refusal(target: str, args) -> str:
+    """Why a SharePoint Online run cannot start, or `""`. Writes nothing.
+
+    Asked before the run folder is prepared, so a run refused for a missing
+    sign-in leaves no empty dated folder behind. Every address of a tenant
+    without a session answers with Microsoft's sign-in page, and an audit of
+    that page is not an audit of the site.
+    """
+    import project_profile
+
+    if not project_profile.is_sharepoint_online(target):
+        return ""
+    host = project_profile._host_of(target)
+    if getattr(args, "no_session", False):
+        return missing_session_message(target, host, True)
+    import site_session
+
+    try:
+        signed_in = site_session.has_session(site_session.host_of(target))
+    except Exception:  # noqa: BLE001 - a session that cannot be read is none
+        signed_in = False
+    return "" if signed_in else missing_session_message(target, host, False)
+
+
+def session_refusal(target: str, config, session_host: str,
+                    no_session: bool) -> str:
+    """Why a SharePoint run that got past `sign_in_refusal` still cannot read.
+
+    The session existed when the run started, and then either was not
+    applied (`session_host` empty) or handed the fetcher no values at all - a
+    profile whose cookies cannot be read. Crawling on would read every page
+    as a stranger, i.e. Microsoft's sign-in page. `""` when the run may go on.
+    """
+    import project_profile
+
+    if not project_profile.is_sharepoint_online(target):
+        return ""
+    if session_host and list(getattr(config, "cookies", None) or ()):
+        return ""
+    return missing_session_message(target, project_profile._host_of(target),
+                                   no_session)
+
+
+def registry_refusal(args) -> str:
+    """Load `--ootb-registry` onto `args._ootb_registry`, or say why not.
+
+    Called before the run folder exists: reading a local JSON file needs no
+    network, and a mistyped path must not leave an empty folder behind.
+    """
+    path = getattr(args, "ootb_registry", None) or ""
+    try:
+        registry, entries = load_ootb_registry(path)
+    except SystemExit as exc:
+        args._ootb_registry = None
+        return str(exc)
+    args._ootb_registry = registry
+    say_registry(registry, entries, path)
+    return ""
+
+
+def say_refusal(message: str, target: str, reason: str) -> None:
+    """The refusal line both commands print, with the command that fixes it."""
+    progress.notice("error", message, human=message, reason=reason,
+                    login=login_hint(target))
+
+
+def say_plan(sp) -> None:
+    """`# [sharepoint] SharePoint site: --page-tree=...` for what the target set."""
+    if not sp.automatic:
+        return
+    values = {"page_tree": sp.page_tree, "site_scope": sp.site_scope,
+              "render": sp.render}
+    said = ", ".join(f"--{name.replace('_', '-')}={values[name]}"
+                     for name in sp.automatic)
+    progress.notice(
+        "sharepoint", f"SharePoint site: {said}",
+        human=f"# [sharepoint] SharePoint site: {said} "
+              f"(a flag given by hand overrides any of them)",
+        page_tree=sp.page_tree, site_scope=sp.site_scope,
+        render=sp.render or "")
+
+
+def say_tree(tree) -> None:
+    """What the page tree found, or why the crawl follows links instead."""
+    if tree is None:
+        return
+    if tree.pages:
+        line = (f"page tree: {len(tree.pages)} page(s) in {len(tree.webs)} "
+                f"site(s), {len(tree.documents)} document(s) not audited, "
+                f"{sum(tree.skipped_counts().values())} address(es) left out "
+                f"({tree.status})")
+        progress.notice("sharepoint", line, human=f"# [sharepoint] {line}",
+                        status=tree.status, pages=len(tree.pages))
+    else:
+        line = f"page tree unavailable ({tree.status}); following links instead"
+        progress.notice("sharepoint", line, human=f"# [sharepoint] {line}",
+                        status=tree.status,
+                        errors=[e.message for e in tree.errors][:5])
+
+
+def say_registry(registry, entries: int, path: str) -> None:
+    if registry is None:
+        return
+    line = f"OOTB registry: {entries} entr(ies) from {path}"
+    progress.notice("sharepoint", line, human=f"# [sharepoint] {line}",
+                    entries=entries)
+
+
+def tree_refusal(tree, target: str) -> str:
+    """The sentence for a page tree that cannot be read as this person, or ""."""
+    import sharepoint_tree
+
+    if tree is None:
+        return ""
+    host = urlparse(target).hostname or target
+    if tree.status == sharepoint_tree.STATUS_AUTH:
+        return (f"SharePoint answered {host} with a sign-in "
+                f"({tree.auth_reason or 'sign-in required'}): the stored "
+                f"session is missing or has expired. Sign in again, then run "
+                f"again: {login_hint(target)}")
+    if tree.status == sharepoint_tree.STATUS_ACCESS_DENIED:
+        return (f"SharePoint refused {host}: the stored session is signed in "
+                f"but has no permission on this site. Sign in as an account "
+                f"that can open it ({login_hint(target)}), or ask the site "
+                f"owner for access.")
+    return ""
+
+
+def page_tree_summary(tree, walk=None, site_scope: str = "",
+                      page_tree: str = PAGE_TREE_LINKS) -> dict:
+    """What the page list was and what it left out - for the JSON summary.
+
+    Every number here is something the run did *not* audit or could not
+    read, so it is carried whole: a list of skipped addresses reduced to a
+    total would hide which kind of address was skipped.
+    """
+    out: dict = {"mode": page_tree}
+    if site_scope:
+        out["site_scope"] = site_scope
+    if walk is not None:
+        out["out_of_scope"] = walk.out_of_scope
+        out["pages_read"] = walk.pages_read
+        out["not_read"] = walk.queued_when_stopped
+    if tree is None:
+        return out
+    out.update({
+        "status": tree.status,
+        "pages": len(tree.pages),
+        "webs": [web.url for web in tree.webs],
+        "documents": [{"url": doc.url, "title": doc.title}
+                      for doc in tree.documents],
+        "skipped": tree.skipped_counts(),
+        "errors": [{"source": e.source, "url": e.url, "status": e.status,
+                    "message": e.message} for e in tree.errors],
+        "truncated": tree.truncated,
+        "requests": tree.requests_made,
+    })
+    return out
+
+
+def load_ootb_registry(path: str):
+    """`--ootb-registry FILE`: Microsoft's web part ids read from a live page.
+
+    Returns `(registry, entries)`; `(None, 0)` without a path. A file that
+    cannot be read raises `SystemExit` with the reason - a registry asked
+    for and silently missing would audit Microsoft's parts as custom code.
+    """
+    if not path:
+        return None, 0
+    from audit import sharepoint_zones
+
+    registry = sharepoint_zones.OotbRegistry()
+    try:
+        entries = registry.load_file(path)
+    except (OSError, ValueError, AttributeError) as exc:
+        raise SystemExit(f"--ootb-registry {path}: {exc}") from None
+    return registry, entries
+
+
+def _crawl_maybe_rendering(target: str, config, progress_cb=None,
+                           session_host: str = "", within: str = ""):
+    """Crawl, starting a browser only if the configuration can use one."""
+    pages, _tree = crawl_site(target, config, progress_cb=progress_cb,
+                              session_host=session_host, within=within)
+    return pages
 
 
 #: Suffixes a document can carry that are not a page. The media pass reports

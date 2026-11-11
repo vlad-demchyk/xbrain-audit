@@ -8,6 +8,7 @@ what a coding agent reads best; `.json` if the suffix asks for it.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -1230,8 +1231,14 @@ def _history_dir() -> Path:
 
     The legacy location is still read - see `_legacy_history` - so runs
     recorded before this change keep counting.
+
+    `XANALYZE_HISTORY_DIR` moves it, the way `XANALYZE_REPORT_ROOT` moves
+    the run folders: the test suite points it at a temporary directory,
+    because every CLI run a test made was otherwise recorded in the
+    developer's real history - and compared against it on the next run.
     """
-    d = Path.home() / ".xanalyze" / "history"
+    override = os.environ.get("XANALYZE_HISTORY_DIR")
+    d = Path(override) if override else Path.home() / ".xanalyze" / "history"
     try:
         d.mkdir(parents=True, exist_ok=True)
     except OSError:

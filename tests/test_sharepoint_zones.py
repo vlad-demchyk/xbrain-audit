@@ -5,10 +5,11 @@ audited, counted), custom SPFx parts and placeholders (audited in full,
 named), and what the author wrote (the Text web part in full; Microsoft's
 own parts held to the content rules only).
 
-The fixture is synthetic - see the comment at its top. Its attribute names
-are the module's hypotheses about SharePoint's DOM, so these tests pin the
-*behaviour* the classification promises; the selectors themselves are to be
-confirmed on a live tenant.
+The fixture is synthetic - see the comment at its top - and its structure
+follows the rendered DOM of a live SharePoint Online page: the chrome
+carries `data-sp-feature-tag` too, every part sits in a `CanvasControl`, and
+an SPFx part may draw its markup into the chrome. Names, texts and custom
+GUIDs are invented.
 """
 import json
 import tempfile
@@ -55,13 +56,17 @@ class TheMapOfOnePage(unittest.TestCase):
         found = [(zone.kind, zone.name, zone.content_only)
                  for zone in zone_map.zones]
         self.assertEqual(found, [
-            ("custom", "Application customizer (Top)", False),
-            ("author", "Page header", True),
+            ("custom", "Application customizer (TopContent)", False),
+            ("custom", "Contoso Header (outside the canvas)", False),
+            ("author", "Title area", True),
             ("author", "Text", False),
-            ("author", "Quick links", True),
+            ("author", "Collegamenti rapidi", True),
             ("custom", "Contoso News Carousel", False),
             ("custom", "Contoso News Carousel", False),
+            ("custom", "Contoso Header", False),
+            ("custom", "Contoso Events (not rendered)", False),
             ("custom", "Application customizer (Bottom)", False),
+            ("custom", "SPFx outside the canvas (contosoPopup)", False),
         ])
 
     def test_the_chrome_is_left_out_and_counted_by_name(self):
@@ -70,13 +75,133 @@ class TheMapOfOnePage(unittest.TestCase):
         self.assertLess(zone_map.platform_elements, zone_map.elements_total)
         self.assertEqual(set(zone_map.platform_regions), {
             "suite-bar", "app-bar", "site-header", "hub-nav", "command-bar",
-            "comments", "footer"})
+            "comments", "footer", "page-chrome"})
 
     def test_an_element_in_the_chrome_belongs_to_no_zone(self):
         document, zone_map = zones.map_page(_markup())
         self.assertIsNone(zone_map.zone_of(document.select_one("#O365_NavHeader button")))
         carousel = document.select_one('img[src$="news/2.jpg"]')
         self.assertEqual(zone_map.zone_of(carousel).name, "Contoso News Carousel")
+
+
+class TheLivePageStructure(unittest.TestCase):
+    """What a live SharePoint Online DOM turned out to be, pinned."""
+
+    def _zone(self, name):
+        _document, zone_map = zones.map_page(_markup())
+        return next(zone for zone in zone_map.zones if zone.name == name)
+
+    def test_the_chromes_own_feature_tags_are_never_zones(self):
+        document, zone_map = zones.map_page(_markup())
+        for selector in ("#spPageChromeAppDiv", "#SuiteNavWrapper",
+                         "#spSiteHeader", "#CommentsWrapper input",
+                         '[data-sp-feature-tag^="CanvasComponent."]'):
+            with self.subTest(selector):
+                self.assertIsNone(zone_map.zone_of(document.select_one(selector)))
+        self.assertNotIn("Page Chrome", {zone.name for zone in zone_map.zones})
+
+    def test_the_canvas_control_is_the_root_and_the_tag_names_the_part(self):
+        zone = self._zone("Contoso News Carousel")
+        self.assertEqual(zone.element.get("data-automation-id"), "CanvasControl")
+        self.assertEqual(zone.alias, "ContosoNewsCarouselWebPart")
+        self.assertEqual(zone.web_part_id, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")
+
+    def test_the_title_area_is_the_authors_content_only(self):
+        zone = self._zone("Title area")
+        self.assertEqual((zone.kind, zone.content_only), ("author", True))
+        self.assertEqual(zone.web_part_id, zones.PAGE_TITLE_ID)
+
+    def test_a_catalog_part_is_custom_whatever_its_alias(self):
+        markup = (
+            '<div data-automation-id="CanvasControl">'
+            '<div data-viewport-id="WebPart.NewsWebPart.external.1">'
+            '<div data-sp-feature-tag="NewsWebPart web part (News)"><img src="a.png"></div>'
+            '</div></div>')
+        _document, zone_map = zones.map_page(markup)
+        self.assertEqual((zone_map.zones[0].kind, zone_map.zones[0].name),
+                         ("custom", "News"))
+
+    def test_a_microsoft_part_is_known_by_its_viewport_alias_or_id(self):
+        for markup in (
+                '<div data-automation-id="CanvasControl"><div data-viewport-id='
+                '"WebPart.BrandNewWebPart.internal.1"><div data-sp-feature-tag='
+                '"BrandNewWebPart web part (Nuovo)"></div></div></div>',
+                '<div data-automation-id="CanvasControl"><div data-sp-feature-tag='
+                '"SiteActivityWebPart web part (Attività)"></div></div>',
+                '<div data-automation-id="CanvasControl"><div data-sp-feature-tag='
+                '"Whatever web part (Elenco)" data-sp-web-part-id='
+                '"f92bf067-bc19-489e-a556-7fe95f508720"></div></div>'):
+            with self.subTest(markup=markup[60:110]):
+                _document, zone_map = zones.map_page(markup)
+                zone = zone_map.zones[0]
+                self.assertEqual((zone.kind, zone.content_only), ("author", True))
+
+    def test_a_part_that_did_not_render_is_listed_not_hidden(self):
+        zone = self._zone("Contoso Events (not rendered)")
+        self.assertEqual(zone.kind, "custom")
+        self.assertFalse(zone.rendered)
+        summary = zones.Summary()
+        summary.add_page(zones.map_page(_markup())[1], URL)
+        part = summary.as_dict()["parts"]["Contoso Events (not rendered)"]
+        self.assertIs(part["rendered"], False)
+
+    def test_an_empty_placeholder_is_not_a_zone(self):
+        names = {zone.name for zone in zones.map_page(_markup())[1].zones}
+        self.assertNotIn("Application customizer (Top)", names)
+        self.assertIn("Application customizer (TopContent)", names)
+
+    def test_a_modern_page_is_recognised_by_its_raw_page_context(self):
+        self.assertTrue(zones.is_sharepoint_page(
+            "<script>var spClientSidePageContext = {};</script>"))
+        self.assertFalse(zones.is_sharepoint_page(
+            '<script>{"data-sp-canvascontrol": ""}</script>'))
+
+
+class SpfxOutsideTheCanvas(unittest.TestCase):
+    """HEURISTIC: an SPFx part's markup in the chrome, found by its CSS module."""
+
+    def _map(self, markup=None):
+        return zones.map_page(markup or _markup())
+
+    def test_the_header_is_bound_to_its_part_by_the_stem(self):
+        document, zone_map = self._map()
+        zone = zone_map.zone_of(document.select_one("#contosoheader img"))
+        self.assertEqual(zone.name, "Contoso Header (outside the canvas)")
+        self.assertTrue(zone.heuristic)
+        self.assertIn("HEURISTIC", zone.evidence)
+        self.assertTrue(zone.details()["zone_heuristic"])
+
+    def test_a_shared_bundle_hash_binds_what_the_stem_does_not(self):
+        markup = _markup().replace(
+            '<div class="contosoPopup_9a8b7c6d">',
+            '<div class="contosoPopup_1a2b3c4d">')
+        document, zone_map = self._map(markup)
+        zone = zone_map.zone_of(document.select_one(".contosoPopup_1a2b3c4d button"))
+        self.assertEqual(zone.name, "Contoso News Carousel (outside the canvas)")
+        self.assertIn("bundle hash", zone.evidence)
+
+    def test_an_unbound_module_is_still_custom_and_named_by_its_stem(self):
+        document, zone_map = self._map()
+        zone = zone_map.zone_of(document.select_one(".contosoPopup_9a8b7c6d button"))
+        self.assertEqual((zone.kind, zone.name),
+                         ("custom", "SPFx outside the canvas (contosoPopup)"))
+
+    def test_microsofts_own_modules_in_the_chrome_are_not_taken(self):
+        markup = _markup().replace(
+            '<button class="ms-Button" tabindex="2">',
+            '<button class="personaCard_0c0d0e0f" tabindex="2">')
+        document, zone_map = self._map(markup)
+        self.assertIsNone(zone_map.zone_of(document.select_one("#spCommandBar button")))
+
+    def test_an_ordinary_page_has_no_outside_the_canvas(self):
+        _document, zone_map = self._map(
+            '<html><body><div class="hero_1a2b3c4d"><img src="a.png"></div></body></html>')
+        self.assertEqual(zone_map.zones, [])
+
+    def test_its_findings_are_reported_under_the_part(self):
+        issues = _issues(_run())
+        names = {issue.details["zone_name"] for issue in issues}
+        self.assertIn("Contoso Header (outside the canvas)", names)
 
 
 class WhoKnowsWhichPartIsMicrosofts(unittest.TestCase):
@@ -100,7 +225,8 @@ class WhoKnowsWhichPartIsMicrosofts(unittest.TestCase):
 
     def test_ids_are_read_from_a_file_not_from_memory(self):
         registry = zones.OotbRegistry()
-        self.assertEqual(registry.ids, {})
+        # Only the ids seen on live pages, nothing typed from memory.
+        self.assertEqual(registry.ids, zones.OOTB_WEB_PART_IDS)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ootb.json"
             path.write_text(json.dumps({
@@ -123,7 +249,11 @@ class WhoKnowsWhichPartIsMicrosofts(unittest.TestCase):
         part = WebPart(alias="NewsCarouselWebPart", id=CAROUSEL_ID.upper(),
                        manifest="src/webparts/news/NewsCarouselWebPart.manifest.json",
                        title="Contoso News Carousel")
-        markup = _markup().replace('"Contoso News Carousel web part"', '"News web part"')
+        markup = (_markup()
+                  .replace("ContosoNewsCarouselWebPart web part (Contoso News Carousel)",
+                           "NewsWebPart web part (News)")
+                  .replace("WebPart.ContosoNewsCarouselWebPart.external",
+                           "WebPart.NewsWebPart.internal"))
         _document, zone_map = zones.map_page(markup, web_parts=[part])
         named = [zone for zone in zone_map.zones if zone.manifest]
         self.assertEqual(len(named), 2)
@@ -174,13 +304,13 @@ class WhatIsReported(unittest.TestCase):
 
     def test_a_microsoft_part_keeps_only_what_the_author_wrote(self):
         quick = [issue for issue in self.issues
-                 if issue.details["zone_name"] == "Quick links"]
+                 if issue.details["zone_name"] == "Collegamenti rapidi"]
         self.assertTrue(quick)
         for issue in quick:
             with self.subTest(issue.rule_id):
                 self.assertTrue(zones.is_content_finding(issue))
         header = {issue.rule_id for issue in self.issues
-                  if issue.details["zone_name"] == "Page header"}
+                  if issue.details["zone_name"] == "Title area"}
         self.assertIn("image-alt", header)
         self.assertNotIn("tabindex-positive", header)
 
@@ -247,7 +377,7 @@ class TheBrowserPass(unittest.TestCase):
                    issue.details.get("zone_name")) for issue in kept}
         self.assertEqual(placed, {
             ("axe:image-alt", "custom", "Contoso News Carousel"),
-            ("axe:link-name", "author", "Quick links"),
+            ("axe:link-name", "author", "Collegamenti rapidi"),
             # Unplaceable: kept and marked, never silently dropped.
             ("axe:region", "", None),
         })
@@ -259,19 +389,25 @@ class TheBrowserPass(unittest.TestCase):
         kept = zones.classify_browser_issues([issue], _markup())
         self.assertEqual(kept[0].details["zone_name"], "Contoso News Carousel")
 
-    def test_axe_is_confined_to_the_zones(self):
+    def test_axe_leaves_the_chrome_alone_and_reads_the_rest(self):
+        """Nothing is `include`d: `data-sp-feature-tag` is on the chrome too,
+        so including it included the whole page, and the markup an SPFx part
+        moves into the chrome has no selector at all. The chrome regions are
+        excluded, and what axe finds outside a zone is dropped and counted."""
         from audit import browser
 
         options = zones.browser_options(browser.BrowserAuditOptions(exclude=[".mine"]))
-        self.assertEqual(options.include, list(zones.AXE_INCLUDE))
+        self.assertEqual(options.include, [])
         self.assertIn(".mine", options.exclude)
-        self.assertIn("#SuiteNavWrapper", options.exclude)
+        for region in ("#SuiteNavWrapper", "#sp-appBar", "#spSiteHeader",
+                       "#spCommandBar", "#spLeftNav", "#CommentsWrapper"):
+            self.assertIn(region, options.exclude)
+        # The page wrapper holds the canvas: excluding it would exclude
+        # every web part.
+        self.assertNotIn("#spPageChromeAppDiv", options.exclude)
         self.assertFalse(options.run_htmlcs or options.run_states
                          or options.run_measurements)
         self.assertTrue(options.capture_html)
-        script = browser.axe_script(options)
-        self.assertIn('"[data-sp-feature-tag]"', script)
-        self.assertIn("scope_empty", script)
 
     def test_an_unscoped_axe_call_is_unchanged(self):
         from audit import browser
@@ -281,7 +417,8 @@ class TheBrowserPass(unittest.TestCase):
     def test_lazy_loading_scripts_are_bounded_and_pollable(self):
         self.assertIn("limit = 60", zones.SCROLL_SCRIPT)
         self.assertIn("__xaScrollDone", zones.SCROLL_DONE_SCRIPT)
-        self.assertIn("data-sp-feature-tag", zones.CANVAS_COUNT_SCRIPT)
+        self.assertIn('[data-automation-id="CanvasControl"]', zones.CANVAS_COUNT_SCRIPT)
+        self.assertIn("undefined", zones.CANVAS_COUNT_SCRIPT)
 
 
 class TheReportSaysWhose(unittest.TestCase):
@@ -310,6 +447,18 @@ class TheReportSaysWhose(unittest.TestCase):
                 self.assertIn(badge, html)
                 self.assertIn(skipped, html)
                 self.assertIn("badge-zone", html)
+
+    def test_a_part_that_did_not_render_is_shown_as_such(self):
+        from report.model import from_accessibility
+        from report.template import render_html
+
+        expected = {"en": "Custom, not rendered", "uk": "не відрендерилась",
+                    "it": "non renderizzata"}
+        for lang, label in expected.items():
+            with self.subTest(lang):
+                html = render_html(from_accessibility(self.result, lang), lang)
+                self.assertIn("Contoso Events (not rendered)", html)
+                self.assertIn(label, html)
 
     def test_an_ordinary_report_has_no_sharepoint_section(self):
         from audit.engine import analyze_pages

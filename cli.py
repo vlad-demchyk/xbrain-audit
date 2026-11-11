@@ -404,6 +404,18 @@ def _web_parts_for(args) -> list:
     return found
 
 
+def _served_by_sharepoint(target: str, pages) -> bool:
+    """Did the crawled markup say SharePoint, as an on-premises farm does?"""
+    import project_profile
+
+    for page in pages[:5]:
+        markup = getattr(page, "raw_html", "") or ""
+        if markup and any(stack.name == "sharepoint" for stack in
+                          project_profile.detect_from_url(target, markup).stacks):
+            return True
+    return False
+
+
 def _narrow_to_project(target: str, args):
     """`(target, "")`, or `("", why not)` when `--project` names nothing.
 
@@ -483,6 +495,24 @@ def cmd_audit(args) -> int:
         return EXIT_ERROR
     target = narrowed
 
+    # A SharePoint Online target without a sign-in is refused before the run
+    # folder exists: a refused run must not leave an empty folder behind.
+    if is_url:
+        from cli_impl import auditpass
+
+        refusal = auditpass.sign_in_refusal(target, args)
+        if refusal:
+            auditpass.say_refusal(refusal, target, "sign-in-required")
+            return EXIT_ERROR
+    # `--ootb-registry` is a local file: read before the folder, so a typo
+    # in its path leaves nothing behind.
+    from cli_impl import auditpass as _auditpass
+
+    refusal = _auditpass.registry_refusal(args)
+    if refusal:
+        progress.notice("error", refusal, human=refusal)
+        return EXIT_ERROR
+
     # Prepared after the target is resolved, so the folder is named by what
     # was audited rather than by what was typed.
     folder = runfolder.prepare_for(target, args)
@@ -510,16 +540,39 @@ def cmd_audit(args) -> int:
             web_parts=_web_parts_for(args))
     elif is_url:
         from crawler import CrawlConfig, EMPTY_JS_RENDERED
+        from models import CrawlDiagnostics
 
+        from cli_impl import auditpass
+
+        # What a SharePoint target changes: the page list, the scope, the
+        # render mode. A flag typed by hand wins; what the target decided is
+        # said out loud. See `cli_impl.auditpass.plan_sharepoint`.
+        sp = auditpass.plan_sharepoint(target, args)
         # Same crawler as the text scan: depth-limited, and refusing to leave
         # the domain. That rule holds for both modes because there is one
         # crawler, not two.
         config = CrawlConfig(max_depth=args.depth, max_pages=args.max_pages,
-                             render_mode=_render_mode(args))
+                             render_mode=sp.render or _render_mode(args))
+        auditpass.say_plan(sp)
         # A site the person signed in to is read as them, in both clients.
         # See `cli_impl.auditpass.apply_session`.
-        session_host = apply_session(
-            target, config, use_session=not getattr(args, "no_session", False))
+        no_session = bool(getattr(args, "no_session", False))
+        session_host = apply_session(target, config,
+                                     use_session=not no_session)
+
+        # Checked before the run folder too (`sign_in_refusal`); this is
+        # the session that existed then and could not be read now, or gave
+        # the fetcher nothing.
+        message = auditpass.session_refusal(target, config, session_host,
+                                            no_session)
+        if message:
+            auditpass.say_refusal(message, target, "sign-in-required")
+            return EXIT_ERROR
+        # Loaded before the run folder (`registry_refusal`).
+        registry = getattr(args, "_ootb_registry", None)
+        # Read once, here: `--web-parts` prints what it found, and the
+        # browser pass needs the same list.
+        args._web_parts_found = _web_parts_for(args)
 
         crawled = 0
 
@@ -531,9 +584,16 @@ def cmd_audit(args) -> int:
                           human=f"# [crawl {crawled}{limit}] depth={depth} "
                                 f"{url}")
 
-        pages = _crawl_maybe_rendering(target, config,
-                                       progress_cb=_crawl_progress,
-                                       session_host=session_host)
+        walk = CrawlDiagnostics()
+        pages, tree = auditpass.crawl_site(
+            target, config, progress_cb=_crawl_progress,
+            session_host=session_host, page_tree=sp.page_tree,
+            site_scope=sp.site_scope, walk=walk)
+        refusal = auditpass.tree_refusal(tree, target)
+        if refusal:
+            auditpass.say_refusal(refusal, target, tree.status)
+            return EXIT_ERROR
+        auditpass.say_tree(tree)
         progress.stage("crawl", "end",
                        f"# [crawl done] {len(pages)} page(s)",
                        pages=len(pages))
@@ -562,12 +622,19 @@ def cmd_audit(args) -> int:
                 rendered=len(rendered_pages), failed=len(spa_pages))
         
         progress.stage("audit", "begin", target=target)
+        sharepoint = sp.sharepoint or _served_by_sharepoint(target, pages)
+        extra = {}
+        if sharepoint:
+            extra = {"sharepoint": True, "ootb_registry": registry}
         result = audit.analyze_pages(
             pages, target, ai_review=reviewer,
             site_controls=getattr(args, "site_controls", False),
             within=getattr(args, "within", None) or "",
-            web_parts=_web_parts_for(args),
-            include_environment=bool(getattr(args, "include_environment", False)))
+            web_parts=args._web_parts_found,
+            include_environment=bool(getattr(args, "include_environment", False)),
+            **extra)
+        result.page_tree = auditpass.page_tree_summary(
+            tree, walk, sp.site_scope, sp.page_tree)
     else:
         from repo_scanner import scan_repo
 
@@ -710,6 +777,10 @@ def cmd_audit(args) -> int:
                 "sources": [p for p in places_of(first, others)][:25],
             } for first, others in distinct],
             "platform_owned": _owned_counts(result),
+            # How the page list was found and what it left out; the zones a
+            # SharePoint page was split into and what was not reported.
+            "page_tree": getattr(result, "page_tree", {}) or {},
+            "sharepoint": getattr(result, "sharepoint", {}) or {},
             "environment": getattr(result, "environment", {}),
             "suppressed": getattr(result, "suppressed", {}),
             "rules_run": result.rules_run,
@@ -1151,6 +1222,28 @@ def cmd_update(args) -> int:
 
 # ------------------------------------------------------------------ parser
 
+def _add_sharepoint_flags(parser) -> None:
+    """`--page-tree`, `--site-scope`, `--ootb-registry`."""
+    from cli_impl.auditpass import PAGE_TREES
+
+    parser.add_argument(
+        "--page-tree", choices=PAGE_TREES, default=None,
+        help="where the list of pages comes from: links (follow them from "
+             "the target) or sharepoint (ask the site for every page in its "
+             "libraries and subsites). Defaults to sharepoint on a "
+             "*.sharepoint.com site, links elsewhere")
+    parser.add_argument(
+        "--site-scope", default=None, metavar="PATH",
+        help="stay inside this path (/sites/x), compared without case; "
+             "addresses outside it are counted, not read. Defaults to the "
+             "site collection of a *.sharepoint.com target")
+    parser.add_argument(
+        "--ootb-registry", default=None, metavar="FILE",
+        help="JSON of Microsoft's web part ids read from a live page "
+             "({\"web_parts\": [{\"id\", \"name\"}], \"feature_tags\": []}), "
+             "so the SharePoint zones recognise them")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="xanalyze",
@@ -1375,6 +1468,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit.add_argument("--no-session", action="store_true",
                         help="ignore any stored sign-in for this host and "
                              "read the site the way a stranger sees it")
+    _add_sharepoint_flags(p_audit)
     p_audit.add_argument("--project", default=None, metavar="NAME",
                          help="one project inside this folder, by its folder name "
                               "or a path: a directory of twenty SPFx solutions is "
@@ -1629,6 +1723,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_fullscan.add_argument("--no-hints", action="store_true",
                         help="do not print what this run leaves "
                              "undone (see cli_impl/prerun.py)")
+    _add_sharepoint_flags(p_fullscan)
     p_fullscan.set_defaults(func=cmd_fullscan)
 
     for performance_parser in (p_audit, p_fullscan):

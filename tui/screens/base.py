@@ -480,6 +480,8 @@ class RunScreen(XScreen):
             lines.append(run_profile.explain(item, self.lang))
         for prompt in plan.prompts:
             lines.append(run_profile.explain(prompt, self.lang, enabled=False))
+            if prompt.field == "sign_in":
+                lines.append(sign_in_hint(target, self.lang))
         if plan.ambiguous():
             lines.append(self.tr("tui_projects_several",
                                  count=len(plan.projects),
@@ -568,3 +570,18 @@ def _folder_name(path: str) -> str:
     from pathlib import Path
 
     return Path(path).name or path
+
+
+def sign_in_hint(target: str, lang: str) -> str:
+    """The command that signs in to a SharePoint site, said in the form.
+
+    The TUI cannot open a browser window of its own, and a SharePoint run
+    without a session audits Microsoft's sign-in page. So the form names
+    the one command that fixes it - the same sentence the CLI ends with
+    (`cli_impl.auditpass.login_hint`) - before the run is started.
+    """
+    import site_session
+    from cli_impl.auditpass import login_hint
+
+    return t("tui_sharepoint_login", lang, host=site_session.host_of(target),
+             command=login_hint(target))

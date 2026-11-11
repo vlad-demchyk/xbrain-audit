@@ -1001,6 +1001,5 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
         # a site three times larger than it is.
         remaining = {url for url, _depth in queue if url not in visited}
         walk.queued_when_stopped = len(remaining)
-        # Not a field of `CrawlDiagnostics` yet; read with a default.
         walk.out_of_scope = len(out_of_scope)
     return results

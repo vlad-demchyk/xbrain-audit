@@ -33,8 +33,8 @@ to replace.
 from __future__ import annotations
 
 import shutil
-import sys
 import subprocess
+import sys
 import time
 
 #: How long a render may show no progress of any kind before it is stopped.

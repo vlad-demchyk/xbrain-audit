@@ -346,7 +346,7 @@ class MainViewModel(QObject):
     def _render_crawl(self, url: str):
         import site_session
         from audit import driver
-        from crawler import RENDER_AUTO, CrawlConfig, crawl
+        from crawler import RENDER_AUTO, CrawlConfig
         from models import CrawlDiagnostics
 
         usable, reason = driver.available()
@@ -369,12 +369,18 @@ class MainViewModel(QObject):
             self.status_message.emit(
                 t("status_browser_pass", self.settings.ui_language, url=page_url))
 
+        from cli_impl.auditpass import PAGE_TREE_LINKS, sharepoint_pages
+
+        plan = self._sharepoint_run()
         try:
             with driver.html_renderer(session_host=session_host) as render:
-                pages = crawl(url, cfg, progress_cb=progress, render=render,
-                              walk=walk,
-                              cancelled=self._run_context.cancellation
-                              if self._run_context else None)
+                pages, _tree = sharepoint_pages(
+                    url, cfg,
+                    page_tree=plan.page_tree if plan else PAGE_TREE_LINKS,
+                    site_scope=plan.site_scope if plan else "",
+                    progress_cb=progress, render=render, walk=walk,
+                    cancelled=self._run_context.cancellation
+                    if self._run_context else None)
                 self._acquired_crawl = walk
                 return pages
         except Exception as exc:
@@ -537,6 +543,7 @@ class MainViewModel(QObject):
             within=self.state.within,
             web_parts=self._web_parts_for_run(),
             no_session=self.state.no_session,
+            sharepoint=self._sharepoint_run(),
             crawl=(self._snapshot.crawl if self._snapshot is not None else None),
             session_host=(self._snapshot.session_host
                           if self._snapshot is not None else ""),
@@ -555,6 +562,30 @@ class MainViewModel(QObject):
                           on_finished=self._on_audit_finished)
         self._worker.start()
         self.busy_changed.emit(True)
+
+    def _sharepoint_run(self):
+        """`auditpass.SharePointRun` for this target, or `None` off a site.
+
+        Read through `plan_sharepoint`, the function `fullscan` reads it
+        through, with nothing typed by hand: the window has no controls for
+        `--page-tree` or `--site-scope`, so what the target asks for is the
+        whole answer. One function for both surfaces is the point - the
+        same SharePoint address must be read as the same set of pages.
+        """
+        if self.state.source != SOURCE_SITE:
+            return None
+        target = (self.state.scan_target or "").strip()
+        if not target:
+            return None
+        from types import SimpleNamespace
+
+        from cli_impl import auditpass
+
+        args = SimpleNamespace(repo=self.state.paired_repo or "",
+                               page_tree=None, site_scope=None, render=None,
+                               no_browser=False)
+        run = auditpass.plan_sharepoint(target, args)
+        return run if run.sharepoint else None
 
     def _web_parts_for_run(self) -> tuple:
         """The SPFx parts to confine this audit to, or `()`.
@@ -701,7 +732,11 @@ class MainViewModel(QObject):
                     self._last_request, files=files, scope=self._repo_scope(),
                     scan=getattr(worker, "scan_diagnostics", None))
         self.audit_result = result
-        if self._last_request and self._last_request.wants_browser:
+        # A SharePoint page is assembled in the browser (`render=always` in
+        # `run_profile.RECIPES`): without the browser pass the run reports on
+        # an empty canvas, so a SharePoint result always gets one.
+        if self._last_request and (self._last_request.wants_browser
+                                   or getattr(result, "sharepoint", None)):
             self.browser_pass_needed.emit()
         if self.cancellation_requested:
             self._pending_copy_pass = False
@@ -803,6 +838,9 @@ class MainViewModel(QObject):
             media=False, site_controls=False,
             within=self.state.within,
             web_parts=self._web_parts_for_run(),
+            # Zoned again on the rendered DOM: the browser is what drew the
+            # web parts the zones are made of.
+            sharepoint=bool(getattr(result, "sharepoint", None)),
         )
 
         # Media already consumed its bounded network budget in the worker.
@@ -846,7 +884,8 @@ class MainViewModel(QObject):
         attribute_ownership(refreshed)
         for name in (
                 "root", "mode", "documents", "rules_run", "media", "repo",
-                "auth", "markup_sample", "markup_by_source", "browser_errors"):
+                "auth", "markup_sample", "markup_by_source", "browser_errors",
+                "sharepoint"):
             setattr(result, name, getattr(refreshed, name))
 
     # -- rewrite actions ---------------------------------------------------

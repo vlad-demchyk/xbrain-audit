@@ -474,11 +474,19 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
         shows the tick and the sentence under it before anything runs. The
         CLI deliberately does not; see `cli_impl.prerun.profile`.
         """
+        self._ask_for_sign_in(plan is not None and plan.asks_for("sign_in"))
         if plan is None:
             return
         touched = self.app_state.profile_touched
         for item in plan.suggestions:
             if item.option in touched or not plan.applies(item.option):
+                continue
+            if item.option in ("render", "page_tree", "site_scope"):
+                # SharePoint's recipes. No control on this window owns them,
+                # so there is nothing to tick: the view model reads them at
+                # run time through `cli_impl.auditpass.plan_sharepoint`, the
+                # one function the CLI reads them through too. A second
+                # copy here would be a second owner of the same three facts.
                 continue
             if item.option == "web_parts":
                 self.app_state.set_web_parts(bool(item.value), by_person=False)
@@ -491,6 +499,29 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
                     self.auto_devserver_check.setChecked(True)
                     self.auto_devserver_check.blockSignals(False)
                     self.settings.auto_start_devserver = True
+
+    def _ask_for_sign_in(self, asked: bool) -> None:
+        """Point at "Sign in to the site" when the target cannot be read without it.
+
+        SharePoint Online without a stored session answers every address
+        with Microsoft's sign-in page; the run would audit that page and call
+        it the site. The button turns primary and the status bar says why,
+        so the next step is visible before anything runs.
+        """
+        button = getattr(self, "sign_in_site_btn", None)
+        if button is None:
+            return
+        wanted = theme.CLASS_PRIMARY if asked else ""
+        if (button.property("class") or "") != wanted:
+            button.setProperty("class", wanted)
+            button.style().unpolish(button)
+            button.style().polish(button)
+        if asked:
+            import site_session
+
+            host = site_session.host_of(self.app_state.target or "")
+            self.status_bar.showMessage(
+                t("sign_in_site_required", self.lang, host=host))
 
     def _sync_scope_to_state(self, _idx: int = 0) -> None:
         self.app_state.set_scope(self._repo_scope())
@@ -3409,6 +3440,14 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
             # responsive probes; serialising the DOM does not navigate again.
             capture_html=True,
         )
+        # A SharePoint run reads the zones, not the chrome - the same options
+        # and the same classification `fullscan`'s browser pass uses.
+        zone_summary = None
+        if getattr(result, "sharepoint", None):
+            from audit import sharepoint_zones
+
+            options = sharepoint_zones.browser_options(options)
+            zone_summary = sharepoint_zones.Summary()
         # Every width, not just the one this screen happens to be: the point
         # of asking a browser at all is to see what a visitor sees, and a
         # visitor on a phone is shown a different document. The merge keeps
@@ -3451,6 +3490,17 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
                     if (cache is not None and markup and not page_audit.error
                             and not page_audit.engine_errors):
                         cache.put(markup, page_audit)
+                if zone_summary is not None and not page_audit.error:
+                    # A copy, not in place: the cache holds this object and
+                    # saves it after the loop, and a cached audit that was
+                    # already zoned would drop Microsoft's findings without
+                    # counting them on the next run.
+                    page_audit = replace(
+                        page_audit,
+                        issues=sharepoint_zones.classify_browser_issues(
+                            page_audit.issues, page_audit.html,
+                            self.view_model._web_parts_for_run(),
+                            summary=zone_summary))
                 page_audits.append((document.source, page_audit))
                 if page_audit.html:
                     rendered_by_source[document.source] = page_audit.html
@@ -3471,6 +3521,10 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
                  if item.source == source and not item.error), None)
             if document is not None:
                 browser_mod.merge_page_audit(result, document, page_audit)
+        if zone_summary is not None:
+            from cli_impl.auditpass import _add_skipped
+
+            _add_skipped(result, zone_summary)
 
         # Repaint, or the pass was invisible. The findings are merged into
         # the documents above and the list on screen was built before that,
@@ -3579,6 +3633,11 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
         dialog = SiteSignInDialog(address, lang=self.lang, parent=self)
         accepted = dialog.exec() == QDialog.DialogCode.Accepted
         self._refresh_sign_in_button()
+        # The plan's sign-in prompt depends on the session, which the key
+        # `_refresh_run_plan` caches on does not include: rebuild it, so a
+        # person who just signed in stops being asked to.
+        self._planned_key = None
+        self._refresh_run_plan()
         if accepted and dialog.saved:
             self.status_bar.showMessage(
                 t("sign_in_site_active", self.lang, host=host))

@@ -361,8 +361,16 @@ class AuditWorker(QThread):
                  crawl=None, session_host: str = "", session_values: int = 0,
                  cancellation=None, extensions: tuple[str, ...] | None = None,
                  files: list | None = None, incremental: bool = False,
-                 parent=None):
+                 sharepoint=None, parent=None):
         super().__init__(parent)
+        #: `cli_impl.auditpass.SharePointRun` for this target, or `None`.
+        #: Decided by the caller through `plan_sharepoint`, the function the
+        #: CLI decides it through, so the window and the command line read a
+        #: SharePoint site the same way: its page tree, inside its own site
+        #: path, with Microsoft's chrome out of the audit.
+        self.sharepoint = sharepoint
+        #: `sharepoint_tree.SiteTree` the page list came from, or `None`.
+        self.page_tree = None
         #: `--within`: confine the reading to one subtree. The document is
         #: then a *fragment* by construction, so the page-level rules stop
         #: applying - it has no `<head>` to carry a canonical link and no
@@ -468,10 +476,10 @@ class AuditWorker(QThread):
                     if not self.no_session:
                         self.session_host, self.session_values = \
                             site_session.apply_to(config, self.target)
-                    pages = crawl(self.target, config, progress_cb=progress_cb,
-                                  walk=walk,
-                                  cancelled=self._is_cancelled)
+                    pages = self._crawl(config, walk, progress_cb)
                     self.crawl = walk
+                    if pages is None:
+                        return
                 self.acquired_pages = pages
                 if self._is_cancelled():
                     return
@@ -479,7 +487,8 @@ class AuditWorker(QThread):
                 result = audit.analyze_pages(pages, self.target,
                                              site_controls=self.site_controls,
                                              within=self.within,
-                                             web_parts=self.web_parts)
+                                             web_parts=self.web_parts,
+                                             **self._sharepoint_kwargs())
                 ignore_root = None
 
             # The same list that governs the text scan: a user who said "not
@@ -495,6 +504,38 @@ class AuditWorker(QThread):
         except Exception as exc:  # noqa: BLE001 - surface any unexpected failure to the UI
             self.failed.emit(str(exc))
 
+    def _crawl(self, config, walk, progress_cb):
+        """The pages of the site, or `None` after saying why there are none.
+
+        A SharePoint run goes through `auditpass.sharepoint_pages`: the
+        site's page tree, inside its own path. When the tree answers that the
+        sign-in is missing or not enough, nothing was crawled, and auditing
+        an empty list would be reported as a clean site - so the run fails
+        with the CLI's own sentence instead.
+        """
+        plan = self.sharepoint
+        if plan is None or not plan.sharepoint:
+            return crawl(self.target, config, progress_cb=progress_cb,
+                         walk=walk, cancelled=self._is_cancelled)
+        from cli_impl import auditpass
+
+        pages, tree = auditpass.sharepoint_pages(
+            self.target, config, page_tree=plan.page_tree,
+            site_scope=plan.site_scope, progress_cb=progress_cb,
+            cancelled=self._is_cancelled, walk=walk)
+        self.page_tree = tree
+        refusal = auditpass.tree_refusal(tree, self.target)
+        if refusal and not pages:
+            self.failed.emit(refusal)
+            return None
+        return pages
+
+    def _sharepoint_kwargs(self) -> dict:
+        plan = self.sharepoint
+        if plan is None or not plan.sharepoint:
+            return {}
+        return {"sharepoint": True}
+
 
 def audit_worker_for(source: str, *, target: str, depth: int, max_pages: int,
                      pages=None, ignore_patterns=None, max_files: int = 5000,
@@ -504,7 +545,7 @@ def audit_worker_for(source: str, *, target: str, depth: int, max_pages: int,
                      session_host: str = "", session_values: int = 0,
                      cancellation=None, extensions: tuple[str, ...] | None = None,
                      files: list | None = None, incremental: bool = False,
-                     parent=None):
+                     sharepoint=None, parent=None):
     """The right `AuditWorker` for the source, or `(None, message)` on refusal.
 
     One place, because there were two: the window and the view model each
@@ -552,7 +593,7 @@ def audit_worker_for(source: str, *, target: str, depth: int, max_pages: int,
                        web_parts=web_parts, no_session=no_session,
                        crawl=crawl, session_host=session_host,
                        session_values=session_values,
-                       cancellation=cancellation,
+                       cancellation=cancellation, sharepoint=sharepoint,
                        parent=parent), ""
 
 

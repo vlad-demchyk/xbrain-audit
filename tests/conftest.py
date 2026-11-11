@@ -47,6 +47,52 @@ os.environ["XDG_CONFIG_HOME"] = _CONFIG_HOME.name
 _REPORT_ROOT = tempfile.TemporaryDirectory(prefix="xanalyze-tests-reports-")
 os.environ["XANALYZE_REPORT_ROOT"] = _REPORT_ROOT.name
 
+#: The rest of the application's own state, which lives outside both of the
+#: above: run history (`~/.xanalyze/history`, compared against on the next
+#: run), the browser-pass and judgment caches (`~/.xanalyze/...`), the log
+#: (`%LOCALAPPDATA%` / `~/.local/state`) and the validation ledgers. Measured
+#: 2026-11-11 on Windows: one full run added about 40 files to the real
+#: history. Each has an environment override the code already reads, so the
+#: environment - inherited by every `cli.py` subprocess a test starts - is
+#: the whole mechanism. HOME itself is left alone on purpose: the
+#: sentence-transformers model cache lives under it, and a moved HOME means
+#: downloading the model again for every run.
+_STATE_ENV = {
+    "XANALYZE_HISTORY_DIR": "history",
+    "XANALYZE_BROWSER_CACHE": "browser",
+    "XANALYZE_JUDGMENT_CACHE": "judgments",
+    "XANALYZE_LOG_DIR": "logs",
+    "XANALYZE_VALIDATION_LEDGER": "validation-ledger",
+    "XANALYZE_API_JOB_CACHE": "api-jobs",
+}
+_STATE_ROOT = tempfile.TemporaryDirectory(prefix="xanalyze-tests-state-")
+for _name, _folder in _STATE_ENV.items():
+    os.environ[_name] = os.path.join(_STATE_ROOT.name, _folder)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_app_state(tmp_path_factory, monkeypatch):
+    """Fresh state directories for every test, and the shared ones re-set.
+
+    Per test, not per run, for history in particular: a test that asserts
+    "a first run has no comparison" must not find the run another test just
+    recorded. Re-set rather than set once, because several tests clean up
+    with `os.environ.pop(...)`, which used to leave every later test in the
+    process writing to the real directory.
+    """
+    root = tmp_path_factory.mktemp("state")
+    for name, folder in _STATE_ENV.items():
+        monkeypatch.setenv(name, str(root / folder))
+    monkeypatch.setenv("XDG_CONFIG_HOME", _CONFIG_HOME.name)
+    monkeypatch.setenv("XANALYZE_REPORT_ROOT", _REPORT_ROOT.name)
+    try:
+        import scan_cache
+    except ImportError:  # pragma: no cover - the module is part of the repo
+        return
+    # A module constant under the real config base, not an environment
+    # override: `ScanCache()` with no path writes there.
+    monkeypatch.setattr(scan_cache, "CACHE_FILE", root / "scan-cache" / "scan_cache.json")
+
 # Set this before pytest imports test modules, several of which create a
 # QApplication directly instead of going through audit.driver's helper.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

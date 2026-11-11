@@ -14,6 +14,12 @@ contiene caratteri che nessuna tastiera produce, e la cosa è accessibile e
 corretta. XAnalyze risponde a tutte e tre in una sola esecuzione e nomina il
 file e la riga dietro ogni risposta.
 
+Compreso un **sito SharePoint Online dietro un accesso Microsoft 365**: accedete
+di persona, la scansione legge ogni pagina del sito dal suo albero delle pagine
+e si esamina solo ciò che è stato costruito per il sito - web part
+personalizzate e testo degli autori - non la cornice di Microsoft. Vedi
+[SharePoint Online](#sharepoint-online).
+
 È un solo binario con tre superfici - una finestra, un'interfaccia da terminale
 e una riga di comando - sopra un unico nucleo, così le tre non possono essere in
 disaccordo su cosa sia stato misurato.
@@ -175,7 +181,7 @@ selettori sono il percorso JSX (`section.card > div.list > img`). Un `aria-label
 è segnalato come `advisory` (`jsx-untranslated-literal`).
 
 **Scritte per ciò che un audit manuale ha trovato.** Un `alt` in forma di slug
-(`mappa-parlante-palmanova`, `Piazza-Grande`, una data) e non solo un nome di
+(`mappa-parlante-example`, `Piazza-Grande`, una data) e non solo un nome di
 file con estensione; un video YouTube, Vimeo o simile incorporato, di cui la
 pagina non dice nulla su sottotitoli, trascrizione e audiodescrizione (1.2.2,
 1.2.3, 1.2.5); un pulsante «carica altri» in una pagina senza live region
@@ -316,6 +322,59 @@ terminale.
 La scansione registra anche quando un indirizzo ha risposto con una porta invece
 che con una pagina, e lo dice chiaramente: un riepilogo pulito ottenuto solo da
 moduli di accesso è l'output più fuorviante che questo strumento possa produrre.
+
+## SharePoint Online
+
+Un indirizzo `*.sharepoint.com` è riconosciuto prima di leggere una pagina, e la
+scansione cambia di conseguenza - allo stesso modo in `audit` e `fullscan`, con
+gli stessi flag, gli stessi rifiuti (codice 2) e le stesse zone nel JSON - ogni cambiamento stampato con il motivo, e
+**ciò che impostate voi ha la precedenza**:
+
+- **Prima l'accesso.** Senza una sessione salvata SharePoint risponde a ogni
+  indirizzo con la pagina di accesso Microsoft. `xanalyze login https://contoso.sharepoint.com/sites/ExampleSite`
+  apre una vera finestra del browser; completate lì l'accesso a Microsoft 365,
+  MFA compresa, e premete «Fatto» quando siete di nuovo sul sito. La finestra
+  evidenzia «Accedi al sito», il modulo da terminale stampa quel comando, e la
+  CLI rifiuta la scansione spiegando perché invece di esaminare la pagina di
+  accesso.
+- **Ogni pagina, dal sito stesso** (`--page-tree sharepoint`). Le pagine sono
+  elementi della raccolta pagine del sito, lette tramite la REST API di
+  SharePoint come voi; seguire i link trova solo ciò che qualcuno ha collegato.
+  `--page-tree links` torna a seguire i link.
+- **Un solo sito del tenant** (`--site-scope /sites/ExampleSite`). Un host
+  serve tutti i siti; la scansione resta dentro il percorso indicato.
+- **Pagine renderizzate.** Una pagina moderna si compone nel browser, quindi
+  ogni pagina viene renderizzata e le web part pigre vengono portate in vista
+  prima dell'audit.
+- **Zone.** La barra della suite, la navigazione e la barra dei comandi di
+  Microsoft non sono esaminate, solo contate. Le web part personalizzate (SPFx)
+  ricevono tutte le regole, ogni istanza separatamente. Il testo degli autori
+  riceve tutte le regole; le web part predefinite solo le regole sul contenuto
+  (testo alternativo, testo dei link, intestazioni, formulazioni da IA). I
+  risultati riportano la loro zona nel report. `--ootb-registry FILE` aggiunge
+  gli id delle web part Microsoft letti da una pagina reale, così una parte che
+  l'elenco integrato non conosce non viene esaminata come codice personalizzato.
+  Una parte che SharePoint ha collocato e non ha renderizzato è indicata come
+  tale, mai confusa con «nessun risultato».
+- **SPFx fuori dal canvas.** Una parte può disegnare il suo markup nella
+  cornice della pagina (un header personalizzato, un popup). Quel markup si
+  trova dalle classi dei moduli CSS (`name_1a2b3c4d`), viene legato alla parte
+  con lo stesso alias o bundle ed esaminato come personalizzato: è
+  un'inferenza, e il report la segna come tale.
+
+Limiti:
+
+- **Conditional Access può rifiutare l'accesso** da una macchina non gestita o
+  da un browser incorporato. È la politica del tenant, e nessuna impostazione
+  qui la aggira.
+- **I selettori delle zone sono in parte ipotesi.** Il markup di SharePoint non
+  è un contratto pubblico; i selettori sono segnati come verificati o ipotesi in
+  `audit/sharepoint_zones.py`, e una modifica di Microsoft può spostare una
+  regione nella zona sbagliata finché non vengono aggiornati.
+- **I documenti sono elencati, non esaminati.** I file delle raccolte (PDF,
+  Office) compaiono solo nell'inventario del riepilogo JSON.
+- Una sessione che ha effettuato l'accesso ma non ha permessi sul sito viene
+  segnalata come tale, e nulla viene esaminato.
 
 ## Report
 
@@ -481,7 +540,7 @@ letto come tale. Un `.php` che è un controller e non una vista resta codice:
 Un progetto viene identificato dai propri file-marcatore, e ciò che risulta
 essere decide cosa trattare come codice di altri anziché scritto qui:
 
-`angular`, `astro`, `bedrock`, `beehiiv`, `carrd`, `craft`, `django`, `docusaurus`, `dotnet`, `drupal`, `eleventy`, `ember`, `flutter`, `gatsby`, `ghost`, `hugo`, `jekyll`, `joomla`, `laravel`, `magento`, `nextjs`, `nuxt`, `qwik`, `rails`, `remix`, `shopify`, `silverstripe`, `spfx`, `spring`, `squarespace`, `statamic`, `storybook`, `sveltekit`, `symfony`, `typo3`, `vite`, `wagtail`, `webflow`, `wix`, `wordpress`, `wordpress-plugin`, `wordpress-theme`
+`angular`, `astro`, `bedrock`, `beehiiv`, `carrd`, `craft`, `django`, `docusaurus`, `dotnet`, `drupal`, `eleventy`, `ember`, `flutter`, `gatsby`, `ghost`, `hugo`, `jekyll`, `joomla`, `laravel`, `magento`, `nextjs`, `nuxt`, `qwik`, `rails`, `remix`, `sharepoint`, `shopify`, `silverstripe`, `spfx`, `spring`, `squarespace`, `statamic`, `storybook`, `sveltekit`, `symfony`, `typo3`, `vite`, `wagtail`, `webflow`, `wix`, `wordpress`, `wordpress-plugin`, `wordpress-theme`
 
 Il rilevamento è una prova: un profilo nomina il file che lo ha dimostrato, le
 esclusioni che ne derivano sono dichiarate e non applicate in silenzio, e un

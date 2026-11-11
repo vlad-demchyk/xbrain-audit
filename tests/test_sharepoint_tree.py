@@ -175,8 +175,8 @@ def test_out_of_scope_and_non_pages_are_counted_with_a_reason():
     counts = tree.skipped_counts()
     assert counts[spt.SKIP_OTHER_SITE] == 2      # /sites/Altro web + nav link
     assert counts[spt.SKIP_SYSTEM] == 1          # /_layouts/15/viewlsts.aspx
-    assert counts[spt.SKIP_LIST_FORM] == 1       # Forms/AllItems.aspx
-    assert counts[spt.SKIP_LIST_VIEW] == 1       # /Lists/Annunci
+    assert counts[spt.SKIP_LIST_VIEW] == 2       # Forms/AllItems.aspx, /Lists/Annunci
+    assert spt.SKIP_LIST_FORM not in counts
     assert counts[spt.SKIP_SHARING_LINK] == 1    # /:w:/r/...
     assert counts[spt.SKIP_OTHER_HOST] == 1      # www.example.org
     assert counts[spt.SKIP_NOT_HTTP] == 1        # mailto:
@@ -614,4 +614,25 @@ def test_a_subsite_called_lists_or_forms_keeps_its_pages():
     assert f"{SITE}/Lists/SitePages/A.aspx" in urls
     assert f"{SITE}/Forms/SitePages/B.aspx" in urls
     # A real list inside that subsite is still a list.
-    assert tree.skipped_counts().get(spt.SKIP_LIST_FORM) == 1
+    assert tree.skipped_counts().get(spt.SKIP_LIST_VIEW) == 1
+
+
+def test_views_and_forms_are_told_apart():
+    routes = minimal_routes(fx("web.json"))
+    routes[3] = (r"GetList", EMPTY)
+    routes.insert(5, (r"navigation/QuickLaunch", {"value": [
+        {"Title": "v", "Url": "/sites/Portal/Shared Documents/Forms/AllItems.aspx"},
+        {"Title": "v2", "Url": "/sites/Portal/SitePages/Forms/AllPages.aspx"},
+        {"Title": "f", "Url": "/sites/Portal/Lists/Tasks/DispForm.aspx?ID=1"},
+        {"Title": "f2", "Url": "/sites/Portal/Shared Documents/Forms/EditForm.aspx"}]}))
+    tree, _t = run(FakeSession(routes), use_search=False)
+    assert tree.skipped_counts() == {spt.SKIP_LIST_VIEW: 2,
+                                     spt.SKIP_LIST_FORM: 2}
+
+
+def test_subsites_carry_their_language():
+    session = FakeSession(full_site_routes())
+    tree, _t = run(session, use_navigation=False, use_search=False)
+    webs_call = next(u for u in session.urls() if "/_api/web/webs" in u)
+    assert "Language" in webs_call.split("$select=", 1)[1]
+    assert [w.language for w in tree.webs] == [1040, 1033]
