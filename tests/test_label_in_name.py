@@ -53,6 +53,20 @@ class LabelInName(unittest.TestCase):
         self.assertEqual(found[0].severity, MODERATE)
         self.assertEqual(found[0].details["text"], "Leggi di più")
 
+    def test_a_counter_is_content_not_a_label(self):
+        """A like button showing "38" or a bell showing "0" names itself in
+        aria-label; the number is what it shows, not what it is called."""
+        for markup in (
+            '<button aria-label="Like this news">38</button>',
+            '<a href="/n" aria-label="Go to your notifications"><span>0</span></a>',
+            '<button aria-label="Like the article">1 234</button>',
+        ):
+            with self.subTest(markup=markup):
+                self.assertEqual(_rules(markup, "label-in-name"), [])
+        # Words beside the number are still a label.
+        self.assertEqual(len(_rules('<button aria-label="Like this">38 likes</button>',
+                                    "label-in-name")), 1)
+
     def test_a_name_that_contains_the_label_passes(self):
         for markup in (
             '<a href="/n" aria-label="Leggi di più: comunicazioni">Leggi di più</a>',

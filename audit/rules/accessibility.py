@@ -457,6 +457,12 @@ class LabelInName(AccessibilityRule):
             words = [w.lower() for w in _WORD.findall(visible)]
             if not words:
                 continue
+            # A visible text of numbers alone is a counter (likes, unread
+            # notifications), content the control shows rather than the label
+            # that names it. Nobody says "click 38", so 2.5.3 has nothing to
+            # match and a finding there is noise.
+            if all(w.isdigit() for w in words):
+                continue
             named = {w.lower() for w in _WORD.findall(label)}
             missing = [w for w in words if w not in named]
             if not missing:
