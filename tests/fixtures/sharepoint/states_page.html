@@ -15,7 +15,10 @@
     focus turns its fill pale under white text, an image with no alt, an
     image above the fold and one far below it - all placed in the part;
   * Text web part: a link with a strong focus ring, and a button whose
-    focus turns it black with white text - nothing.
+    focus turns it black with white text - nothing;
+  * a Fluent-style button in the part (`ms-Button`): its ring is an `::after`
+    drawn only once a trusted Tab put `ms-Fabric--isFocusVisible` on the
+    body - visible focus, nothing.
 -->
 <html lang="en">
 <head>
@@ -31,6 +34,9 @@
   .goodFocus { background: #fff; color: #111; border: 1px solid #111; padding: 8px; }
   .goodFocus:focus { outline: 3px solid #000; background: #000; color: #fff; }
   .spacer { height: 2400px; }
+  .ms-Button { position: relative; outline: none; border: 0; background: #fff; color: #111; padding: 8px; }
+  .ms-Button:focus { outline: none; }
+  .ms-Fabric--isFocusVisible .ms-Button:focus::after { content: ""; position: absolute; inset: 1px; border: 1px solid #fff; outline: 1px solid #605e5c; }
 </style>
 </head>
 <body>
@@ -72,6 +78,7 @@
                 <div class="tiles_1a2b3c4d">
                   <a class="noring tile_1a2b3c4d" href="#tile-one">First tile</a>
                   <button class="paleFocus_1a2b3c4d" type="button">Open</button>
+                  <button class="ms-Button fluent_1a2b3c4d" type="button">Fluent</button>
                   <img class="above_1a2b3c4d" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="40" height="40">
                   <div class="spacer"></div>
                   <img class="below_1a2b3c4d" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs=" width="40" height="40" alt="Below">
@@ -85,5 +92,11 @@
   </div>
 </div>
 </div>
+<script>
+  // What Fluent UI does: the ring class follows the last trusted key press.
+  window.addEventListener('keydown', function(event) {
+    if (event.isTrusted && event.key === 'Tab') document.body.classList.add('ms-Fabric--isFocusVisible');
+  }, true);
+</script>
 </body>
 </html>

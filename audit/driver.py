@@ -201,6 +201,10 @@ _LAZY_DETECT_SCRIPT = """(function() {
 #: after a resize still reports the previous width.
 VIEWPORT_SETTLE_MS = 200
 
+#: How long the page's own keydown handlers get after the one real Tab the
+#: state pass starts with (`BrowserAuditRunner._prime_keyboard`).
+KEYBOARD_PRIME_MS = 150
+
 #: Chromium flags for a headless run. Set before QtWebEngine initialises or
 #: they are ignored, which is why `ensure_headless_application` exists rather
 #: than the caller doing this by hand.
@@ -537,6 +541,31 @@ class BrowserAuditRunner:
             warnings.simplefilter("ignore", DeprecationWarning)
             QApplication.setActiveWindow(view)
         _pump(300)
+
+    def _prime_keyboard(self) -> bool:
+        """Press Tab once, natively, before the state pass reads focus.
+
+        Many component libraries show a focus ring only after they have seen
+        a keyboard: Fluent UI, which SharePoint and every SPFx part built on
+        it use, puts `ms-Fabric--isFocusVisible` on the page on the first
+        trusted Tab and draws its rings under that class. The state pass
+        moves focus with `el.focus()`, which is not a key press, so on a live
+        intranet every Fluent button read as having no visible focus. One
+        real Tab is what a keyboard user's visit starts with; it moves focus
+        and activates nothing. Returns whether it was sent (a page with no
+        view has no window to receive it).
+        """
+        if self._view is None:
+            return False
+        try:
+            from PySide6.QtCore import Qt
+            from PySide6.QtTest import QTest
+
+            target = self._view.focusProxy() or self._view
+            QTest.keyClick(target, Qt.Key.Key_Tab)
+        except Exception:  # noqa: BLE001 - a missing key press must not stop the pass
+            return False
+        return True
 
     def set_viewport(self, width: int, height: int) -> None:
         """Resize the page's viewport, for the next `audit()` call.
@@ -889,7 +918,11 @@ class BrowserAuditRunner:
                 # scheduled, and the pass hangs until its timeout with no
                 # error to show for it (cost one debugging session to find).
                 live.append(slot)
-                slot.start()
+                if name == "states" and self._prime_keyboard():
+                    # Let the page's keydown handlers run before it is read.
+                    QTimer.singleShot(KEYBOARD_PRIME_MS, slot.start)
+                else:
+                    slot.start()
 
             if options.run_measurements and options.performance_scenario:
                 def scenario_done(evidence):

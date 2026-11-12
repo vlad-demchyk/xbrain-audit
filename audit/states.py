@@ -369,6 +369,33 @@ STATE_SCRIPT = r"""
     return null;
   }
 
+  // A pseudo-element's look, for the two that can draw a ring.
+  function pseudoLooks(el) {
+    return ['::before', '::after'].map(function(which) {
+      var cs = getComputedStyle(el, which);
+      return [cs.content, cs.outlineStyle, cs.outlineWidth, cs.boxShadow,
+              cs.borderTopStyle, cs.borderTopWidth, cs.borderTopColor,
+              cs.backgroundColor].join('|');
+    });
+  }
+  // Did focus give a pseudo-element something visible: content that draws
+  // (anything but `none`/`normal`) with an outline, a shadow, a border or a
+  // fill it did not have? Its contrast is not judged, as for a ring on an
+  // ancestor: a question left open, not a pass.
+  function pseudoGained(el, before) {
+    var now = pseudoLooks(el);
+    return ['::before', '::after'].some(function(which, i) {
+      if (now[i] === before[i]) return false;
+      var cs = getComputedStyle(el, which);
+      if (cs.content === 'none' || cs.content === 'normal') return false;
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+      var outline = cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth || '0') > 0;
+      var border = cs.borderTopStyle !== 'none' && parseFloat(cs.borderTopWidth || '0') > 0;
+      var fill = parseColor(cs.backgroundColor);
+      return outline || border || cs.boxShadow !== 'none' || (fill !== null && fill.a > 0);
+    });
+  }
+
   // The text a focused control shows, against what it now sits on. Only
   // asked when focus changed the fill or the text colour: otherwise the
   // pair is the unfocused one, which axe has measured already. Only text
@@ -454,8 +481,16 @@ STATE_SCRIPT = r"""
       ancestors.push(kept);
       node = node.parentElement;
     }
+    // The ring can be drawn on the element's own `::after` or `::before`:
+    // Fluent UI, which every SharePoint part built on it inherits, draws a
+    // button's focus ring as an absolutely placed `::after` with a border and
+    // an outline, and leaves the button's own outline at `none`. Read on the
+    // element alone, every such button on a live intranet was reported as
+    // having no visible focus.
+    var pseudoBefore = pseudoLooks(el);
     try { el.focus({preventScroll: true}); } catch (e) { restoreAncestors(); return; }
     if (document.activeElement !== el) { restoreAncestors(); return; }
+    var pseudoRing = pseudoGained(el, pseudoBefore);
     var ancestorRing = ancestors.some(function(kept) {
       var cs = getComputedStyle(kept.el);
       var look = [cs.outlineStyle, cs.outlineWidth, cs.boxShadow, cs.borderColor].join('|');
@@ -490,7 +525,7 @@ STATE_SCRIPT = r"""
         !gainedBackground && !gainedColor) {
       // A ring on a container is a visible change; its contrast is not
       // measured here, which is a question left open rather than a pass.
-      if (!ancestorRing) {
+      if (!ancestorRing && !pseudoRing) {
         pending = {rule: 'focus-not-visible', extra: {outline: after.outlineStyle}};
       }
     } else {

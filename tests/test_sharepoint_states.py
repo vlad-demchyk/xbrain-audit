@@ -310,6 +310,13 @@ class TheRealBrowser(unittest.TestCase):
         self.assertEqual((hits[0].details["zone"], hits[0].details["zone_name"]),
                          ("custom", "Contoso Tiles"))
 
+    def test_a_fluent_ring_on_after_shown_after_a_real_tab_is_visible_focus(self):
+        """Fluent UI draws a button's ring as `::after`, and only after a
+        trusted Tab: the pass starts with one real Tab and reads pseudo-
+        elements, so the button is not reported (it was, on a live site)."""
+        self.assertFalse(any("fluent_1a2b3c4d" in issue.snippet for issue in self.raw
+                             if issue.rule_id == "state:focus-not-visible"))
+
     def test_the_text_of_a_focused_button_is_measured_against_its_new_fill(self):
         hits = self._kept("state:focus-text-low-contrast")
         self.assertEqual(len(hits), 1)
