@@ -24,6 +24,8 @@ def _model():
     page = PageResult(url="https://x.test/", depth=0, raw_html=html,
                       diagnostics=PageDiagnostics(status_code=200, final_url="", headers={}))
     model = from_accessibility(audit.analyze_pages([page], "https://x.test", media=False), "en")
+    from report.model import page_index
+    model.pages = page_index([{"source": "https://x.test/", "findings_count": 3, "error": ""}])
     return model
 
 
