@@ -102,11 +102,13 @@ _LABELS = {
         top_places="Pages with the most findings",
         pages_more="and {count} more pages", page_col="Page or file",
         top_patterns="Highest-scoring passages",
-        side_col_rule="Check", side_col_wcag="WCAG", side_col_why="Why it is not settled",
-        side_col_count="Occurrences", side_col_pages="Pages", side_col_parts="Parts",
-        side_col_examples="Examples", side_more="and {count} more",
+        pages_of="{pages} of the {total} pages", pages_n="{pages} pages",
+        components="By component", comp_col_name="Component",
+        comp_col_problems="Distinct problems", comp_col_occurrences="Occurrences",
+        comp_col_pages="Pages", comp_author="Author content: {name}",
+        comp_custom="SPFx: {name}", comp_none="Without a zone (page-level or not placed)",
         component_fix="One fix in the code of {name} fixes all {count} occurrences.",
-        tally="{problems} distinct problems · {occurrences} occurrences on {pages} pages · {to_verify} to check by hand · {recommendations} recommendations (the last two are not in the totals)",
+        tally="{problems} distinct problems · {occurrences} occurrences on {pages} · {to_verify} to check by hand · {recommendations} recommendations (the last two are not in the totals)",
         found_in="Found in {count} places", and_more="and {count} more",
         occurrences="Occurrences",
         distinct="distinct problems", occurrences_total="occurrences in total",
@@ -172,9 +174,11 @@ _LABELS = {
         top_places="Сторінки з найбільшою кількістю знахідок",
         pages_more="і ще {count} сторінок", page_col="Сторінка або файл",
         top_patterns="Уривки з найвищою оцінкою",
-        side_col_rule="Перевірка", side_col_wcag="WCAG", side_col_why="Чому не вирішено",
-        side_col_count="Повторів", side_col_pages="Сторінок", side_col_parts="Частини",
-        side_col_examples="Приклади", side_more="і ще {count}",
+        pages_of="{pages} з {total}", pages_n="{pages}",
+        components="За компонентами", comp_col_name="Компонент",
+        comp_col_problems="Окремих проблем", comp_col_occurrences="Входжень",
+        comp_col_pages="Сторінок", comp_author="Контент автора: {name}",
+        comp_custom="SPFx: {name}", comp_none="Без зони (рівень сторінки або не прив'язані)",
         component_fix="Одне виправлення в коді {name} виправляє всі входження: {count}.",
         tally="Окремих проблем: {problems} · входжень: {occurrences}, сторінок: {pages} · перевірити вручну: {to_verify} · рекомендацій: {recommendations} (останні два не входять у підсумки)",
         found_in="Знайдено у {count} місцях", and_more="і ще {count}",
@@ -242,11 +246,13 @@ _LABELS = {
         top_places="Pagine con più rilievi",
         pages_more="e altre {count} pagine", page_col="Pagina o file",
         top_patterns="Passaggi con punteggio più alto",
-        side_col_rule="Controllo", side_col_wcag="WCAG", side_col_why="Perché non è deciso",
-        side_col_count="Occorrenze", side_col_pages="Pagine", side_col_parts="Parti",
-        side_col_examples="Esempi", side_more="e altri {count}",
+        pages_of="{pages} delle {total} pagine", pages_n="{pages} pagine",
+        components="Per componente", comp_col_name="Componente",
+        comp_col_problems="Problemi distinti", comp_col_occurrences="Occorrenze",
+        comp_col_pages="Pagine", comp_author="Contenuto dell'autore: {name}",
+        comp_custom="SPFx: {name}", comp_none="Senza zona (a livello di pagina o non attribuiti)",
         component_fix="Una sola correzione nel codice di {name} corregge tutte le {count} occorrenze.",
-        tally="{problems} problemi distinti · {occurrences} occorrenze su {pages} pagine · {to_verify} da verificare · {recommendations} raccomandazioni (le ultime due non sono nei totali)",
+        tally="{problems} problemi distinti · {occurrences} occorrenze su {pages} · {to_verify} da verificare · {recommendations} raccomandazioni (le ultime due non sono nei totali)",
         found_in="Trovato in {count} punti", and_more="e altri {count}",
         occurrences="Occorrenze",
         distinct="problemi distinti", occurrences_total="occorrenze in totale",
@@ -350,15 +356,31 @@ def _stat_card(count: int, label: str, palette: Palette, accent: str | None = No
 _LOCATIONS_SHOWN = 12
 
 
-def _locations_block(finding, labels: dict) -> str:
+def _locations_block(finding, labels: dict, root: str = "") -> str:
     """Where the problem is: one line when it is in one place, a counted list
-    when the same problem was found in several."""
-    places = finding.locations or ([finding.location] if finding.location else [])
+    when the same problem was found in several.
+
+    Each place reads `page — last two steps of the element's path`
+    (`report.model.readable_location`): a full address followed by a
+    nine-step CSS path wrapped a character per line in the PDF and named the
+    page in a way nobody says it.
+    """
+    from report.model import readable_location
+
+    places = [readable_location(where, root)
+              for where in (finding.locations or ([finding.location] if finding.location else []))]
     if len(places) <= 1:
         return f'<p class="location">{_esc(places[0] if places else "")}</p>'
-    shown = places[:_LOCATIONS_SHOWN]
+    # Shortened, two places can read the same (eight videos of one part,
+    # one per slide): one line with how many, the total still in the title.
+    counted: dict = {}
+    for where in places:
+        counted[where] = counted.get(where, 0) + 1
+    lines = [f"{where} (\u00d7{count})" if count > 1 else where
+             for where, count in counted.items()]
+    shown = lines[:_LOCATIONS_SHOWN]
     items = "".join(f'<li>{_esc(where)}</li>' for where in shown)
-    rest = len(places) - len(shown)
+    rest = len(lines) - len(shown)
     more = (f'<li class="more">{_esc(labels["and_more"]).format(count=rest)}</li>'
             if rest > 0 else "")
     return (
@@ -396,7 +418,7 @@ def _meta_line(finding, labels: dict) -> str:
     return '<p class="finding-meta">' + '<span class="dot">·</span>'.join(bits) + '</p>'
 
 
-def _finding_card(finding, lang: str, palette: Palette) -> str:
+def _finding_card(finding, lang: str, palette: Palette, root: str = "") -> str:
     labels = _labels(lang)
     rank = min(max(finding.severity_rank, 0), 3)
     severity_label = _SEVERITY_LABEL[rank].get(lang, _SEVERITY_LABEL[rank]["en"])
@@ -431,7 +453,7 @@ def _finding_card(finding, lang: str, palette: Palette) -> str:
     parts.append('</div>')
     parts.append(f'<h3>{_esc(finding.title)}</h3>')
     parts.append(_meta_line(finding, labels))
-    parts.append(_locations_block(finding, labels))
+    parts.append(_locations_block(finding, labels, root))
     component = _component_line(finding.zone, finding.zone_name,
                                 finding.occurrences, labels)
     if component:
@@ -941,8 +963,16 @@ def _pages_section(model: ReportModel, labels: dict) -> str:
         return ""
     pages = sorted(model.pages,
                    key=lambda p: -(p.get("findings_count") or 0))
+    from report.model import page_label
+
+    def _page_cell(source: str) -> str:
+        label = page_label(source, model.meta.target)
+        if "://" in source:
+            return f'<a href="{_esc(source)}">{_esc(label)}</a>'
+        return _esc(label)
+
     rows = "".join(
-        f'<tr><td>{_esc(p.get("source", ""))}</td>'
+        f'<tr><td>{_page_cell(p.get("source", ""))}</td>'
         f'<td class="num">{p.get("findings_count", 0)}</td></tr>'
         for p in pages[:_PAGES_SHOWN])
     extra = len(pages) - _PAGES_SHOWN
@@ -1001,124 +1031,59 @@ def _top_patterns_section(model: ReportModel, labels: dict, lang="en") -> str:
             f'<th>{_esc(labels["explanation"])}</th></tr>{"".join(rows)}</table></section>')
 
 
-#: How many example places a compact row of the to-check and the
-#: recommendations sections prints.
-_SIDE_EXAMPLES = 3
-#: How long an example's quoted markup may be in such a row.
-_SIDE_SNIPPET = 140
-
-
 def _page_of(location: str) -> str:
     """The page a location names: `source — selector` -> `source`."""
-    return (location or "").split(" — ", 1)[0]
+    from report.model import split_location
+
+    return split_location(location)[0]
 
 
-def _side_rows(items) -> list:
-    """The to-check and recommendations findings, one row per rule and part.
+def _components_table(findings, labels: dict) -> str:
+    """The proven problems per component: one row per part of the page.
 
-    These two sections used to print a full card per grouped finding, like
-    the proven findings. On a live 104-page intranet the to-check list had
-    1436 entries - most of them one people-directory part's photos whose
-    contrast no engine could measure - and the PDF ran to 1018 pages. What a
-    reader needs from a list of open questions is which checks are open,
-    how often, where, and a few places to look; the proven findings keep
-    their cards. Grouped by rule over `ReportModel.grouped_findings` (the
-    same identity as the main list), so every occurrence is counted once.
+    On a SharePoint run a problem belongs to one part - a custom web part
+    (its group spans every page it is placed on) or one author part - so the
+    rows add up to the totals line above them. Not printed for a run without
+    zones, where one shared header's problem sits on many pages and a
+    per-page split could not add up.
     """
+    if not any(finding.zone for finding in findings):
+        return ""
+    from duplicates import OUTSIDE_CANVAS
+
     rows: dict = {}
-    for finding in items:
-        # Never across rules or across parts: a row is one check in one
-        # component, the unit somebody fixes.
-        key = (finding.rule_id or finding.title, finding.zone, finding.zone_name)
+    for finding in findings:
+        name = (finding.zone_name or "").removesuffix(OUTSIDE_CANVAS)
         if finding.zone == "custom":
-            # A custom part's problem is its family, as in the main list.
-            from audit.browser import _rule_family
-            from duplicates import OUTSIDE_CANVAS
-
-            key = (_rule_family(finding.rule_id or finding.title), finding.zone,
-                   finding.zone_name.removesuffix(OUTSIDE_CANVAS))
-        row = rows.get(key)
-        if row is None:
-            row = rows[key] = {
-                "first": finding, "title": finding.title, "rule_id": finding.rule_id,
-                "wcag": [], "why": "", "count": 0, "pages": [], "parts": [],
-                "examples": [], "rank": finding.severity_rank,
-                "confidence": finding.confidence or "",
-                "zone": finding.zone,
-            }
-        row["rank"] = min(row["rank"], finding.severity_rank)
-        for criterion in finding.wcag or ():
-            if criterion not in row["wcag"]:
-                row["wcag"].append(criterion)
-        if not row["why"]:
-            row["why"] = _flatten_sentence(finding.caveat or finding.why or finding.found)
-        places = finding.locations or ([finding.location] if finding.location else [])
-        row["count"] += max(1, len(places))
-        for where in places:
+            label = labels["comp_custom"].format(name=name)
+        elif finding.zone == "author":
+            label = labels["comp_author"].format(name=name)
+        else:
+            label = labels["comp_none"]
+        row = rows.setdefault(label, {"problems": 0, "occurrences": 0, "pages": set()})
+        row["problems"] += 1
+        row["occurrences"] += finding.occurrences
+        for where in finding.locations or ([finding.location] if finding.location else []):
             page = _page_of(where)
-            if page and page not in row["pages"]:
-                row["pages"].append(page)
-        if finding.zone_name and finding.zone_name not in row["parts"]:
-            row["parts"].append(finding.zone_name)
-        if len(row["examples"]) < _SIDE_EXAMPLES:
-            snippet = " ".join((finding.snippet or "").split())
-            if len(snippet) > _SIDE_SNIPPET:
-                snippet = snippet[:_SIDE_SNIPPET - 1] + "…"
-            row["examples"].append((snippet, places[0] if places else ""))
-            # One grouped problem in many places (one component's pattern):
-            # further places as examples, the markup quoted once.
-            for where in places[1:]:
-                if len(row["examples"]) >= _SIDE_EXAMPLES:
-                    break
-                row["examples"].append(("", where))
-    return sorted(rows.values(), key=lambda row: (row["rank"], -row["count"],
-                                                  row["title"]))
+            if page:
+                row["pages"].add(page)
+    ordered = sorted(rows.items(), key=lambda kv: (-kv[1]["occurrences"], kv[0]))
+    body = "".join(
+        f'<tr class="component-row"><td>{_esc(label)}</td>'
+        f'<td class="num">{row["problems"]}</td>'
+        f'<td class="num">{row["occurrences"]}</td>'
+        f'<td class="num">{len(row["pages"])}</td></tr>'
+        for label, row in ordered)
+    return (f'<h3 class="table-title">{_esc(labels["components"])}</h3>'
+            f'<table class="category-table components-table"><tr>'
+            f'<th>{_esc(labels["comp_col_name"])}</th>'
+            f'<th class="num">{_esc(labels["comp_col_problems"])}</th>'
+            f'<th class="num">{_esc(labels["comp_col_occurrences"])}</th>'
+            f'<th class="num">{_esc(labels["comp_col_pages"])}</th></tr>{body}</table>')
 
 
-def _side_table(rows, labels: dict) -> str:
-    """The compact rows of `_side_rows`: one `<tr>` per rule."""
-    body = []
-    for row in rows:
-        examples = "".join(
-            f'<li><code>{_esc(snippet)}</code> <span class="where">{_esc(where)}</span></li>'
-            if snippet else f'<li><span class="where">{_esc(where)}</span></li>'
-            for snippet, where in row["examples"])
-        rest = row["count"] - len(row["examples"])
-        if rest > 0:
-            examples += f'<li class="more">{_esc(labels["side_more"].format(count=rest))}</li>'
-        parts = ", ".join(row["parts"])
-        component = _component_line(row["zone"], row["parts"][0] if row["parts"] else "",
-                                    row["count"], labels)
-        why = row["why"]
-        rule = (f'<br><span class="rule">{_esc(row["rule_id"])}</span>'
-                if row["rule_id"] else "")
-        # The certainty badge and the caveat, as on a card: what kind of
-        # claim this row is must not depend on which layout printed it.
-        certainty = row["confidence"]
-        if certainty and certainty != EXACT:
-            label = labels["cert"].get(certainty, certainty)
-            rule += (f'<br><span class="badge badge-cert cert-{_esc(certainty)}">'
-                     f'{_esc(label)}</span>')
-        body.append(
-            '<tr class="side-row">'
-            f'<td><strong>{_esc(row["title"])}</strong>{rule}</td>'
-            f'<td>{_esc(", ".join(row["wcag"]))}</td>'
-            f'<td><span class="caveat">{_esc(why)}</span>'
-            + (f'<br><span class="component-fix">{_esc(component)}</span>' if component else "")
-            + '</td>'
-            f'<td class="num">{row["count"]}</td>'
-            f'<td class="num">{len(row["pages"])}</td>'
-            f'<td>{_esc(parts)}</td>'
-            f'<td><ul class="side-examples">{examples}</ul></td></tr>')
-    head = "".join(f'<th{cls}>{_esc(labels[key])}</th>' for key, cls in (
-        ("side_col_rule", ""), ("side_col_wcag", ""), ("side_col_why", ""),
-        ("side_col_count", ' class="num"'), ("side_col_pages", ' class="num"'),
-        ("side_col_parts", ""), ("side_col_examples", "")))
-    return (f'<table class="category-table side-table"><tr>{head}</tr>'
-            + "".join(body) + '</table>')
-
-
-def _tally_line(findings, to_verify, recommendations, labels: dict) -> str:
+def _tally_line(findings, to_verify, recommendations, labels: dict,
+                pages_total: int = 0) -> str:
     """What the overview counts, in one line under the stat cards.
 
     The cards and "what was found" count distinct problems, and nothing said
@@ -1130,12 +1095,16 @@ def _tally_line(findings, to_verify, recommendations, labels: dict) -> str:
     places = [where for finding in findings
               for where in (finding.locations or ([finding.location] if finding.location else []))]
     pages = {_page_of(where) for where in places if where}
+    # "on 98 of the 104 pages": the pages with a proven problem, out of the
+    # pages examined - a bare 98 read as the size of the run.
+    pages_text = (labels["pages_of"].format(pages=len(pages), total=pages_total)
+                  if pages_total else labels["pages_n"].format(pages=len(pages)))
     text = labels["tally"].format(
         problems=len(findings),
         occurrences=sum(finding.occurrences for finding in findings),
-        pages=len(pages),
-        to_verify=len(_side_rows(to_verify)) if to_verify else 0,
-        recommendations=len(_side_rows(recommendations)) if recommendations else 0)
+        pages=pages_text,
+        to_verify=len(to_verify),
+        recommendations=len(recommendations))
     return f'<p class="tally">{_esc(text)}</p>'
 
 
@@ -1207,21 +1176,27 @@ def render_html(model: ReportModel, lang: str = "en") -> str:
     charts = _charts(by_severity, by_category, labels, palette, lang)
     legend = _legend(findings, labels, lang)
 
-    findings_html = ("".join(_finding_card(f, lang, palette) for f in findings)
+    root = model.meta.target
+    findings_html = ("".join(_finding_card(f, lang, palette, root) for f in findings)
                      if findings else f'<p class="empty">{_esc(labels["no_findings"])}</p>')
     def _side_section(key, items):
         if not items:
             return ""
-        rows = _side_rows(items)
-        return (f'<section class="findings {key}"><h2>{_esc(labels[key])} ({len(rows)})</h2>'
+        # Full cards, one per group, as for the proven findings: grouping
+        # keeps the section short, and the card layout is the one people
+        # read.
+        return (f'<section class="findings {key}"><h2>{_esc(labels[key])} ({len(items)})</h2>'
                 f'<p class="authwall-note">{_esc(labels[key + "_note"])}</p>'
-                + _side_table(rows, labels) + '</section>')
+                + "".join(_finding_card(f, lang, palette, root) for f in items)
+                + '</section>')
 
     # To-check right after the findings: each may be a real failure. Advice
     # goes last, after the pages: it changes no total and asks nothing urgent.
     verify_section = _side_section("to_verify", to_verify)
     advice_section = _side_section("recommendations", recommendations)
-    tally = _tally_line(findings, to_verify, recommendations, labels)
+    tally = (_tally_line(findings, to_verify, recommendations, labels,
+                         pages_total=len(model.pages or []))
+             + _components_table(findings, labels))
 
     authwall_section = (_behind_the_login(model, labels, palette)
                         + _sharepoint_section(model, labels))
@@ -1376,12 +1351,7 @@ table.category-table .src {{
   color: {palette.text_muted}; font-size: 8pt; margin-top: 1mm;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }}
-.side-table td {{ vertical-align: top; font-size: 8.5pt; }}
 .component-fix {{ font-size: 8.4pt; font-weight: 600; margin: 1.5mm 0 0; }}
-.side-table .rule {{ font-family: monospace; font-size: 7.5pt; color: {palette.text_muted}; }}
-.side-examples {{ margin: 0; padding-left: 4mm; }}
-.side-examples code {{ font-size: 7.5pt; word-break: break-all; }}
-.side-examples .where {{ color: {palette.text_muted}; font-size: 7.5pt; word-break: break-all; }}
 .repo-coverage {{ color: {palette.text_muted}; font-size: 9pt; margin: -1mm 0 2mm; }}
 /* The index of what was examined is context, not content: small type, and a
    fixed narrow column for the count so the addresses get the width. */

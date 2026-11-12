@@ -677,7 +677,7 @@ def _report_markdown(payload: dict, lang: str) -> str:
         # `payload["files"]` is one entry per *document*, which is right for
         # a JSON consumer and wrong for a reader's index. See
         # `report.model.page_index`.
-        from report.model import page_index
+        from report.model import page_index, page_label
 
         ranked = sorted(
             page_index({"source": f.get("source", "") or f.get("url", ""),
@@ -693,7 +693,12 @@ def _report_markdown(payload: dict, lang: str) -> str:
         for f in ranked[:_PAGES_LISTED]:
             error = f.get("error", "")
             count = f"*error: {error}*" if error else f["findings_count"]
-            out.append(f"| {f['source']} | {count} |")
+            # The page as a person names it, the full address as its link
+            # (`report.model.page_label`), the same as in the styled report.
+            source = f["source"]
+            name = page_label(source, payload.get("root", "")).replace("|", "\\|")
+            shown = f"[{name}]({source})" if "://" in source else name
+            out.append(f"| {shown} | {count} |")
         rest = len(ranked) - _PAGES_LISTED
         if rest > 0:
             out.append(f"| *and {rest} more* | |")

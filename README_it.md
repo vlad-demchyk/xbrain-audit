@@ -246,7 +246,7 @@ stato in cui la mette una persona - indicatore di focus e se si distingue dallo
 sfondo (3:1), se il testo di un controllo a fuoco resta leggibile quando il
 focus ne cambia i colori (1.4.3), se un'intestazione fissa copre l'elemento a
 fuoco (2.4.11),
-trappole da tastiera, ordine di focus, contenuto solo in hover, una modale
+trappole da tastiera (confermate con Tab e Maiusc+Tab reali), ordine di focus, contenuto solo in hover, una modale
 aperta, il percorso del modulo, la dimensione di ogni bersaglio del puntatore e
 lo spazio attorno (2.5.8, misurati da axe-core con il riquadro e il bersaglio più
 vicino nella segnalazione) - e la stessa pagina a più larghezze. Legge e non
@@ -495,10 +495,17 @@ altro sito restano un problema per elemento: ogni immagine e link scritto da
 una persona richiede la sua correzione. Il report, il riepilogo JSON e la
 finestra raggruppano allo stesso modo; `--json` elenca ancora ogni occorrenza.
 
-**Da verificare e raccomandazioni sono compatti.** Una riga per controllo e
-web part: criteri WCAG, perché nessun motore l'ha deciso, quanti luoghi, su
-quante pagine e tre esempi con la loro pagina. Solo i risultati provati hanno
-una scheda completa.
+**La panoramica dice che cosa conta.** Sotto le schede di gravità: problemi
+distinti, occorrenze, su quante delle pagine esaminate, e quanti gruppi da
+verificare e raccomandazioni (fuori dai totali). In un'esecuzione SharePoint una
+tabella per componente (ogni web part personalizzata, ogni parte dell'autore)
+somma a quella riga. «Da verificare» e «Raccomandazioni» sono schede come i
+risultati provati, una per gruppo. Le pagine sono nominate come le nomina una
+persona - il percorso decodificato sotto il sito (`Backup / Rubrica`), con
+l'indirizzo completo come link - e un luogo si legge `pagina — ultimi due passi
+del percorso dell'elemento`. Un gruppo è verificato membro per membro: non
+mescola mai famiglie di controlli, web part, forme di elementi o, fuori dalle
+parti personalizzate, risultati che l'identità distingue.
 
 **Rigenerare il report di un'esecuzione conclusa.** `xaudit report
 <cartella-esecuzione> --styled-report breve.pdf [--language it] [--unsettled]`

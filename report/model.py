@@ -62,6 +62,62 @@ def page_index(rows) -> list:
     return list(merged.values())
 
 
+#: How a finding's location joins its page and the element on it.
+LOCATION_SEPARATOR = " \u2014 "
+
+
+def split_location(location: str) -> tuple:
+    """`(page, where)` of a location: `source — selector` -> both halves."""
+    page, _sep, where = (location or "").partition(LOCATION_SEPARATOR)
+    return page, where
+
+
+def page_label(url: str, root: str = "") -> str:
+    """A page as a person names it: its decoded path below the site.
+
+    `https://contoso.sharepoint.com/sites/ExampleSite/SitePages/Backup/I%20nostri%20Obiettivi.aspx`
+    under the site `.../sites/ExampleSite` reads `Backup / I nostri
+    Obiettivi`. SharePoint's `SitePages` library and a page's extension say
+    nothing to a reader; the site's own path is the same on every row. The
+    full address stays where the label is printed, as its link.
+    """
+    from urllib.parse import unquote, urlsplit
+
+    text = str(url or "")
+    if "://" not in text:
+        return text
+    path = unquote(urlsplit(text).path or "/")
+    base = unquote(urlsplit(root).path if "://" in str(root or "") else "").rstrip("/")
+    if base and (path == base or path.startswith(base + "/")):
+        path = path[len(base):]
+    parts = [part for part in path.split("/") if part]
+    if parts and parts[0].lower() == "sitepages":
+        parts = parts[1:]
+    if parts:
+        last = parts[-1]
+        for suffix in (".aspx", ".html", ".htm", ".php"):
+            if last.lower().endswith(suffix):
+                parts[-1] = last[: -len(suffix)]
+                break
+    return " / ".join(parts) if parts else "/"
+
+
+def short_selector(selector: str, steps: int = 2) -> str:
+    """The last `steps` steps of a CSS path: where on the page, readably."""
+    parts = [part.strip() for part in str(selector or "").split(">") if part.strip()]
+    if len(parts) <= steps:
+        return " > ".join(parts)
+    return "\u2026 > " + " > ".join(parts[-steps:])
+
+
+def readable_location(location: str, root: str = "") -> str:
+    """`page label — last two steps of the selector` for a location."""
+    page, where = split_location(location)
+    label = page_label(page, root)
+    short = short_selector(where)
+    return f"{label}{LOCATION_SEPARATOR}{short}" if short else label
+
+
 @dataclass
 class ReportFinding:
     """One row in the report, whichever pass produced it."""
@@ -150,6 +206,19 @@ class ReportFinding:
         """How many places this problem was found in - 1 when ungrouped."""
         return max(1, len(self.locations))
 
+    def as_issue(self):
+        """This row as the fields `duplicates` groups audit issues by."""
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            rule_id=self.rule_id, category=self.category,
+            severity=self.severity, confidence=self.confidence or "exact",
+            snippet=self.snippet,
+            selector=(self.evidence or {}).get("selector", ""),
+            details={**((self.evidence or {}).get("details") or {}),
+                     "zone": self.zone, "zone_name": self.zone_name},
+        )
+
     @property
     def identity(self) -> tuple:
         """What makes two findings the same problem in different places.
@@ -182,18 +251,10 @@ class ReportFinding:
         fact that is wrong for half its rows.
         """
         from duplicates import canonical_markup, issue_identity
-        from types import SimpleNamespace
         import json
 
         if self.rule_id:
-            return issue_identity(SimpleNamespace(
-                rule_id=self.rule_id, category=self.category,
-                severity=self.severity, confidence=self.confidence or "exact",
-                snippet=self.snippet,
-                selector=(self.evidence or {}).get("selector", ""),
-                details={**((self.evidence or {}).get("details") or {}),
-                         "zone": self.zone, "zone_name": self.zone_name},
-            ))
+            return issue_identity(self.as_issue())
         return (self.category, self.severity, self.rule_id, self.confidence,
                 self.zone, self.zone_name,
                 self.title, self.found, self.why, self.fix,
@@ -306,13 +367,18 @@ class ReportModel:
         The pages table lists every page examined; this answers a different
         question - which of them to open first.
         """
+        # By page. A location is `page — element`, and counting locations
+        # ranked single elements as if each were a page: a SharePoint run
+        # printed "...aspx — div:nth-of-type(1) > ... > img" with counts of
+        # 4 and 3 under "pages with the most findings".
         counts: dict = {}
         for finding in self.findings:
-            place = finding.location or ""
-            if place:
-                counts[place] = counts.get(place, 0) + 1
+            page, _where = split_location(finding.location or "")
+            if page:
+                counts[page] = counts.get(page, 0) + 1
         ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
-        return ranked[:limit]
+        return [(page_label(page, self.meta.target), count)
+                for page, count in ranked[:limit]]
 
     def counts_by_category(self) -> dict:
         counts: dict[str, int] = {}
@@ -342,13 +408,20 @@ class ReportModel:
         """
         from dataclasses import replace
 
+        from duplicates import admits
+
         grouped: dict = {}
         engines: dict = {}
+        firsts: dict = {}
         order: list = []
         # Worst first (`sorted_findings`), so a group's first finding carries
         # its highest severity - the one a component's group is reported at.
         for finding in self.sorted_findings():
             key = finding.identity
+            if key in grouped and finding.rule_id and not admits(
+                    firsts[key].as_issue(), finding.as_issue()):
+                # The invariant failed (logged by `admits`): its own group.
+                key = key + (len(order),)
             if key in grouped:
                 where = finding.location
                 if where and where not in grouped[key]:
@@ -358,6 +431,7 @@ class ReportModel:
                 continue
             grouped[key] = [finding.location] if finding.location else []
             engines[key] = [finding.engine] if finding.engine else []
+            firsts[key] = finding
             order.append((key, finding))
         return [replace(first, locations=grouped[key],
                         engine=", ".join(engines[key]) or first.engine)

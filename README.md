@@ -248,7 +248,7 @@ goes.
 page in the state a person puts it in - focus indicator and whether it can be
 seen against its background (3:1), whether the text of a focused control can
 still be read when focus changes its colours (1.4.3), whether a sticky header
-covers the focused element (2.4.11), keyboard traps, focus order, hover-only content, an open
+covers the focused element (2.4.11), keyboard traps (confirmed with real Tab and Shift+Tab), focus order, hover-only content, an open
 modal, the form journey, the size of every pointer target and the space around
 it (2.5.8, measured by axe-core with the box and the nearest target in the
 finding) - and the same page at several widths. It reads and
@@ -480,10 +480,16 @@ one problem per element: each image and link a person wrote needs its own fix.
 The report, the JSON summary and the window group the same way; `--json` still
 lists every occurrence.
 
-**To check by hand, and recommendations, are compact.** One row per check and
-web part: its WCAG criteria, why no engine could settle it, how many places,
-on how many pages, and three examples with their page. Only proven findings
-get a full card.
+**The overview says what it counts.** Under the severity cards: distinct
+problems, occurrences, on how many of the pages examined, and how many groups
+are to check by hand and recommended (not in the totals). On a SharePoint run a
+table per component (each custom web part, each author part) adds up to that
+line. "To check by hand" and "Recommendations" are cards like the proven
+findings, one per group. Pages are named as a person names them - the decoded
+path below the site (`Backup / Rubrica`), the full address as the link - and a
+place reads `page — last two steps of the element's path`. A group is checked
+member by member: it never mixes check families, web parts, element shapes or,
+outside custom parts, findings the identity tells apart.
 
 **Re-rendering a finished run.** `xaudit report <run-folder> --styled-report
 short.pdf [--language it] [--unsettled]` writes the styled report again from a

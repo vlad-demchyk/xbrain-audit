@@ -227,7 +227,8 @@ class TheReportIsAboutThePage(unittest.TestCase):
                               fix="x", location="https://a/1"),
             ])
         self.assertEqual(model.counts_by_title()[0][2], 2)
-        self.assertEqual(model.counts_by_place()[0], ("https://a/1", 2))
+        # The page, as a person names it (`report.model.page_label`).
+        self.assertEqual(model.counts_by_place()[0], ("1", 2))
 
     def test_the_section_renders_in_every_language(self):
         from report.model import ReportFinding, ReportMeta, ReportModel

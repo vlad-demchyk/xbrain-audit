@@ -70,8 +70,9 @@ class ReRenderingARunFolder(unittest.TestCase):
             code, html = self._render("--language", "it", "--unsettled")
         self.assertEqual(code, 0)
         self.assertIn("Da verificare manualmente (1)", html)
-        # 200 undecided contrasts on one part's names: one compact row.
-        self.assertEqual(html.count('<tr class="side-row">'), 1)
+        # 200 undecided contrasts on one part's names: one card, one group.
+        section = html.split('<section class="findings to_verify">')[1].split("</section>")[0]
+        self.assertEqual(section.count('<article class="finding'), 1)
 
     def test_masking_is_applied_again(self):
         _code, html = self._render("--unsettled")

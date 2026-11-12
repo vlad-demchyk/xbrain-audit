@@ -75,7 +75,8 @@ class GroupedFindings(unittest.TestCase):
         model = self.model(finding(f"https://x.com/p{i}") for i in range(30))
         html = render_html(model, "en")
         self.assertIn("Found in 30 places", html)
-        self.assertIn("https://x.com/p0", html)
+        # Each place by the page's readable name (`report.model.page_label`).
+        self.assertIn("<li>p0</li>", html)
         # Not every one of the thirty: a card that is only a list of URLs
         # stops being a finding.
         self.assertIn("and 18 more", html)
@@ -324,8 +325,8 @@ class BriefingPageIndex(unittest.TestCase):
         ]
         text = _report_markdown(payload, "en")
         self.assertIn("Pages examined (2)", text)
-        self.assertEqual(text.count("| https://example.com/page-0 |"), 1)
-        self.assertIn("| https://example.com/page-0 | 3 |", text)
+        self.assertEqual(text.count("| [page-0](https://example.com/page-0) |"), 1)
+        self.assertIn("| [page-0](https://example.com/page-0) | 3 |", text)
 
     def test_a_page_that_failed_is_listed_before_the_rest(self):
         from cli_impl.reports import _report_markdown

@@ -364,22 +364,93 @@ def canonical_markup(text: str) -> str:
     return " ".join(str(document).split())
 
 
+class GroupInvariantError(AssertionError):
+    """Two findings that are not the same problem were put in one group."""
+
+
+def _strict_groups() -> bool:
+    import os
+
+    return bool(os.environ.get("XAUDIT_STRICT_GROUPS") or os.environ.get("PYTEST_CURRENT_TEST"))
+
+
+def group_conflict(first, other) -> str:
+    """Why `other` may not share a group with `first`, or "" when it may.
+
+    The invariant every grouped list keeps, checked member by member rather
+    than trusted from the key: a group never mixes rule families, zones or
+    web parts, element shapes (in a custom part), or - anywhere else -
+    findings `issue_identity` tells apart. A smaller number made by grouping
+    unrelated things is the one error a summary must never make.
+    """
+    from audit.browser import _family_of
+
+    def zone_of(issue):
+        details = getattr(issue, "details", None) or {}
+        return (details.get("zone", "") or "",
+                str(details.get("zone_name", "") or "").removesuffix(OUTSIDE_CANVAS))
+
+    try:
+        families = (_family_of(first), _family_of(other))
+    except Exception:  # noqa: BLE001 - compared by rule instead
+        families = (getattr(first, "rule_id", ""), getattr(other, "rule_id", ""))
+    if families[0] != families[1]:
+        return f"rule family {families[0]} != {families[1]}"
+    if zone_of(first) != zone_of(other):
+        return f"zone {zone_of(first)} != {zone_of(other)}"
+    if getattr(first, "confidence", "exact") != getattr(other, "confidence", "exact"):
+        return "certainty differs"
+    if zone_of(first)[0] == "custom":
+        shapes = tuple(element_shape(getattr(issue, "snippet", "") or "",
+                                     getattr(issue, "selector", "") or "")
+                       for issue in (first, other))
+        if shapes[0] != shapes[1]:
+            return f"element shape {shapes[0]} != {shapes[1]}"
+        return ""
+    if issue_identity(first) != issue_identity(other):
+        return "identity differs"
+    return ""
+
+
+def admits(first, other) -> bool:
+    """May `other` join `first`'s group? A conflict raises under tests (and
+    with `XAUDIT_STRICT_GROUPS`), and is logged and split otherwise."""
+    reason = group_conflict(first, other)
+    if not reason:
+        return True
+    if _strict_groups():
+        raise GroupInvariantError(
+            f"{getattr(first, 'rule_id', '')} / {getattr(other, 'rule_id', '')}: {reason}")
+    try:
+        import applog
+
+        applog.error("grouping.invariant", reason=reason,
+                     rule=getattr(first, "rule_id", ""), other=getattr(other, "rule_id", ""))
+    except Exception:  # noqa: BLE001 - logging must not stop a report
+        pass
+    return False
+
+
 def group_issues(issues: list) -> list:
     """`[(first, others)]` for audit issues, in arrival order.
 
     Same contract as `group`: nothing is dropped, and a finding with no twin
     comes back with an empty `others`, so one branch renders every case.
+    Every member is checked against its group's first (`admits`).
     """
     order: list = []
     seen: dict = {}
     for issue in issues:
         key = issue_identity(issue)
-        if key in seen:
-            seen[key][1].append(issue)
-            continue
-        entry = (issue, [])
-        seen[key] = entry
-        order.append(entry)
+        entries = seen.setdefault(key, [])
+        for entry in entries:
+            if admits(entry[0], issue):
+                entry[1].append(issue)
+                break
+        else:
+            entry = (issue, [])
+            entries.append(entry)
+            order.append(entry)
     return order
 
 
