@@ -92,7 +92,7 @@ def main(out_path: str) -> int:
             print("%s %-24s %2d paragraphs" % (language, title, len(found)),
                   file=sys.stderr)
 
-    with open(out_path, "w") as out:
+    with open(out_path, "w", encoding="utf-8") as out:
         for row in rows:
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
     print("%d entries -> %s (agent: %s)" % (len(rows), out_path, USER_AGENT),

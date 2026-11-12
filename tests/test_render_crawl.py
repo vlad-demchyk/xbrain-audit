@@ -203,3 +203,96 @@ class RedirectsToOnePage(unittest.TestCase):
         pages, _ = self._crawl()
         first = [p for p in pages if p.url == "https://example.com/a"][0]
         self.assertEqual(first.diagnostics.reasons.count(EMPTY_REDIRECTED), 1)
+
+
+class TheRenderTimeoutIsPortable(unittest.TestCase):
+    """The bound on a render used to be `SIGALRM`: absent on Windows and
+    unusable off the main thread, and the `except` around it swallowed both,
+    so the browser was never asked and a JavaScript page read as empty."""
+
+    def _crawl(self, render):
+        session = _Session(SHELL)
+        with patch("crawler.requests.Session", return_value=session):
+            return crawl("https://example.com",
+                         CrawlConfig(max_depth=0, max_pages=1,
+                                     render_mode=RENDER_AUTO,
+                                     render_timeout=7.5),
+                         render=render)
+
+    def test_render_is_called_on_windows(self):
+        import sys
+
+        with patch.object(sys, "platform", "win32"):
+            pages = self._crawl(lambda url: RENDERED_HTML)
+        self.assertEqual(pages[0].diagnostics.reasons, [RENDERED])
+        self.assertEqual(pages[0].diagnostics.render_error, "")
+
+    def test_render_is_called_off_the_main_thread(self):
+        import threading
+
+        out = {}
+        worker = threading.Thread(
+            target=lambda: out.setdefault("pages", self._crawl(lambda url: RENDERED_HTML)))
+        worker.start()
+        worker.join(30)
+        self.assertEqual(out["pages"][0].diagnostics.reasons, [RENDERED])
+
+    def test_a_renderer_that_takes_a_timeout_is_given_the_configured_one(self):
+        seen = {}
+
+        def render(url, timeout=None):
+            seen["timeout"] = timeout
+            return RENDERED_HTML
+
+        self._crawl(render)
+        self.assertEqual(seen["timeout"], 7.5)
+
+    def test_a_timeout_is_recorded_against_the_page(self):
+        def render(url, timeout=None):
+            raise TimeoutError(f"render timed out after {timeout}s")
+
+        pages = self._crawl(render)
+        self.assertIn("timed out", pages[0].diagnostics.render_error)
+
+
+class TheRendererStopsItselfAtTheDeadline(unittest.TestCase):
+    """`html_renderer` takes the timeout as a deadline its runner polls on
+    the Qt thread; no Qt is needed to check the bookkeeping around it."""
+
+    def _renderer(self, audit):
+        from audit import driver
+
+        renderer = driver.html_renderer()
+        renderer.runner = type("Runner", (), {"audit": staticmethod(audit)})()
+        return renderer
+
+    def test_a_page_past_its_deadline_is_a_timeout(self):
+        import time
+        from types import SimpleNamespace
+
+        holder = {}
+
+        def audit(url):
+            time.sleep(0.05)
+            # What the runner's 50 ms cancellation poll does.
+            cancelled = holder["renderer"]._expired()
+            return SimpleNamespace(error="cancelled" if cancelled else "", html="")
+
+        holder["renderer"] = renderer = self._renderer(audit)
+        with self.assertRaises(TimeoutError):
+            renderer("https://example.com", timeout=0.01)
+        self.assertIsNone(renderer._deadline)
+
+    def test_without_a_timeout_nothing_expires(self):
+        from types import SimpleNamespace
+
+        holder = {}
+
+        def audit(url):
+            holder["expired"] = holder["renderer"]._expired()
+            return SimpleNamespace(error="the page did not load", html="")
+
+        holder["renderer"] = renderer = self._renderer(audit)
+        with self.assertRaisesRegex(RuntimeError, "did not load"):
+            renderer("https://example.com")
+        self.assertFalse(holder["expired"])

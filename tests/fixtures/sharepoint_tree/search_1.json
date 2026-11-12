@@ -1,0 +1,4 @@
+{"PrimaryQueryResult": {"RelevantResults": {"RowCount": 2, "TotalRows": 3, "Table": {"Rows": [
+  {"Cells": [{"Key": "Path", "Value": "https://contoso.sharepoint.com/sites/Portal/SitePages/CHI-SIAMO.aspx", "ValueType": "Edm.String"}, {"Key": "Title", "Value": "Chi siamo", "ValueType": "Edm.String"}, {"Key": "SPWebUrl", "Value": "https://contoso.sharepoint.com/sites/Portal", "ValueType": "Edm.String"}]},
+  {"Cells": [{"Key": "Path", "Value": "https://contoso.sharepoint.com/sites/Portal/SitePages/Solo%20Ricerca.aspx", "ValueType": "Edm.String"}, {"Key": "Title", "Value": "Solo ricerca", "ValueType": "Edm.String"}, {"Key": "LastModifiedTime", "Value": "2026-07-01T00:00:00Z", "ValueType": "Edm.DateTime"}, {"Key": "SPWebUrl", "Value": "https://contoso.sharepoint.com/sites/Portal", "ValueType": "Edm.String"}]}
+]}}}}

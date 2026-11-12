@@ -236,7 +236,7 @@ def _mask_hash_comments(text: str) -> str:
 
     Every SVG sprite reference, every `href="#main"` skip link and every
     `color:#fff` in a `.py`, `.rb` or `.php` file did this. Found on the
-    Palmanova theme, where it accounted for a large part of the remaining
+    municipal site's WordPress theme, where it accounted for a large part of the remaining
     `control-name` criticals after the server-tag fix.
 
     Quote tracking is per line and deliberately simple. A string that opens
@@ -1052,7 +1052,7 @@ _SERVER_TAG = re.compile(
     # output. Requiring it meant such a file was not masked at all, so its
     # string literals - `echo '<div>' . $html . '</div>'` - were walked as
     # markup and `' . $html . '` came back as copy. Measured 2026-09-02 on
-    # `palmanova_wp`: 83 blocks of "markup" from `.php`, most of them PHP.
+    # `municipal_wp`: 83 blocks of "markup" from `.php`, most of them PHP.
     r"<\?(?:php\b|=)?.*?(?:\?>|\Z)"
     r"|<%.*?%>"                      # ERB, EJS, JSP, ASP
     r"|\{%-?.*?-?%\}"                # Twig, Django, Jinja, Liquid, Nunjucks
@@ -1084,7 +1084,7 @@ _TEMPLATE_SPLIT_RE = re.compile(
 #: What a run of "copy" from a server template looks like when it is really
 #: a piece of that language. `mask_server_tags` cannot always find the end of
 #: a PHP block: `?>` occurs inside string literals, and a real one does -
-#: `'/<h2(\s[^>]*)?>([\s\S]*?)<\/h2>/i'` in `palmanova_wp`'s TOC builder
+#: `'/<h2(\s[^>]*)?>([\s\S]*?)<\/h2>/i'` in `municipal_wp`'s TOC builder
 #: closes the mask thirty lines early, and the rest of the file walks as
 #: markup. Short of a PHP lexer the mask cannot be made exact, so the runs it
 #: lets through are filtered on what they are: a passage that concatenates a
@@ -1251,7 +1251,7 @@ def mask_code_comments(raw_text: str, file_path: str,
         # The `#` is the first character of the link's visible label. Blanking
         # from it to the end of the line takes the label and the closing tag
         # with it, and the link then reports as having no accessible name.
-        # Found on the Palmanova theme; the same shape covers every
+        # Found on a municipal site's WordPress theme; the same shape covers every
         # `href="#main"`, every SVG sprite id and every `color:#fff`.
         return masked
     masked = _CODE_COMMENT_RE.sub(_blank_but_newlines, masked)
@@ -1322,7 +1322,7 @@ def _extract_blocks(raw_text: str, file_path: str,
         # blanked by `mask_code_comments`, server tags replaced by their
         # filler. Cutting from the *raw* file instead put an HTML comment
         # back into the copy - `<!-- /header-social-wrapper -->` came back as
-        # a passage to judge, measured on the `palmanova_wp` theme.
+        # a passage to judge, measured on the `municipal_wp` theme.
         #
         # `walk_text` is only used to find the tags, and masks Blade's
         # `{{ … }}` on top. `mask_server_tags` deliberately leaves that alone

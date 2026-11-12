@@ -179,6 +179,10 @@ class CrawlDiagnostics:
     #: bound on what was missed, not a total: the pages never fetched would
     #: have contributed links of their own.
     queued_when_stopped: int = 0
+    #: Addresses found and not read because they lie outside `site_scope`
+    #: (one SharePoint host serves every site of a tenant). Counted, not
+    #: listed: they are not this run's pages, only proof the scope held.
+    out_of_scope: int = 0
 
     @property
     def truncated(self) -> bool:

@@ -16,7 +16,7 @@ def observed(shifts):
     result = subprocess.run([node, str(Path(__file__).with_name("vitals_observer_harness.cjs"))],
                             input=json.dumps({"bootstrap": vitals.bootstrap_script(),
                                               "snapshot": vitals.SNAPSHOT, "shifts": shifts}),
-                            text=True, capture_output=True, timeout=5)
+                            text=True, encoding="utf-8", capture_output=True, timeout=5)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
 

@@ -20,6 +20,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import cli_install
 
+#: Linking the command is a symlink into `~/.local/bin`: macOS and Linux.
+#: The Windows build ships the command as its own executable instead, and
+#: `install` refuses there (see `OnWindows` below).
+_POSIX_ONLY = unittest.skipIf(sys.platform == "win32",
+                              "the command is a symlink on macOS/Linux only")
+
 
 class _ScratchCase(unittest.TestCase):
     def setUp(self):
@@ -58,6 +64,7 @@ class IsDirOnPath(unittest.TestCase):
             self.assertFalse(cli_install.is_dir_on_path(Path("/opt/nowhere")))
 
 
+@_POSIX_ONLY
 class InstallAndUninstall(_ScratchCase):
     def test_install_creates_a_symlink_to_the_source(self):
         target = cli_install.install(source=self.source, link_dir=self.link_dir)
@@ -104,6 +111,7 @@ class InstallAndUninstall(_ScratchCase):
         self.assertEqual(cli_install.installed_target(link_dir=self.link_dir), self.source)
 
 
+@_POSIX_ONLY
 class AdminElevatedPath(_ScratchCase):
     """The `/usr/local/bin` path, with `subprocess.run` mocked so no real
     macOS password dialog appears during the test suite."""
@@ -145,6 +153,7 @@ class AdminElevatedPath(_ScratchCase):
         self.assertEqual(len(admin_calls), 1)
 
 
+@_POSIX_ONLY
 class TheFirstRunOffer(_ScratchCase):
     """`cli_install.offer_is_due`: asked once, in the packaged app, when the
     command is not there yet. Every branch is a refusal to nag."""
@@ -171,6 +180,19 @@ class TheFirstRunOffer(_ScratchCase):
         (self.link_dir / cli_install.CLI_NAME).symlink_to(self.source)
         with self._frozen():
             self.assertFalse(cli_install.offer_is_due(False, link_dir=self.link_dir))
+
+
+class OnWindows(_ScratchCase):
+    def test_install_explains_instead_of_trying_a_symlink(self):
+        with mock.patch.object(sys, "platform", "win32"):
+            with self.assertRaises(cli_install.CliInstallError) as caught:
+                cli_install.install(self.source, self.link_dir)
+        self.assertIn("xanalyze-cli.exe", str(caught.exception))
+        self.assertFalse((self.link_dir / cli_install.CLI_NAME).exists())
+
+    def test_the_first_run_offer_is_not_made(self):
+        with mock.patch.object(sys, "platform", "win32"),                 mock.patch.object(cli_install, "bundled_cli_path", return_value=self.source):
+            self.assertFalse(cli_install.offer_is_due(False, self.link_dir))
 
 
 class TheOfferIsRememberedAcrossLaunches(unittest.TestCase):

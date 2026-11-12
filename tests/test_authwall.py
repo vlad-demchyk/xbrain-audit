@@ -159,5 +159,93 @@ class TheReportSaysItFirst(unittest.TestCase):
             self.assertIn(heading, render_html(model, lang))
 
 
+class MicrosoftSignIn(unittest.TestCase):
+    """SharePoint Online in front of a crawl, as an anonymous request sees it.
+
+    Shapes recorded against a real tenant without a session; tenant id,
+    `state`, `nonce` and client id are replaced by placeholders.
+    """
+
+    SITE = "https://contoso.sharepoint.com/sites/ExampleSite/SitePages/Home.aspx"
+    # Browser user agent: Authenticate.aspx -> _forms/default.aspx -> Entra ID,
+    # which answers 200 with a page built by script: not one <input>.
+    IDP = ("https://login.microsoftonline.com:443/common/oauth2/authorize"
+           "?client%5Fid=00000000-0000-0000-0000-000000000000"
+           "&response%5Fmode=form%5Fpost&response%5Ftype=code%20id%5Ftoken"
+           "&resource=00000003-0000-0ff1-ce00-000000000000"
+           "&scope=openid&nonce=NONCE&redirect%5Furi=https%3A%2F%2Fcontoso"
+           ".sharepoint.com%2F%5Fforms%2Fdefault.aspx&state=STATE")
+    SCRIPT_ONLY = ("<!DOCTYPE html><html><head><title>Sign in to your "
+                   "account</title><script>var $Config={};</script></head>"
+                   "<body><noscript>JavaScript required</noscript></body>"
+                   "</html>")
+
+    def test_the_browser_chain_ending_on_entra_id_is_certain(self):
+        wall = authwall.inspect(page(url=self.SITE, status=200,
+                                     html=self.SCRIPT_ONLY, final=self.IDP))
+        self.assertEqual(wall.signal, authwall.LOGIN_REDIRECT)
+        self.assertTrue(wall.certain)
+        # Where it went, without what it carried.
+        self.assertEqual(
+            wall.detail,
+            "https://login.microsoftonline.com:443/common/oauth2/authorize")
+
+    def test_the_crawlers_403_with_the_forms_header_is_certain(self):
+        wall = authwall.inspect(page(
+            url=self.SITE, status=403, html="403 FORBIDDEN",
+            headers={"content-type": "text/plain; charset=utf-8",
+                     "x-forms_based_auth_required":
+                         "https://contoso.sharepoint.com/_forms/default.aspx"
+                         "?ReturnUrl=/_layouts/15/error.aspx&Source=%2f",
+                     "x-msdavext_error": "917656; Access denied."}))
+        self.assertEqual(wall.signal, authwall.HTTP_403)
+        self.assertTrue(wall.certain)
+        self.assertEqual(wall.detail, "X-Forms_Based_Auth_Required")
+
+    def test_a_bare_403_stays_the_weak_signal(self):
+        wall = authwall.inspect(page(url=self.SITE, status=403,
+                                     headers={"content-type": "text/html"}))
+        self.assertFalse(wall.certain)
+
+    def test_each_hop_of_the_chain_is_a_sign_in(self):
+        for hop in ("https://contoso.sharepoint.com/_layouts/15/Authenticate.aspx?Source=%2F",
+                    "https://contoso.sharepoint.com/_forms/default.aspx?ReturnUrl=x",
+                    "https://login.microsoft.com/common/oauth2/v2.0/authorize",
+                    "https://login.windows.net/common/oauth2/authorize",
+                    "https://contoso.b2clogin.com/contoso.onmicrosoft.com/oauth2/v2.0/authorize",
+                    "https://sts.contoso.test/adfs/ls/?wa=wsignin1.0"):
+            with self.subTest(hop=hop):
+                self.assertTrue(authwall.is_definite_login_url(hop))
+                wall = authwall.inspect(page(url=self.SITE, final=hop,
+                                             html="<html></html>"))
+                self.assertTrue(wall.certain)
+
+    def test_an_encoded_return_key_is_still_a_return_key(self):
+        wall = authwall.inspect(page(
+            url="https://x.test/admin", html="<h1>x</h1>",
+            final="https://id.x.test/start?redirect%5Furi=https%3A%2F%2Fx.test"))
+        self.assertEqual(wall.signal, authwall.LOGIN_REDIRECT)
+        self.assertFalse(wall.certain)
+
+    def test_a_sharepoint_page_named_login_is_not_proof(self):
+        self.assertFalse(authwall.is_definite_login_url(
+            "https://contoso.sharepoint.com/sites/x/SitePages/Login-help.aspx"))
+        self.assertFalse(authwall.is_definite_login_url(
+            "https://contoso.sharepoint.com/sites/x/SitePages/Home.aspx"))
+
+    def test_a_checkpointed_wall_without_the_new_field_still_loads(self):
+        wall = authwall.Wall("https://x.test/", authwall.HTTP_403, "403")
+        self.assertFalse(wall.certain)
+
+    def test_the_page_tree_uses_this_list_and_no_copy_of_it(self):
+        from pathlib import Path
+
+        import sharepoint_tree
+
+        self.assertIs(sharepoint_tree.authwall, authwall)
+        source = Path(sharepoint_tree.__file__).read_text(encoding="utf-8")
+        self.assertNotIn('"login.microsoftonline.com"', source)
+
+
 if __name__ == "__main__":
     unittest.main()

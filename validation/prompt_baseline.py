@@ -12,7 +12,7 @@ ARCHIVE_DIGEST = "f7548aa7d3d655b5d575f9ff6fc0dc600e1acf3d2bbcf151879713edd08b0a
 
 
 def _legacy_packet():
-    packet = strict_json(ASSET.read_text())
+    packet = strict_json(ASSET.read_text(encoding="utf-8"))
     if digest(packet) != ARCHIVE_DIGEST:
         raise ValueError("archived Claude request no longer matches its git-derived packet")
     return packet

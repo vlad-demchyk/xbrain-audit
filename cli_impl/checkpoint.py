@@ -51,6 +51,10 @@ def save_audit(run_dir, result) -> Path | None:
         "auth": json_value(result.auth), "repo": json_value(result.repo),
         "media": json_value(result.media),
         "media_type": type(result.media).__name__ if result.media is not None else None,
+        # A SharePoint run's zones and page list: without them a resumed
+        # browser pass would read the chrome as if it were the site.
+        "sharepoint": json_value(getattr(result, "sharepoint", {}) or {}),
+        "page_tree": json_value(getattr(result, "page_tree", {}) or {}),
         "content_hashes": {source: content_digest(markup)
                            for source, markup in result.markup_by_source.items()},
         "documents": [
@@ -96,6 +100,10 @@ def load_audit(run_dir):
         coverage_documents=payload.get("coverage_documents", []),
         coverage=payload.get("coverage", {}))
     result.coverage.setdefault("content_hashes", payload.get("content_hashes", {}))
+    if isinstance(payload.get("sharepoint"), dict):
+        result.sharepoint = payload["sharepoint"]
+    if payload.get("page_tree"):
+        result.page_tree = payload["page_tree"]
     from dataclasses import fields
     from audit.authwall import Wall, WallReport
     from audit.media import MediaFetchScan, MediaScan, Provenance

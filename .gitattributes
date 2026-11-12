@@ -1,0 +1,8 @@
+# Files whose bytes are checked against a recorded hash, or against the blob
+# git holds, must not be rewritten on checkout. With `core.autocrlf=true` -
+# the Git for Windows default - they were checked out with CRLF line endings,
+# and `audit/vitals.py` then refused its own vendored web-vitals build
+# ("artifact hash differs from its manifest"), which took the whole browser
+# pass down on Windows.
+audit/vendor/** -text
+validation/assets/** -text

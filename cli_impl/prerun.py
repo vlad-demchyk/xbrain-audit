@@ -146,6 +146,11 @@ def announce(command: str, target: str, args, *, is_url: bool, out) -> list:
 PROFILE_PREFIX = "# [profile]"
 
 
+#: Options `audit` and `fullscan` apply from the target itself rather than
+#: suggesting.
+_APPLIED_BY_AUDIT = frozenset({"page_tree", "site_scope", "render"})
+
+
 def profile(command: str, target: str, args, *, is_url: bool, out) -> list:
     """What this target's stack asks for - said, and applied only if asked.
 
@@ -176,6 +181,11 @@ def profile(command: str, target: str, args, *, is_url: bool, out) -> list:
         # `cli_impl.runheader.describe`.
         args._profile_applied = tuple(applied)
     for item in plan.suggestions:
+        if command in ("audit", "fullscan") and item.option in _APPLIED_BY_AUDIT:
+            # `audit` applies these itself and says so in its own line
+            # (`cli_impl.auditpass.plan_sharepoint`); "consider" here would
+            # contradict it.
+            continue
         flag = "--" + item.option.replace("_", "-")
         on = item in applied
         verb = "on" if on else "consider"

@@ -149,6 +149,11 @@ class CrawlConfig:
     max_links_per_page: int = 1000
     #: Addresses waiting in the queue at once.
     max_queue: int = 20_000
+    #: `site_session.SESSION_BROWSER` reads every page with the `render`
+    #: callable only - the session lives in the browser profile and a
+    #: `requests` fetch would read the sign-in page. Anything else: fetch,
+    #: then render as `render_mode` says.
+    session_mode: str = ""
 
 
 class _TooLarge(Exception):
@@ -283,6 +288,39 @@ def _http_session(config: CrawlConfig, root_url: str):
     return session
 
 
+def http_session(config: CrawlConfig, root_url: str):
+    """A Requests session carrying `config.cookies` with their browser scope.
+
+    The public name for every reader of a signed-in site - the crawl itself
+    and `sharepoint_tree` - so both send the same cookies to the same hosts.
+    """
+    return _http_session(config, root_url)
+
+
+def _scope_key(path: str) -> str:
+    from urllib.parse import unquote
+
+    path = unquote(path or "/")
+    if len(path) > 1:
+        path = path.rstrip("/")
+    return path.casefold()
+
+
+def in_site_scope(url: str, site_scope: str) -> bool:
+    """Is `url` inside the path `site_scope` (`/sites/x`), ignoring case?
+
+    Segment-aware: `/sites/x2` is not inside `/sites/x`. SharePoint paths
+    are case-insensitive, so `/SITES/X/page.aspx` is.
+    """
+    if not site_scope:
+        return True
+    scope = _scope_key(site_scope)
+    if scope in ("", "/"):
+        return True
+    key = _scope_key(urlparse(url).path)
+    return key == scope or key.startswith(scope + "/")
+
+
 def _normalize(url: str) -> str:
     parsed = urlparse(url)
     # Drop fragments; keep query since some sites route content via query params.
@@ -330,6 +368,37 @@ def _should_render(mode: str, diagnostics) -> bool:
     return (EMPTY_JS_RENDERED in diagnostics.reasons
             or not diagnostics.blocks_kept
             or diagnostics.extraction.get("style_blocks") == 0)
+
+
+def _render_within(render, url: str, timeout: float) -> str:
+    """Render one page, bounded by `timeout` seconds where the renderer can be.
+
+    The bound used to be `SIGALRM`, which has two holes and both were silent,
+    because the `except` around the call swallowed what they raised:
+    Windows has no `SIGALRM` at all (`AttributeError`), and `signal.signal`
+    from any thread but the main one raises `ValueError` - the window crawls
+    on a worker. Either way `render` was never called and a JavaScript page
+    was reported as empty.
+
+    A signal could not have been the right tool anyway: the renderer is
+    QtWebEngine, which runs on the thread that called it and must not be
+    interrupted from outside. So the deadline is handed to the renderer,
+    which stops its own page load at the next turn of its event loop
+    (`audit.driver.html_renderer`). A plain `render(url)` callable - a test
+    double, a custom renderer - is called without one: nothing in the same
+    thread can stop it portably, and calling it unbounded beats not calling
+    it at all.
+    """
+    import inspect
+
+    try:
+        parameters = inspect.signature(render).parameters.values()
+    except (TypeError, ValueError):
+        parameters = ()
+    if any(p.name == "timeout" or p.kind is inspect.Parameter.VAR_KEYWORD
+           for p in parameters):
+        return render(url, timeout=timeout) or ""
+    return render(url) or ""
 
 
 CANDIDATE_TAGS = [
@@ -718,7 +787,8 @@ def page_from_html(html: str, url: str, depth: int = 0) -> PageResult:
 
 
 def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
-          render=None, walk=None, cancelled=None) -> list[PageResult]:
+          render=None, walk=None, cancelled=None, seeds=None,
+          site_scope: str | None = None) -> list[PageResult]:
     """Breadth-first crawl starting at root_url up to config.max_depth hops.
 
     progress_cb, if given, is called as progress_cb(url, depth) right before
@@ -748,14 +818,39 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
     pages, network responses and browser renders. It cannot interrupt a
     socket inside `requests`, but it prevents the next expensive unit from
     starting and gives every UI surface one cooperative stop contract.
+
+    seeds, when given, is the list of pages to read instead of a walk: every
+    seed is read at depth 0 and no link found on a page is followed. The
+    list comes from somewhere that knows the site's pages better than its
+    links do (`sharepoint_tree`). `max_pages` still applies, and what it left
+    unread is in `walk.queued_when_stopped` like any other stopped crawl.
+
+    site_scope, when given, is a path (`/sites/x`) the crawl stays inside,
+    compared without case and by whole segments. An address outside it is
+    neither fetched nor queued, and the distinct addresses turned away are
+    counted in `walk.out_of_scope`: one host serves a whole SharePoint
+    tenant, and a link into another site is not a page of this one.
     """
     config = config or CrawlConfig()
     root_url = _normalize(root_url)
 
     visited: set[str] = set()
-    queue: deque[tuple[str, int]] = deque([(root_url, 0)])
+    out_of_scope: set[str] = set()
+    if seeds:
+        start = [(_normalize(url), 0) for url in dict.fromkeys(seeds)]
+    else:
+        start = [(root_url, 0)]
+    queue: deque[tuple[str, int]] = deque()
+    for url, depth in start:
+        if in_site_scope(url, site_scope):
+            queue.append((url, depth))
+        else:
+            out_of_scope.add(url)
+    #: A seeded crawl reads its list and follows nothing.
+    max_depth = 0 if seeds else config.max_depth
     results: list[PageResult] = []
     session = _http_session(config, root_url)
+    browser_only = render is not None and config.session_mode == "browser"
 
     #: Pages actually read as HTML. The budget counts these rather than
     #: `len(results)`, because a result is also recorded for an address that
@@ -783,91 +878,100 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
 
         diagnostics = PageDiagnostics()
         resp = None
-        try:
-            resp = session.get(url, timeout=config.timeout, stream=True)
-            if cancelled and cancelled():
-                _close(resp)
-                break
-            diagnostics.status_code = resp.status_code
-            diagnostics.final_url = resp.url
-            diagnostics.content_type = resp.headers.get("Content-Type", "")
-            diagnostics.headers = {k.lower(): v for k, v in resp.headers.items()}
-            applog.debug("crawl.page", url=url, depth=depth,
-                         status=resp.status_code,
-                         type=diagnostics.content_type[:40])
-            resp.raise_for_status()
-            content_type = diagnostics.content_type
-            if "text/html" not in content_type and not content_type.startswith("text/"):
-                # Recorded rather than skipped. Dropping it silently was
-                # indistinguishable from a page that was crawled and found
-                # clean, which is exactly the confusion this whole
-                # diagnostics path exists to remove.
-                diagnostics.reasons.append(EMPTY_NOT_HTML)
-                results.append(PageResult(url=url, depth=depth, diagnostics=diagnostics))
-                _close(resp)
-                continue
+        if browser_only:
+            # The session is the browser profile's: a `requests` fetch here
+            # would read the sign-in page. The browser reads the page.
             try:
-                html = _read_html(resp, config.max_page_bytes)
-            except _TooLarge:
-                applog.warning("crawl.page_too_large", url=url,
-                               limit=config.max_page_bytes)
-                diagnostics.reasons.append(EMPTY_TOO_LARGE)
-                results.append(PageResult(url=url, depth=depth, diagnostics=diagnostics))
+                html = _render_within(render, url, config.render_timeout) or ""
+                if not html:
+                    raise RuntimeError("the browser returned no page")
+            except Exception as exc:  # noqa: BLE001 - recorded on the page
+                diagnostics.render_error = str(exc)
+                diagnostics.reasons.append(EMPTY_ERROR)
+                results.append(PageResult(url=url, depth=depth, error=str(exc),
+                                          diagnostics=diagnostics))
                 continue
-            finally:
-                _close(resp)
-            landing = _normalize(resp.url)
-            if landing != _normalize(url):
-                # Three URLs redirecting to one page are one page. Analysing
-                # the landing page once per address counted the same copy
-                # three times, spent three AI calls on it, and reported a
-                # site larger than it is.
-                diagnostics.reasons.append(EMPTY_REDIRECTED)
-                if landing in visited:
-                    diagnostics.reasons.append(EMPTY_ALREADY_SEEN)
-                    results.append(
-                        PageResult(url=url, depth=depth, diagnostics=diagnostics))
+            diagnostics.final_url = url
+            diagnostics.html_bytes = len(html)
+            url_base = url
+        else:
+            try:
+                resp = session.get(url, timeout=config.timeout, stream=True)
+                if cancelled and cancelled():
+                    _close(resp)
+                    break
+                diagnostics.status_code = resp.status_code
+                diagnostics.final_url = resp.url
+                diagnostics.content_type = resp.headers.get("Content-Type", "")
+                diagnostics.headers = {k.lower(): v for k, v in resp.headers.items()}
+                applog.debug("crawl.page", url=url, depth=depth,
+                             status=resp.status_code,
+                             type=diagnostics.content_type[:40])
+                resp.raise_for_status()
+                content_type = diagnostics.content_type
+                if "text/html" not in content_type and not content_type.startswith("text/"):
+                    # Recorded rather than skipped. Dropping it silently was
+                    # indistinguishable from a page that was crawled and found
+                    # clean, which is exactly the confusion this whole
+                    # diagnostics path exists to remove.
+                    diagnostics.reasons.append(EMPTY_NOT_HTML)
+                    results.append(PageResult(url=url, depth=depth, diagnostics=diagnostics))
+                    _close(resp)
                     continue
-                visited.add(landing)
-                # Links on the page are relative to where it landed, not to
-                # where it was asked for.
-                url_base = resp.url
-            else:
-                url_base = url
-        except requests.RequestException as exc:
-            if resp is not None:
-                _close(resp)
-            applog.warning("crawl.page_failed", url=url, depth=depth,
-                           error=f"{type(exc).__name__}: {exc}")
-            diagnostics.reasons.append(EMPTY_ERROR)
-            results.append(
-                PageResult(url=url, depth=depth, error=str(exc), diagnostics=diagnostics)
-            )
-            continue
+                try:
+                    html = _read_html(resp, config.max_page_bytes)
+                except _TooLarge:
+                    applog.warning("crawl.page_too_large", url=url,
+                                   limit=config.max_page_bytes)
+                    diagnostics.reasons.append(EMPTY_TOO_LARGE)
+                    results.append(PageResult(url=url, depth=depth, diagnostics=diagnostics))
+                    continue
+                finally:
+                    _close(resp)
+                landing = _normalize(resp.url)
+                if landing != _normalize(url):
+                    # Three URLs redirecting to one page are one page. Analysing
+                    # the landing page once per address counted the same copy
+                    # three times, spent three AI calls on it, and reported a
+                    # site larger than it is.
+                    diagnostics.reasons.append(EMPTY_REDIRECTED)
+                    if landing in visited:
+                        diagnostics.reasons.append(EMPTY_ALREADY_SEEN)
+                        results.append(
+                            PageResult(url=url, depth=depth, diagnostics=diagnostics))
+                        continue
+                    visited.add(landing)
+                    # Links on the page are relative to where it landed, not to
+                    # where it was asked for.
+                    url_base = resp.url
+                else:
+                    url_base = url
+            except requests.RequestException as exc:
+                if resp is not None:
+                    _close(resp)
+                applog.warning("crawl.page_failed", url=url, depth=depth,
+                               error=f"{type(exc).__name__}: {exc}")
+                diagnostics.reasons.append(EMPTY_ERROR)
+                results.append(
+                    PageResult(url=url, depth=depth, error=str(exc), diagnostics=diagnostics)
+                )
+                continue
 
         blocks = _extract_text_blocks(html, url, diagnostics)
         _diagnose(diagnostics, url, html, blocks)
+        if browser_only:
+            diagnostics.reasons = [RENDERED] + diagnostics.reasons
 
         # The page was read as it arrived. If that reading is empty because the
         # copy is written by JavaScript, the browser is the only reader that can
         # answer - and the fetch already said so.
-        if (render is not None and not (cancelled and cancelled())
+        if (render is not None and not browser_only
+                and not (cancelled and cancelled())
                 and _should_render(config.render_mode, diagnostics)):
             rendered = ""
             try:
-                import signal
-
-                def _timeout_handler(signum, frame):
-                    raise TimeoutError(f"render timed out after {config.render_timeout}s")
-
-                old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-                signal.setitimer(signal.ITIMER_REAL, config.render_timeout)
-                try:
-                    rendered = render(url) or ""
-                finally:
-                    signal.setitimer(signal.ITIMER_REAL, 0)
-                    signal.signal(signal.SIGALRM, old_handler)
-            except (TimeoutError, Exception) as exc:  # noqa: BLE001
+                rendered = _render_within(render, url, config.render_timeout)
+            except Exception as exc:  # noqa: BLE001
                 diagnostics.render_error = str(exc)
             if rendered:
                 html = rendered
@@ -892,12 +996,15 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
         )
         pages_read += 1
 
-        if depth < config.max_depth:
+        if depth < max_depth:
             taken = 0
             for link in links:
                 if link.url in visited:
                     continue
                 if config.same_domain_only and not _same_domain(link.url, root_url):
+                    continue
+                if not in_site_scope(link.url, site_scope):
+                    out_of_scope.add(link.url)
                     continue
                 if ((config.max_links_per_page
                      and taken >= config.max_links_per_page)
@@ -920,4 +1027,5 @@ def crawl(root_url: str, config: CrawlConfig | None = None, progress_cb=None,
         # a site three times larger than it is.
         remaining = {url for url, _depth in queue if url not in visited}
         walk.queued_when_stopped = len(remaining)
+        walk.out_of_scope = len(out_of_scope)
     return results

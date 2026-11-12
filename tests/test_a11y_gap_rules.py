@@ -125,8 +125,8 @@ class TranslatedLinks(unittest.TestCase):
 
     def test_the_same_link_pointing_elsewhere_in_a_translation_is_found(self):
         pages = self.pages(
-            '<a href="https://palmanova.example/">Palmanova</a><a href="https://x.test/b">B</a>',
-            '<a href="https://strassoldo.example/">Palmanova</a><a href="https://x.test/b">B</a>')
+            '<a href="https://town.example/">Town</a><a href="https://x.test/b">B</a>',
+            '<a href="https://village.example/">Town</a><a href="https://x.test/b">B</a>')
         hits = link_target_issues(pages)
         self.assertEqual(len(hits), 1)
         hit = hits[0]
@@ -134,14 +134,14 @@ class TranslatedLinks(unittest.TestCase):
         self.assertEqual(hit.source, "https://s.test/en/")
         self.assertEqual(hit.category, ACCESSIBILITY)
         self.assertEqual(hit.confidence, ADVISORY)
-        self.assertEqual(hit.details["href"], "https://strassoldo.example/")
-        self.assertEqual(hit.details["target"], "https://palmanova.example/")
+        self.assertEqual(hit.details["href"], "https://village.example/")
+        self.assertEqual(hit.details["target"], "https://town.example/")
 
     def test_a_language_only_difference_is_the_same_destination(self):
         pages = self.pages(
-            '<a href="https://it.wikipedia.org/wiki/Palmanova">Palmanova</a>'
+            '<a href="https://it.wikipedia.org/wiki/Town">Town</a>'
             '<a href="https://site.test/it/contatti?utm_source=a">Contatti</a>',
-            '<a href="https://en.wikipedia.org/wiki/Palmanova">Palmanova</a>'
+            '<a href="https://en.wikipedia.org/wiki/Town">Town</a>'
             '<a href="https://site.test/en/contatti">Contacts</a>')
         self.assertEqual(link_target_issues(pages), [])
 
@@ -189,19 +189,19 @@ class TranslatedLinks(unittest.TestCase):
         self.assertEqual(len(link_target_issues(pages)), 1)
 
     def test_the_same_packages_in_another_order_are_not_wrong_links(self):
-        # Palmanova's packages: the German page lists them in another order,
+        # The municipal site's packages: the German page lists them in another order,
         # so by position each link stands opposite another package, and each
         # still leads to its own translation.
         names = ("cultura", "natura", "gusto")
-        alts = {n: {"it": f"https://s.test/pacchetto-palmanova-{n}",
-                    "de": f"https://s.test/de/paket-palmanova-{n}"} for n in names}
+        alts = {n: {"it": f"https://s.test/pacchetto-borgo-{n}",
+                    "de": f"https://s.test/de/paket-borgo-{n}"} for n in names}
         crawled = []
         for n in names:
             crawled += [page(alts[n]["it"], _doc("it", alts[n], "")),
                         page(alts[n]["de"], _doc("de", alts[n], ""))]
-        it_body = "".join(f'<a href="/pacchetto-palmanova-{n}">Pacchetto Palmanova {n}</a>'
+        it_body = "".join(f'<a href="/pacchetto-borgo-{n}">Pacchetto Borgo {n}</a>'
                           for n in names)
-        de_body = "".join(f'<a href="/de/paket-palmanova-{n}">Paket Palmanova {n}</a>'
+        de_body = "".join(f'<a href="/de/paket-borgo-{n}">Paket Borgo {n}</a>'
                           for n in reversed(names))
         home = {"it": "https://s.test/", "de": "https://s.test/de/"}
         pages = [page("https://s.test/", _doc("it", home, it_body)),
@@ -210,22 +210,22 @@ class TranslatedLinks(unittest.TestCase):
 
     def test_external_links_in_another_order_are_not_wrong_links(self):
         pages = self.pages(
-            '<a href="https://palmanova.example/">Palmanova</a>'
-            '<a href="https://unesco.example/">Palmanova UNESCO</a>',
-            '<a href="https://unesco.example/">Palmanova UNESCO</a>'
-            '<a href="https://palmanova.example/">Palmanova</a>')
+            '<a href="https://town.example/">Town</a>'
+            '<a href="https://unesco.example/">Town UNESCO</a>',
+            '<a href="https://unesco.example/">Town UNESCO</a>'
+            '<a href="https://town.example/">Town</a>')
         self.assertEqual(link_target_issues(pages), [])
 
     def test_a_wrong_link_is_found_beside_a_link_to_where_it_leads(self):
         """The case the rule exists for must survive the set comparison: the
-        page also links to Strassoldo, but under Strassoldo's name."""
+        page also links to the village, but under the village's own name."""
         pages = self.pages(
-            '<a href="https://palmanova.example/">Palmanova</a>'
-            '<a href="https://strassoldo.example/">Strassoldo</a>',
-            '<a href="https://strassoldo.example/">Palmanova</a>'
-            '<a href="https://strassoldo.example/">Strassoldo</a>')
+            '<a href="https://town.example/">Town</a>'
+            '<a href="https://village.example/">Village</a>',
+            '<a href="https://village.example/">Town</a>'
+            '<a href="https://village.example/">Village</a>')
         hits = link_target_issues(pages)
-        self.assertEqual([h.details["href"] for h in hits], ["https://strassoldo.example/"])
+        self.assertEqual([h.details["href"] for h in hits], ["https://village.example/"])
 
     def test_paginated_and_filtered_archive_links_have_no_declared_translation(self):
         # Both targets were crawled, neither declares an hreflang pair: "not
@@ -263,8 +263,8 @@ class TranslatedLinks(unittest.TestCase):
 
     def test_two_links_with_nothing_in_common_are_two_different_links(self):
         # Cards of a listing in a different order: same position, different
-        # card, so a different target is simply true. Not "Palmanova" against
-        # "Strassoldo" under one label.
+        # card, so a different target is simply true. Not the town against
+        # the village under one label.
         pages = self.pages('<a href="https://a.test/1">Porta Udine</a>',
                            '<a href="https://b.test/2">Duomo Dogale</a>')
         self.assertEqual(link_target_issues(pages), [])
@@ -276,10 +276,10 @@ class TranslatedLinks(unittest.TestCase):
 
     def test_the_odd_link_out_among_many_is_still_found(self):
         same = "".join(f'<a href="https://a.test/{n}">{n}</a>' for n in range(20))
-        pages = self.pages(same + '<a href="https://palmanova.test/">Palmanova</a>',
-                           same + '<a href="https://strassoldo.test/">Palmanova</a>')
+        pages = self.pages(same + '<a href="https://town.test/">Town</a>',
+                           same + '<a href="https://village.test/">Town</a>')
         self.assertEqual([h.details["href"] for h in link_target_issues(pages)],
-                         ["https://strassoldo.test/"])
+                         ["https://village.test/"])
 
     def test_an_uncrawled_internal_target_is_not_guessed_at(self):
         pages = self.pages('<a href="/a">Casa</a>', '<a href="/en/zzz">Home</a>')
@@ -449,7 +449,7 @@ class EveryNewRuleReadsInEveryLanguage(unittest.TestCase):
                     self.assert_readable(self.rendered(
                         rule_id, {"provider": "YouTube", "src": "https://y/x",
                                   "transcript": False, "element": "button",
-                                  "alt": "mappa-parlante-palmanova", "kind": "slug"}, lang),
+                                  "alt": "mappa-parlante-example", "kind": "slug"}, lang),
                         rule_id, lang)
 
     def test_state_rules_with_their_measurements(self):
@@ -473,8 +473,8 @@ class EveryNewRuleReadsInEveryLanguage(unittest.TestCase):
             "state:focus-obscured", {**base, "edge": "top"}, "en").found)
 
     def test_the_crawl_rule_carries_its_criterion(self):
-        details = {"text": "Palmanova", "href": "https://a/s", "target": "https://a/p",
-                   "language": "it", "other_text": "Palmanova"}
+        details = {"text": "Town", "href": "https://a/s", "target": "https://a/p",
+                   "language": "it", "other_text": "Town"}
         for lang in ("uk", "it", "en"):
             with self.subTest(lang=lang):
                 explanation = self.rendered(RULE_LINK_TARGET_DIFFERS, details, lang)

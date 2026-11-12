@@ -38,7 +38,7 @@ def _run(folder: str, *extra) -> dict:
     done = subprocess.run(
         [sys.executable, str(ROOT / "cli.py"), "audit", str(path), "--browser",
          "--json", "--unsettled", "--no-update-check", *extra],
-        capture_output=True, text=True, env=env, timeout=300, cwd=str(ROOT))
+        capture_output=True, text=True, encoding="utf-8", env=env, timeout=300, cwd=str(ROOT))
     return json.loads(done.stdout), done.stderr
 
 

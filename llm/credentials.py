@@ -27,7 +27,9 @@ _file_mutex = threading.Lock()
 
 
 def _fallback_path() -> Path:
-    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    import platform_dirs
+
+    base = str(platform_dirs.config_home())
     d = Path(base) / SERVICE_NAME
     d.mkdir(mode=0o700, parents=True, exist_ok=True)
     d.chmod(0o700)

@@ -36,7 +36,7 @@ class TheSkipLinkCheckIsNotWordMatching(unittest.TestCase):
     against `skip|jump|перейти|content|main|vai`. Measured 2026-09-01 on a
     live trilingual site: the German page was reported as having no skip
     link, and the finding quoted that page's own skip link -
-    `<a id="palmanova-skip-to-content" class="…skiplink-link"
+    `<a id="site-skip-to-content" class="…skiplink-link"
     href="#main-container">Zum Inhalt springen</a>` - as the element it was
     about. Whether it fires at all depends on what the other four anchors
     happen to say, which is a flaky answer as well as a wrong one.

@@ -13,6 +13,11 @@ three questions: is this copy machine-written, does the markup carry characters
 no keyboard produces, and is the thing accessible and correct. XAnalyze answers
 all three in one run and names the file and line behind every answer.
 
+That includes a **SharePoint Online site behind a Microsoft 365 sign-in**: you
+sign in yourself, the run reads every page of the site from its own page tree,
+and only what was built for the site - custom web parts and the authors' text
+- is audited, not Microsoft's chrome. See [SharePoint Online](#sharepoint-online).
+
 It is one binary with three surfaces - a desktop window, a terminal interface
 and a command line - over one core, so the three cannot disagree about what a
 run measured.
@@ -50,6 +55,32 @@ python main.py                                  # window
 python cli.py fullscan https://example.com      # command line
 python cli.py                                   # terminal interface
 ```
+
+**Windows 10/11, from source**
+
+There is no Windows download yet; it runs from a checkout. Python 3.13 or
+newer from python.org (the `py` launcher comes with it), in PowerShell:
+
+```powershell
+git clone https://github.com/vlad-demchyk/xAnalyze-.git; cd xAnalyze-
+py -3.13 -m venv venv
+venv\Scripts\pip install -r requirements.txt
+venv\Scripts\python main.py                              # window
+venv\Scripts\python cli.py fullscan https://example.com  # command line
+venv\Scripts\python cli.py                               # terminal interface
+```
+
+The output is UTF-8 whatever the console code page, so it can be redirected
+to a file or piped into an agent. Settings, the credential fallback file and
+signed-in site sessions live in `%APPDATA%\xanalyze`, the app's own log in
+`%LOCALAPPDATA%\xanalyze\logs`, and keys go to the Windows Credential
+Manager. `xanalyze update` replaces a macOS app only; on Windows update the
+checkout with `git pull`.
+
+A Windows build (`dist\XAnalyze\XAnalyze.exe` for the window and
+`xanalyze-cli.exe` for the command line and the TUI) is made with
+`pip install pyinstaller` and then
+`powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1`.
 
 ## Use it
 
@@ -156,7 +187,7 @@ JSX path (`section.card > div.list > img`). A literal `aria-label`,
 reported as `advisory` (`jsx-untranslated-literal`).
 
 **Written for what a manual audit found.** An `alt` that is a slug
-(`mappa-parlante-palmanova`, `Piazza-Grande`, a date) and not only a file name
+(`mappa-parlante-example`, `Piazza-Grande`, a date) and not only a file name
 with an extension; a YouTube, Vimeo or similar embed whose captions, transcript
 and audio description the page does not answer (1.2.2, 1.2.3, 1.2.5); a "load
 more" button on a page with no live region (4.1.3); and, across a crawled
@@ -288,6 +319,54 @@ A crawl also records when an address answered with a door rather than a page,
 and says so plainly - a clean summary over nothing but sign-in forms is the
 most misleading output this tool can produce.
 
+## SharePoint Online
+
+A `*.sharepoint.com` address is recognised before a page is read, and the run
+changes accordingly - in `audit` and `fullscan` alike, with the same flags,
+the same refusals (exit 2) and the same zones in the JSON - each change printed with its reason, and **anything you
+set yourself wins**:
+
+- **Sign in first.** Without a stored session SharePoint answers every address
+  with Microsoft's sign-in page. `xanalyze login https://contoso.sharepoint.com/sites/ExampleSite`
+  opens a real browser window; finish the Microsoft 365 sign-in there,
+  including MFA, and press "Done" once you are back on the site. The window
+  highlights "Sign in to the site" and the terminal form prints that command;
+  the CLI refuses the run and says why rather than audit the sign-in page.
+- **Every page, from the site itself** (`--page-tree sharepoint`). The pages
+  are items of the site's page library, read through SharePoint's REST API as
+  you; following links finds only what somebody linked. `--page-tree links`
+  goes back to following links.
+- **One site of the tenant** (`--site-scope /sites/ExampleSite`). One host
+  serves every site; the crawl stays inside the path you gave.
+- **Rendered pages.** A modern page is assembled in the browser, so every page
+  is rendered and lazy web parts are scrolled into view before the audit.
+- **Zones.** Microsoft's suite bar, navigation and command bar are not audited,
+  only counted. Custom (SPFx) web parts get every rule, every instance of a part
+  separately. Authors' text gets every rule; out-of-the-box parts get only the
+  content rules (alt text, link text, headings, AI wording). Findings carry
+  their zone in the report. `--ootb-registry FILE` adds Microsoft web part ids
+  read from a live page, so a part the built-in list does not know is not
+  audited as custom code. A part SharePoint placed and did not render is
+  listed as such, never folded into "no findings".
+- **SPFx outside the canvas.** A part can draw its markup into the page's
+  chrome (a custom header, a pop-up). That markup is found by its CSS module
+  classes (`name_1a2b3c4d`), bound to the part whose alias or bundle shares
+  them, and audited as custom - an inference, marked as such in the report.
+
+Limits:
+
+- **Conditional Access can refuse the sign-in** from an unmanaged machine or an
+  embedded browser. That is the tenant's policy, and no setting here can get
+  around it.
+- **The zone selectors are partly hypotheses.** SharePoint's markup is not a
+  public contract; the selectors are marked verified or hypothesis in
+  `audit/sharepoint_zones.py`, and a Microsoft change can move a region into
+  the wrong zone until they are updated.
+- **Documents are listed, not audited.** Files in the libraries (PDF, Office)
+  appear in the inventory of the JSON summary only.
+- A session that is signed in but has no permission on the site is reported as
+  such, and nothing is audited.
+
 ## Reports
 
 Every command writes a dated run folder, `~/Documents/XAnalyze/` by default
@@ -382,8 +461,8 @@ automatic fixes.
 
 ## Configuration
 
-Settings live in `~/.config/xanalyze/settings.json` - language, provider,
-`max_pages`, character categories.
+Settings live in `~/.config/xanalyze/settings.json` (`%APPDATA%\xanalyze\settings.json`
+on Windows) - language, provider, `max_pages`, character categories.
 
 `.xanalyze-ignore` in a project root uses gitignore syntax, and can also
 suppress by rule, selector or fingerprint:
@@ -444,7 +523,7 @@ comparison, not a tag.
 A project is identified from its own marker files, and what it turns out to be
 decides what is treated as vendored rather than written here:
 
-`angular`, `astro`, `bedrock`, `beehiiv`, `carrd`, `craft`, `django`, `docusaurus`, `dotnet`, `drupal`, `eleventy`, `ember`, `flutter`, `gatsby`, `ghost`, `hugo`, `jekyll`, `joomla`, `laravel`, `magento`, `nextjs`, `nuxt`, `qwik`, `rails`, `remix`, `shopify`, `silverstripe`, `spfx`, `spring`, `squarespace`, `statamic`, `storybook`, `sveltekit`, `symfony`, `typo3`, `vite`, `wagtail`, `webflow`, `wix`, `wordpress`, `wordpress-plugin`, `wordpress-theme`
+`angular`, `astro`, `bedrock`, `beehiiv`, `carrd`, `craft`, `django`, `docusaurus`, `dotnet`, `drupal`, `eleventy`, `ember`, `flutter`, `gatsby`, `ghost`, `hugo`, `jekyll`, `joomla`, `laravel`, `magento`, `nextjs`, `nuxt`, `qwik`, `rails`, `remix`, `sharepoint`, `shopify`, `silverstripe`, `spfx`, `spring`, `squarespace`, `statamic`, `storybook`, `sveltekit`, `symfony`, `typo3`, `vite`, `wagtail`, `webflow`, `wix`, `wordpress`, `wordpress-plugin`, `wordpress-theme`
 
 Detection is evidence: a profile names the file that proved it, the exclusions
 it implies are stated rather than applied silently, and one click scans them
@@ -490,7 +569,8 @@ or notarised yet.
 
 ## Requirements
 
-Python 3.14+, PySide6 for the window, QtWebEngine for browser rendering,
+Python 3.13+ (CI and the macOS release are built on 3.14; 3.13 is checked on
+Windows 11), PySide6 for the window, QtWebEngine for browser rendering,
 sentence-transformers for the embedding detector, and `c2pa-python` with
 `cryptography` for optional C2PA reading.
 

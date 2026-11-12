@@ -71,7 +71,7 @@ class TheCorpusDoesNotMoveUnderTheChange(unittest.TestCase):
     def setUp(self):
         self.rows = []
         for name in ("labelled.jsonl", "negative_pool.jsonl"):
-            with open(CORPUS / name) as handle:
+            with open(CORPUS / name, encoding="utf-8") as handle:
                 self.rows += [json.loads(line) for line in handle if line.strip()]
 
     def _flagged(self, hint_of):

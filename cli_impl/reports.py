@@ -8,6 +8,7 @@ what a coding agent reads best; `.json` if the suffix asks for it.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -314,6 +315,10 @@ def _write_report(result, args, lang: str, fix_outcome=None, ai_findings=None) -
             # but a person triaging needs to know which of it they can act
             # on. See `project_profile.PLATFORM_ASSETS`.
             "platform_owned": _owned_counts(result),
+            # A SharePoint run's split of each page: what was audited, by
+            # part, and what of Microsoft's markup was left out. Empty for
+            # any other run. See `audit.sharepoint_zones.Summary`.
+            "sharepoint": dict(getattr(result, "sharepoint", None) or {}),
         },
         # Rules whose findings are spread too evenly across the run to be
         # describing the content. Not removed - a saturated rule is
@@ -453,6 +458,11 @@ def _file_map(result, render, lang: str) -> list:
                 # Empty unless a detected platform emitted this element; see
                 # `audit.engine.attribute_ownership`.
                 "owner": getattr(issue, "owner", ""),
+                # On a SharePoint run: whose part of the page this is
+                # (`custom` / `author`) and which part. See
+                # `audit.sharepoint_zones`.
+                "zone": (issue.details or {}).get("zone", ""),
+                "zone_name": (issue.details or {}).get("zone_name", ""),
             })
         files.append(entry)
     return files
@@ -540,6 +550,8 @@ def _problem_map(result, render, lang: str) -> list:
             "agreement": (first.details or {}).get("agreement", 1),
             "confidence": getattr(first, "confidence", "exact"),
             "owner": getattr(first, "owner", ""),
+            "zone": (first.details or {}).get("zone", ""),
+            "zone_name": (first.details or {}).get("zone_name", ""),
             "occurrences": len(others) + 1,
             "places": duplicates.places_of(first, others),
         })
@@ -1219,8 +1231,14 @@ def _history_dir() -> Path:
 
     The legacy location is still read - see `_legacy_history` - so runs
     recorded before this change keep counting.
+
+    `XANALYZE_HISTORY_DIR` moves it, the way `XANALYZE_REPORT_ROOT` moves
+    the run folders: the test suite points it at a temporary directory,
+    because every CLI run a test made was otherwise recorded in the
+    developer's real history - and compared against it on the next run.
     """
-    d = Path.home() / ".xanalyze" / "history"
+    override = os.environ.get("XANALYZE_HISTORY_DIR")
+    d = Path(override) if override else Path.home() / ".xanalyze" / "history"
     try:
         d.mkdir(parents=True, exist_ok=True)
     except OSError:

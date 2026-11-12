@@ -108,6 +108,13 @@ class BrowserAuditOptions:
     #: hundreds of findings nobody involved can act on. Passed to axe as its
     #: `include` context; see `audit/within.py` for the static side.
     within: str = ""
+    #: Several selectors the audit is confined to, together: "only inside
+    #: these parts". What a SharePoint page needs, where the parts somebody
+    #: other than Microsoft wrote are many subtrees rather than one - see
+    #: `audit.sharepoint_zones.browser_options`. A selector that matches
+    #: nothing on the page is dropped before axe runs, and a page on which
+    #: none matches is audited as having nothing in scope rather than failing.
+    include: list = field(default_factory=list)
     #: Rule ids to switch off, passed through to axe as `rules: {id: {...}}`.
     disabled_rules: list = field(default_factory=list)
     #: Milliseconds to wait after load before auditing, for the JavaScript
@@ -219,10 +226,28 @@ def axe_script(options: BrowserAuditOptions) -> str:
     # a delivered fragment asks. axe takes both in the same context object.
     if getattr(options, "within", ""):
         context["include"] = [[options.within]]
+    # Several parts at once. Unlike `within`, a selector here is a guess
+    # about a platform's DOM (see `audit.sharepoint_zones`), so the ones that
+    # match nothing are dropped in the page before axe sees them: axe refuses
+    # a context whose include finds no element, and one stale selector must
+    # not fail the pass for the parts that are there.
+    include = list(getattr(options, "include", None) or [])
+    scope_guard = ""
+    if include:
+        context["include"] = context.get("include", []) + [[s] for s in include]
+        scope_guard = """
+  context.include = context.include.filter(function(entry) {
+    try { return document.querySelector(entry[0]) !== null; }
+    catch (e) { return false; }
+  });
+  if (!context.include.length) {
+    return Promise.resolve(JSON.stringify({violations: [], incomplete: [],
+                                           scope_empty: true}));
+  }"""
     return f"""
 (function() {{
   {_read(AXE_PATH)}
-  var context = {json.dumps(context) or "document"};
+  var context = {json.dumps(context) or "document"};{scope_guard}
   return axe.run(Object.keys(context).length ? context : document, {json.dumps(config)})
     .then(function(results) {{
       var measured = {json.dumps(list(_AXE_MEASURED))};
@@ -297,7 +322,7 @@ def htmlcs_script(standard: str = "WCAG2AA") -> str:
   // Text a sighted person cannot see right now: clipped to nothing, or a
   // box of a pixel or less - the "visually hidden" pattern of a skip link
   // that appears on focus. Its colours are not what anyone reads; measured
-  // unfocused, Palmanova's skip link was 3.79:1 against an ancestor's dark
+  // unfocused, a municipal site's skip link was 3.79:1 against an ancestor's dark
   // background, and 12.63:1 as it is actually shown.
   function __xaVisuallyHidden(el) {{
     if (!el || !el.getBoundingClientRect) return false;
@@ -476,7 +501,7 @@ def issues_from_axe(payload: str, source: str, exclude_rules=()) -> list:
                 continue
             # An `incomplete` is axe saying it could not decide, and it
             # carries the same `impact` as a confirmed failure - so
-            # `aria-valid-attr-value` arrived as *critical* on the Palmanova
+            # `aria-valid-attr-value` arrived as *critical* on the municipal WordPress
             # site with the message "Unable to determine if aria-controls
             # referenced ID exists". Checked on the live page: all five
             # `aria-controls` targets exist. Weighted as a note, the same way
@@ -555,7 +580,7 @@ def _measured_details(rule: str, node: dict) -> dict:
 #:
 #: Measured on ten pages of `https://www.gov.uk/`: 60 of 61 `1_4_3` findings
 #: were `.Abs` - "this element is absolutely positioned and the background
-#: color can not be determined". On ten pages of the Palmanova site, 93 of
+#: color can not be determined". On ten pages of a municipal WordPress site, 93 of
 #: 103. Reporting an engine's own uncertainty as a violation is the same
 #: defect this project keeps finding in its own checks, arriving through a
 #: vendored one.

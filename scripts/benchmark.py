@@ -51,14 +51,14 @@ def main(argv=None):
         if getattr(args, "output", None) and args.output.exists():
             raise ValueError("output already exists; reports/protocols are never overwritten")
         if args.command == "capabilities":
-            config = strict_json(args.config.read_text()) if args.config else None
+            config = strict_json(args.config.read_text(encoding="utf-8")) if args.config else None
             result = method_capabilities(args.detector, config)
             if args.output:
                 write_new(args.output, result)
             print(json.dumps(result, indent=2))
             return 0
         if args.command == "partition":
-            data = strict_json(args.dataset.read_text())
+            data = strict_json(args.dataset.read_text(encoding="utf-8"))
             result = assign_splits(data, args.seed)
         else:
             data = load_dataset(args.dataset)
@@ -71,15 +71,15 @@ def main(argv=None):
             if args.command == "unicode":
                 result = add_unicode_variants(data)
             elif args.command == "freeze":
-                config = strict_json(args.config.read_text()) if args.config else {}
-                policy = QualityPolicy(**strict_json(args.policy.read_text())) if args.policy else QualityPolicy()
+                config = strict_json(args.config.read_text(encoding="utf-8")) if args.config else {}
+                policy = QualityPolicy(**strict_json(args.policy.read_text(encoding="utf-8"))) if args.policy else QualityPolicy()
                 result = freeze(data, args.detector, config, policy, allow_remote=args.allow_remote, fixed_threshold=args.fixed_threshold)
             elif args.command == "freeze-comparison":
-                methods = strict_json(args.methods.read_text())
-                policy = QualityPolicy(**strict_json(args.policy.read_text())) if args.policy else QualityPolicy()
+                methods = strict_json(args.methods.read_text(encoding="utf-8"))
+                policy = QualityPolicy(**strict_json(args.policy.read_text(encoding="utf-8"))) if args.policy else QualityPolicy()
                 result = freeze_comparison(data, methods, policy, allow_remote=args.allow_remote)
             else:
-                protocol = strict_json(args.protocol.read_text())
+                protocol = strict_json(args.protocol.read_text(encoding="utf-8"))
                 run = evaluate_comparison if args.command == "run-comparison" else evaluate
                 result = run(data, protocol, allow_remote=args.allow_remote)
         write_new(args.output, result)

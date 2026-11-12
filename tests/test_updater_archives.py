@@ -13,6 +13,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase, mock
 
+import sys
+import unittest
+
 import updater
 
 
@@ -88,6 +91,10 @@ class ArchiveLimits(TestCase):
             with self.assertRaisesRegex(RuntimeError, "too many entries"):
                 updater._extract_gui_app(archive, self.root / "u")
 
+    @unittest.skipIf(sys.platform == "win32",
+                     "a macOS bundle's symlinks and executable bits: Windows "
+                     "has neither without Developer Mode, and the updater "
+                     "replaces only a macOS app")
     def test_links_and_executable_bits_come_back(self):
         """Lost, Qt's frameworks and QtWebEngineProcess do not load."""
         app = updater._extract_gui_app(_bundle_zip(self.root / "a.zip"),

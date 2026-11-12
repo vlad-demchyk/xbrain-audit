@@ -29,7 +29,7 @@ EXIT_ERROR = 2
 
 def _cli(*args, **kwargs):
     return subprocess.run([sys.executable, str(ROOT / "cli.py"), *args],
-                          capture_output=True, text=True, timeout=180,
+                          capture_output=True, text=True, encoding="utf-8", timeout=180,
                           cwd=str(ROOT), **kwargs)
 
 
@@ -450,7 +450,7 @@ class CLIIntegrationTests(unittest.TestCase):
 
     def test_agent_judge_missing_path_is_no_findings(self):
         done = _cli("agent-judge", "/no/such/path", "--json",
-                    "--judgments", "/dev/stdin",
+                    "--judgments", "-",
                     input="[]")
         # agent-judge returns 0 for missing paths (no files = no findings)
         self.assertEqual(done.returncode, EXIT_OK)

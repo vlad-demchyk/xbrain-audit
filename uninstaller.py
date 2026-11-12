@@ -54,9 +54,9 @@ class UninstallItem:
 
 
 def _config_base() -> Path:
-    import os
-    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base)
+    import platform_dirs
+
+    return platform_dirs.config_home()
 
 
 def _keychain_has(service: str, account: str) -> bool:

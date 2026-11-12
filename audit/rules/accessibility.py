@@ -115,7 +115,7 @@ _IMAGE_EXTENSION_RE = re.compile(r"\.(png|jpe?g|gif|svg|webp|avif)$", re.IGNOREC
 # What a CMS appends to a stem: `-1024x683`, `-scaled`, `-e1700000000000`,
 # a duplicate counter. None of it is part of what the author named the file.
 _STEM_SUFFIX_RE = re.compile(r"(-\d+x\d+|-scaled|-e\d{6,}|-\d{1,2})+$")
-# Words joined by hyphens or underscores with no space: `mappa-parlante-palmanova`.
+# Words joined by hyphens or underscores with no space: `mappa-parlante-example`.
 _SLUG_RE = re.compile(r"^[^\W_]+(?:[-_][^\W_]+){2,}$")
 # A date, or a camera / export counter. Nothing a person would say aloud.
 _COUNTER_ALT_RE = re.compile(
@@ -144,7 +144,7 @@ class ImageAltIsFilename(AccessibilityRule):
 
     `alt="hero-banner-2.png"` was always caught. The pattern that actually
     filled a WordPress media library was the same string without the
-    extension: `mappa-parlante-palmanova`, `Piazza-Grande`,
+    extension: `mappa-parlante-example`, `Piazza-Grande`,
     `meccanica-della-fortezza`, and `2025-10-28`. Every "has alt" checker
     passes those, and a screen reader reads them out letter by letter.
 

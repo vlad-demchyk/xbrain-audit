@@ -151,8 +151,8 @@ class ParsingIsNotInWcag22(unittest.TestCase):
 class TheJsonCarriesBothNumbers(unittest.TestCase):
     PAGE = ("<!doctype html><html lang='it'><head><meta charset='utf-8'><title>t pagina</title>"
             "</head><body><main><h1>x</h1>"
-            "<img src='/a.jpg' alt='mappa-parlante-palmanova'>"
-            "<img src='/b.jpg' alt='mappa-parlante-palmanova'>"
+            "<img src='/a.jpg' alt='mappa-parlante-example'>"
+            "<img src='/b.jpg' alt='mappa-parlante-example'>"
             "</main></body></html>")
 
     def run_cli(self):
@@ -162,7 +162,7 @@ class TheJsonCarriesBothNumbers(unittest.TestCase):
             done = subprocess.run(
                 [sys.executable, str(ROOT / "cli.py"), "--no-update-check", "audit", str(path),
                  "--category", "accessibility", "--no-browser", "--json"],
-                capture_output=True, text=True, cwd=folder, timeout=120)
+                capture_output=True, text=True, encoding="utf-8", cwd=folder, timeout=120)
         return json.loads(done.stdout)
 
     def test_counts_are_distinct_and_occurrences_are_beside_them(self):

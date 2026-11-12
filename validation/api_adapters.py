@@ -228,7 +228,7 @@ def _pangram(session, headers, text, config, credential):
     key = digest(["pangram", config["model"], hashlib.sha256(text.encode()).hexdigest(), credential])
     path = directory / (key + ".json")
     if path.exists():
-        task = strict_json(path.read_text())
+        task = strict_json(path.read_text(encoding="utf-8"))
         task_id = task["task_id"]
     else:
         directory.mkdir(parents=True, exist_ok=True)

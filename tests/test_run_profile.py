@@ -308,3 +308,60 @@ class ADevServerIsFoundWhereItLives(_Built):
 
         root = self.build({"pnpm-workspace.yaml": "packages:\n  - apps/*\n"})
         self.assertTrue(devserver.is_workspace_root(Path(root)))
+
+
+class ASharePointSite(unittest.TestCase):
+    URL = "https://contoso.sharepoint.com/sites/ExampleSite/SitePages/Home.aspx"
+
+    def test_without_a_checkout_it_asks_for_the_whole_tree(self):
+        plan = run_profile.build(self.URL, signed_in=True)
+        self.assertEqual(plan.suggestion("render").value, "always")
+        self.assertEqual(plan.suggestion("page_tree").value, "sharepoint")
+        self.assertEqual(plan.suggestion("site_scope").value,
+                         "/sites/ExampleSite")
+        for option in ("render", "page_tree", "site_scope"):
+            item = plan.suggestion(option)
+            self.assertEqual(item.stack, "sharepoint")
+            self.assertIn("contoso.sharepoint.com", item.evidence)
+        self.assertFalse(plan.asks_for("sign_in"))
+
+    def test_without_a_session_it_asks_for_a_sign_in(self):
+        plan = run_profile.build(self.URL, signed_in=False)
+        self.assertTrue(plan.asks_for("sign_in"))
+
+    def test_the_session_is_looked_up_when_not_given(self):
+        # The test run's config directory is empty: no session stored.
+        self.assertTrue(run_profile.build(self.URL).asks_for("sign_in"))
+
+    def test_a_paired_checkout_keeps_web_parts_and_drops_the_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _tree(Path(tmp), {"config/package-solution.json": "{}"})
+            plan = run_profile.build(self.URL, repo=tmp, signed_in=True)
+        self.assertIsNotNone(plan.suggestion("web_parts"))
+        self.assertEqual(plan.suggestion("render").value, "always")
+        self.assertIsNone(plan.suggestion("page_tree"))
+        self.assertIsNone(plan.suggestion("site_scope"))
+        self.assertEqual(plan.stacks(), ["sharepoint", "spfx"])
+
+    def test_an_ordinary_site_asks_for_none_of_it(self):
+        plan = run_profile.build("https://example.com/", signed_in=False)
+        self.assertEqual(plan.suggestions, ())
+        self.assertEqual(plan.prompts, ())
+        self.assertIsNone(plan.profile)
+
+    def test_the_new_options_belong_to_a_site_only(self):
+        for option in ("page_tree", "site_scope"):
+            self.assertEqual(run_profile._OPTION_KINDS[option],
+                             (run_profile.KIND_SITE,))
+
+    def test_applying_never_overwrites_a_hand_set_render(self):
+        plan = run_profile.build(self.URL, signed_in=True)
+        args = argparse.Namespace(render="never")
+        applied = plan.apply(args, touched={"render"})
+        self.assertEqual(args.render, "never")
+        self.assertNotIn("render", [item.option for item in applied])
+        self.assertEqual(args.page_tree, "sharepoint")
+
+
+if __name__ == "__main__":
+    unittest.main()

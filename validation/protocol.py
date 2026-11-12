@@ -180,7 +180,7 @@ def verify_report(report: dict) -> dict:
         if row["group_id"] != groups[row["id"]]:
             raise ValueError("benchmark source groups changed")
     for path in _test_paths(originals).values():
-        access = strict_json(path.read_text())
+        access = strict_json(path.read_text(encoding="utf-8"))
         if report.get("test_access") != access:
             raise ValueError("test access evidence changed")
         single = (access.get("protocol_sha256") == frozen["protocol_sha256"]

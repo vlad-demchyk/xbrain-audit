@@ -1,6 +1,6 @@
 """Findings that describe the machine a page was served from, not the page.
 
-A crawl of `http://palmanova.local` reported 365 critical findings. Every one
+A crawl of `http://town.local` reported 365 critical findings. Every one
 was a form whose `action` was `http://...`, because a local development site
 is served over plain HTTP: there is nothing to change in the code. Beside them,
 381 pages each missing a `Content-Security-Policy`, `X-Content-Type-Options`,
@@ -17,7 +17,7 @@ read.
 
 What is *not* in the list: anything about the markup, the scripts, the images,
 the accessibility or the SEO of the page. A third-party script loaded
-synchronously is as much a defect on `palmanova.local` as on `palmanova.it`.
+synchronously is as much a defect on `town.local` as on `town.example.it`.
 Only what the server (not the code) decides, and what a plain-HTTP address
 makes inevitable, is environment.
 

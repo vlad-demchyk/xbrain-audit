@@ -45,10 +45,10 @@ class Images(unittest.TestCase):
     def test_real_description_is_left_alone(self):
         self.assertEqual(issues('<img src="/a.png" alt="The team lead on stage">'), [])
 
-    # --- alt written as a slug (the Palmanova media library) -----------------
+    # --- alt written as a slug (a municipal site's media library) -----------------
 
     def test_slug_alt_without_extension_is_flagged_as_advisory(self):
-        for alt in ("mappa-parlante-palmanova", "meccanica-della-fortezza",
+        for alt in ("mappa-parlante-example", "meccanica-della-fortezza",
                     "gallerie-e-baluardo-donato", "Pasquetta-sui-Bastioni",
                     "infografica-meccanica-della-fortezza"):
             with self.subTest(alt=alt):
@@ -84,7 +84,7 @@ class Images(unittest.TestCase):
                     issues(f'<img src="/other.jpg" alt="{alt}">', "image-alt-filename"), [])
 
     def test_empty_alt_is_never_a_slug(self):
-        self.assertEqual(issues('<img src="/mappa-parlante-palmanova.jpg" alt="">',
+        self.assertEqual(issues('<img src="/mappa-parlante-example.jpg" alt="">',
                                 "image-alt-filename"), [])
 
 

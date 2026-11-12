@@ -451,7 +451,7 @@ def _load_judgment_input(args):
     """Read and parse the agent's JSON from --judgments or stdin."""
     import_file = getattr(args, "judgments", None)
     if import_file and import_file != "-":
-        with open(import_file) as f:
+        with open(import_file, encoding="utf-8") as f:
             raw = f.read()
     else:
         raw = sys.stdin.read()

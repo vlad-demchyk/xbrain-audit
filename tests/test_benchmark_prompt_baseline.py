@@ -46,7 +46,7 @@ def test_request_variant_retains_model_effort_and_archived_packet_without_changi
     flags = old.analyze_block(block())
     assert len(flags) == 1 and flags[0].details["quote_status"] == "verified"
     request = old_client.calls[0]
-    packet = json.loads(prompt_baseline.ASSET.read_text())
+    packet = json.loads(prompt_baseline.ASSET.read_text(encoding="utf-8"))
     assert request["system"] == packet["system_prompt"]
     assert request["output_config"]["format"]["schema"] == packet["response_schema"]
     assert request["messages"][0]["content"] == "[0] " + block().text
@@ -88,8 +88,8 @@ def test_legacy_variant_is_not_registered_in_production_factory():
 
 
 def test_altered_archive_cannot_keep_claiming_the_original_git_source(monkeypatch):
-    packet = json.loads(prompt_baseline.ASSET.read_text())
+    packet = json.loads(prompt_baseline.ASSET.read_text(encoding="utf-8"))
     packet["system_prompt"] += " changed after archival"
-    monkeypatch.setattr(prompt_baseline, "ASSET", SimpleNamespace(read_text=lambda: json.dumps(packet)))
+    monkeypatch.setattr(prompt_baseline, "ASSET", SimpleNamespace(read_text=lambda **_: json.dumps(packet)))
     with pytest.raises(ValueError, match="git-derived packet"):
         prompt_baseline.request_identity("claude-legacy-prompt")

@@ -242,7 +242,7 @@ def guess_language_safe(text: str) -> str | None:
     hits = sum(padded.count(marker) for marker in _ITALIAN_MARKERS)
     needed = max(1, word_count // _ITALIAN_WORDS_PER_MARKER)
     # And from more than one word. An English page whose header and footer
-    # both say "Youtube di Città di Palmanova" and "Comune di Palmanova"
+    # both say "Youtube di Città di Esempio" and "Comune di Esempio"
     # carries ` di ` seven times in 300 words - the rate of real Italian,
     # from one name repeated. Italian prose that long uses several of its
     # function words; a proper name repeats one. Only where the rate asks

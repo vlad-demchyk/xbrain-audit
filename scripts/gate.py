@@ -71,7 +71,8 @@ def run_tests(result: Result) -> None:
     """
     print("tests")
     done = subprocess.run([PYTHON, "-m", "pytest", str(ROOT / "tests"), "-q"],
-                          capture_output=True, text=True, cwd=str(ROOT))
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          cwd=str(ROOT))
     tail = (done.stdout or "").strip().splitlines()
     summary = tail[-1] if tail else "no output"
     result.check(f"suite: {summary}", done.returncode == 0,
@@ -80,7 +81,8 @@ def run_tests(result: Result) -> None:
 
 def _cli(*args, timeout=300):
     return subprocess.run([PYTHON, str(ROOT / "cli.py"), *args],
-                          capture_output=True, text=True, timeout=timeout,
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=timeout,
                           cwd=str(ROOT))
 
 

@@ -47,7 +47,7 @@ def _fullscan(*extra):
     return subprocess.run(
         [sys.executable, str(ROOT / "cli.py"), "fullscan", str(TARGET),
          "--no-browser", "--no-update-check", *extra],
-        capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+        capture_output=True, text=True, encoding="utf-8", timeout=300, cwd=str(ROOT))
 
 
 class StyledReportIsWritten(unittest.TestCase):

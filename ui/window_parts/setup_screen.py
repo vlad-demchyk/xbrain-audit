@@ -78,7 +78,7 @@ def _under_home(path) -> str:
     from pathlib import Path
 
     try:
-        return "~/" + str(Path(path).relative_to(Path.home()))
+        return "~/" + Path(path).relative_to(Path.home()).as_posix()
     except ValueError:
         return str(path)
 

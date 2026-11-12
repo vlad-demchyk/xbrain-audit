@@ -13,6 +13,14 @@ import cli_install
 from llm import credentials
 
 
+#: Windows has no owner/group/other modes - `os.chmod` only toggles the
+#: read-only flag and `st_mode` always reads 0o666 or 0o444 - so checking them
+#: there checks nothing. The files live under the user's own profile folder,
+#: which NTFS already restricts to that user. Everything else these tests
+#: check (redaction, atomic replace, concurrent writers) runs everywhere.
+_POSIX_MODES = os.name != "nt"
+
+
 @pytest.mark.skipif(sys.platform != "darwin",
                     reason="the admin path is an osascript command with BSD `ln -h`")
 def test_admin_paths_are_shell_data(tmp_path, monkeypatch):
@@ -41,11 +49,11 @@ def test_log_redacts_nested_urls_and_secrets_before_writing(tmp_path, monkeypatc
     for secret in ("password", "QUERYSECRET", "FRAGMENTSECRET", "TOKENSECRET"):
         assert secret not in raw
     assert "example.org/page" in raw
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+    assert not _POSIX_MODES or stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert not _POSIX_MODES or stat.S_IMODE(path.parent.stat().st_mode) == 0o700
     path.chmod(0o644)
     applog.info("again")
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert not _POSIX_MODES or stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_credential_replace_is_private_and_failure_preserves_old(tmp_path, monkeypatch):
@@ -55,7 +63,7 @@ def test_credential_replace_is_private_and_failure_preserves_old(tmp_path, monke
     before = path.read_bytes()
 
     def fail_replace(source, target):
-        assert stat.S_IMODE(source.stat().st_mode) == 0o600
+        assert not _POSIX_MODES or stat.S_IMODE(source.stat().st_mode) == 0o600
         assert json.loads(source.read_text())["new"] == "new-value"
         raise OSError("disk failure")
 
@@ -63,7 +71,7 @@ def test_credential_replace_is_private_and_failure_preserves_old(tmp_path, monke
         with pytest.raises(OSError):
             credentials._file_save("new", "new-value")
     assert path.read_bytes() == before
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert not _POSIX_MODES or stat.S_IMODE(path.stat().st_mode) == 0o600
     assert not list(path.parent.glob(".credentials-*"))
 
 
@@ -80,7 +88,7 @@ def test_concurrent_credential_writers_preserve_all_accounts(tmp_path):
         assert process.wait(timeout=15) == 0
     path = tmp_path / "xanalyze/credentials.json"
     assert set(json.loads(path.read_text())) == {str(i) for i in range(12)}
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert not _POSIX_MODES or stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_corrupt_credentials_are_not_silently_overwritten(tmp_path, monkeypatch):

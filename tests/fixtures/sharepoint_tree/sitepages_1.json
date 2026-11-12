@@ -1,0 +1,8 @@
+{
+  "value": [
+    {"FileRef": "/sites/Portal/SitePages/Home.aspx", "FileLeafRef": "Home.aspx", "Title": "Home", "Modified": "2026-10-01T08:00:00Z", "PromotedState": 0, "FSObjType": 0},
+    {"FileRef": "/sites/Portal/SitePages/Chi-Siamo.aspx", "FileLeafRef": "Chi-Siamo.aspx", "Title": "Chi siamo", "Modified": "2026-10-02T08:00:00Z", "PromotedState": 0, "FSObjType": 0},
+    {"FileRef": "/sites/Portal/SitePages/Archivio", "FileLeafRef": "Archivio", "Title": null, "Modified": "2026-09-01T08:00:00Z", "PromotedState": null, "FSObjType": 1}
+  ],
+  "odata.nextLink": "https://contoso.sharepoint.com/sites/Portal/_api/web/GetList('/sites/Portal/SitePages')/items?%24skiptoken=Paged%3dTRUE%26p_ID%3d3&%24select=FileRef,FileLeafRef,Title,Modified,PromotedState,FSObjType&%24top=500"
+}

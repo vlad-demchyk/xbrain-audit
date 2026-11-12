@@ -192,7 +192,7 @@ def issues_for(pages) -> list:
             if target is None or target is page:
                 continue
             # A search result or a filtered list carries the hreflang of the
-            # page it was built on, and nothing links back to `?s=palmanova`
+            # page it was built on, and nothing links back to `?s=town`
             # - 216 rows of one crawl, none of them a translation set the
             # site meant to declare. Left out, and said so below.
             if _is_parameterised_view(page) or _is_parameterised_view(target):
@@ -609,7 +609,7 @@ def link_target_issues(pages, parsed=None) -> list:
     """A link in a translation that goes somewhere else than in the original.
 
     Found by hand in the three-language copy of a tourism site: the same link,
-    labelled "Palmanova" on all three pages, led to Palmanova's page in Italian
+    labelled with the town's name on all three pages, led to the town's page in Italian
     and to a neighbouring village's in English and German. Nothing about it is
     invalid - every address is well-formed and returns 200 - and nothing on one
     page shows it. It only shows when the two pages are held side by side,
@@ -741,8 +741,8 @@ def _matches_another_link(own, theirs, index, subject, other, by_url,
     Internal: `own` points at that link's target or at its declared
     translation into this page's language. External: at the same site. The
     words are required too, so the defect this rule was written for - a link
-    labelled "Palmanova" that leads to Strassoldo's page - is still reported
-    on a page that also has a link labelled "Strassoldo".
+    labelled with the town's name that leads to a neighbouring village's page - is still reported
+    on a page that also has a link labelled with the village's name.
     """
     own_path = _without_query(own["href"])
     own_site = _destination_signature(own["href"])[0]
@@ -772,7 +772,7 @@ def _same_link_text(first: str, second: str) -> bool:
     """Are these two link texts plausibly the same link in two languages?
 
     True when they are equal once case and accents are folded, or share a word
-    of four letters or more (`Palmanova`, `Strassoldo`, a name, a number).
+    of four letters or more (a town's name, a village's name, a number).
     Empty text is no evidence either way - an icon link says nothing about
     what it is - so it is not "the same".
     """

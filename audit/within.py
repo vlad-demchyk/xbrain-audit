@@ -112,6 +112,73 @@ def narrow_any(document, selectors) -> tuple:
     raise ScopeNotFound(", ".join(selectors) or "(no selectors)")
 
 
+def find_all(document, selector: str) -> tuple:
+    """Every subtree `selector` names, as `(elements, how)`.
+
+    The same two readings as `find` - exact first, then by stem - but every
+    match rather than the first. A web part placed twice on one page is two
+    deliveries of the same code, and auditing only the first left the second
+    unread without saying so.
+
+    An element inside another match is dropped: its markup is already part
+    of the outer one, and reading it twice would report each defect twice.
+    Raises `ScopeNotFound` when neither reading matches anything.
+    """
+    try:
+        found = list(document.select(selector))
+    except Exception:  # noqa: BLE001 - an invalid selector is a message, not a crash
+        found = []
+    how = "exact"
+    if not found:
+        kind, name = _wanted(selector)
+        if not name:
+            raise ScopeNotFound(selector)
+        target = stem(name)
+        how = "stem"
+        for element in document.find_all(True):
+            if kind == "id":
+                if stem(str(element.get("id") or "")) == target:
+                    found.append(element)
+            elif any(stem(str(value)) == target
+                     for value in element.get("class") or []):
+                found.append(element)
+    if not found:
+        raise ScopeNotFound(selector)
+    return _outermost(found), how
+
+
+def _outermost(elements) -> list:
+    """`elements` without any that sit inside another one, in page order."""
+    chosen = {id(element) for element in elements}
+    kept = []
+    for element in elements:
+        if any(id(parent) in chosen for parent in element.parents):
+            continue
+        if any(element is other for other in kept):
+            continue
+        kept.append(element)
+    return kept
+
+
+def narrow_all(document, selectors) -> list:
+    """Every match of every selector, as `[(element, how, selector)]`.
+
+    The counterpart of `narrow_any` for a part that may appear more than
+    once. Selectors are still tried strongest first, and the first that
+    matches anything decides the reading - "found by its GUID" and "found by
+    a class that looked like yours" must not be mixed in one answer - but
+    every element it matches is returned. Raises `ScopeNotFound` when no
+    selector matches.
+    """
+    for selector in selectors:
+        try:
+            elements, how = find_all(document, selector)
+        except ScopeNotFound:
+            continue
+        return [(element, how, selector) for element in elements]
+    raise ScopeNotFound(", ".join(selectors) or "(no selectors)")
+
+
 def narrow(markup: str, selector: str) -> tuple:
     """`(markup_of_the_subtree, how)` for a document and a selector.
 

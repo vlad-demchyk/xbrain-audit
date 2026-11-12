@@ -35,11 +35,16 @@ from scripts.fetch_foreign_corpus import (  # noqa: E402
 #: Subjects, not languages: the point is the vocabulary a page about
 #: usability or tourism is written in, which is the vocabulary a cliché list
 #: is most likely to collide with.
+#:
+#: The first Italian subject was the article on the town of a client's site;
+#: its 12 rows in `prose.jsonl` keep their revid, with the town's name taken
+#: out of the text and the source label. A rebuild fetches "Città ideale" in
+#: its place, so it is a different measurement, not the same one again.
 ARTICLES = {
     "en": ["Tourism", "Marketing", "Usability", "Software", "Cloud computing",
            "Productivity", "User experience", "Startup company", "Venice",
            "Renaissance architecture"],
-    "it": ["Palmanova", "Venezia", "Fortificazione alla moderna", "Turismo",
+    "it": ["Città ideale", "Venezia", "Fortificazione alla moderna", "Turismo",
            "Architettura rinascimentale", "Patrimonio dell'umanità",
            "Cicloturismo", "Friuli-Venezia Giulia", "Urbanistica", "Software",
            "Cloud computing", "Produttività", "Usabilità", "Marketing"],
@@ -70,7 +75,7 @@ def main(out_path: str) -> int:
             print("%s %-34s %2d paragraphs" % (language, title, len(found)),
                   file=sys.stderr)
 
-    with open(out_path, "w") as out:
+    with open(out_path, "w", encoding="utf-8") as out:
         for row in rows:
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
     print("%d entries -> %s (agent: %s)" % (len(rows), out_path, USER_AGENT),

@@ -333,7 +333,7 @@ def build_plan(stack: Stack, repo: Path, *,
 
 def run_install(plan: DevServerPlan) -> None:
     result = subprocess.run(plan.install_argv, cwd=str(plan.cwd),
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         tail = "\n".join((result.stderr or result.stdout or "").splitlines()[-20:])
         raise DevServerInstallFailed(
@@ -364,7 +364,8 @@ class DevServerProcess:
             kwargs["start_new_session"] = True
         popen = subprocess.Popen(
             plan.start_argv, cwd=str(plan.cwd), stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, text=True, bufsize=1, **kwargs)
+            stderr=subprocess.STDOUT, text=True, bufsize=1,
+            encoding="utf-8", errors="replace", **kwargs)
         proc = cls(popen=popen, plan=plan)
         reader = threading.Thread(target=proc._drain, daemon=True)
         reader.start()
