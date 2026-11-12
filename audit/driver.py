@@ -101,6 +101,13 @@ BUSY_POLL_MS = 250
 #: `display: none` / `visibility: hidden`, and a box with an area (or, for a
 #: `display: contents` wrapper, a child that has one).
 _BUSY_SCRIPT = """(function() {
+  var EXCLUDED = /*XAUDIT_BUSY_EXCLUDE*/[];
+  function excluded(el) {
+    for (var x = 0; x < EXCLUDED.length; x++) {
+      try { if (el.closest(EXCLUDED[x])) return true; } catch (e) {}
+    }
+    return false;
+  }
   function boxed(el) {
     var rects = el.getClientRects();
     for (var i = 0; i < rects.length; i++) {
@@ -123,16 +130,30 @@ _BUSY_SCRIPT = """(function() {
     }
     return false;
   }
+  function named(el) {
+    var role = el.getAttribute('role');
+    var cls = (el.getAttribute('class') || '').trim().split(/\\s+/)[0];
+    var r = el.getBoundingClientRect();
+    return el.tagName.toLowerCase() + (el.id ? '#' + el.id : '')
+      + (!el.id && cls ? '.' + cls : '') + (role ? '[role=' + role + ']' : '')
+      + ' ' + Math.round(r.width) + 'x' + Math.round(r.height);
+  }
   var busy = document.querySelectorAll('[aria-busy="true"]');
   for (var b = 0; b < busy.length; b++) {
-    if (rendered(busy[b])) return true;
+    if (rendered(busy[b]) && !excluded(busy[b])) return 'aria-busy ' + named(busy[b]);
   }
   if (!document.getAnimations) return false;
-  return document.getAnimations().some(function(a) {
-    if (a.playState !== 'running' || !a.effect) return false;
-    var end = a.effect.getComputedTiming().endTime;
-    return isFinite(end) && end > 0;
-  });
+  var anims = document.getAnimations();
+  for (var a = 0; a < anims.length; a++) {
+    var an = anims[a];
+    if (an.playState !== 'running' || !an.effect) continue;
+    var end = an.effect.getComputedTiming().endTime;
+    if (isFinite(end) && end > 0) {
+      var target = an.effect.target;
+      return 'animation ' + (target && target.tagName ? named(target) : '');
+    }
+  }
+  return false;
 })()"""
 
 #: Lazy loading. SharePoint Online is believed to render a web part only
@@ -154,6 +175,22 @@ LAZY_STABLE_POLLS = 3
 #: Is this page one whose web parts may load late? Read in the page, so the
 #: decision needs no plumbing from the caller: the same check
 #: `sharepoint_zones.is_sharepoint_page` makes on markup.
+def busy_script(exclude=()) -> str:
+    """`_BUSY_SCRIPT` that does not wait for what the audit leaves out.
+
+    A region the run excludes (`BrowserAuditOptions.exclude`: the user's
+    suppressions, and on SharePoint Microsoft's chrome) is not read, so its
+    loading state cannot make what is read wrong. Measured live: Microsoft's
+    comments region (`#CommentsWrapper`) keeps a viewport container
+    `aria-busy` on subsite home pages for as long as one waits, and held
+    four pages 8 s each with a warning about a region nobody audits.
+    """
+    import json
+
+    selectors = [str(s) for s in (exclude or ()) if s]
+    return _BUSY_SCRIPT.replace("/*XAUDIT_BUSY_EXCLUDE*/[]", json.dumps(selectors))
+
+
 _LAZY_DETECT_SCRIPT = """(function() {
   return !!(window._spPageContextInfo || document.querySelector(
     '[data-sp-feature-tag], [data-sp-placeholder], #spPageChromeAppDiv'));
@@ -686,8 +723,15 @@ class BrowserAuditRunner:
                 finish()
                 return
             # The settle wait is the difference between auditing the site and
-            # auditing its loading skeleton.
-            QTimer.singleShot(options.settle_ms, wait_until_idle)
+            # auditing its loading skeleton. The lazy scroll goes first, the
+            # busy wait after it: SharePoint marks a part below the fold
+            # `aria-busy` (its viewport container, `div#vpc_...[role=region]`)
+            # until it has been scrolled into view. Waited for in the other
+            # order, the comments and the footer of every page held the run
+            # 8 s and were reported "still aria-busy" - measured live on six
+            # of twelve modern pages.
+            QTimer.singleShot(options.settle_ms,
+                              lambda: settle_lazy(wait_until_idle))
 
         payloads: dict = {}
         #: Active `_Slot`s, kept alive against garbage collection. See
@@ -715,7 +759,8 @@ class BrowserAuditRunner:
             if not pending:
                 finish()
 
-        busy = {"waited_ms": 0, "still_busy": False, "scheme": None}
+        busy = {"waited_ms": 0, "still_busy": False, "scheme": None,
+                "element": ""}
 
         def wait_until_idle():
             if state["finished"]:
@@ -735,9 +780,13 @@ class BrowserAuditRunner:
                     QTimer.singleShot(BUSY_POLL_MS, wait_until_idle)
                     return
                 busy["still_busy"] = bool(is_busy)
-                settle_lazy(run_scripts)
+                # What held it, so the report can be checked: `aria-busy
+                # div#feed[role=status] 640x200` or `animation ...`.
+                busy["element"] = is_busy if isinstance(is_busy, str) else ""
+                run_scripts()
 
-            page.runJavaScript(_BUSY_SCRIPT, 0, answered)
+            page.runJavaScript(
+                busy_script(getattr(options, "exclude", None) or ()), 0, answered)
 
         def settle_lazy(then):
             """Scroll lazily rendered parts into existence, then go on."""
@@ -930,9 +979,10 @@ class BrowserAuditRunner:
                 f"asked for {wanted}, the page saw {busy['scheme']}")
         if busy["still_busy"]:
             # Measured anyway, and said: what follows may describe a skeleton.
+            held = f" ({busy['element']})" if busy["element"] else ""
             result.engine_errors["busy"] = (
-                f"the page was still aria-busy after {BUSY_WAIT_MS // 1000}s; "
-                "it was measured as it was")
+                f"the page was still aria-busy after {BUSY_WAIT_MS // 1000}s"
+                f"{held}; it was measured as it was")
         if "states" in payloads:
             issues += states.issues_from_states(payloads["states"], url)
         if "html" in payloads:

@@ -1294,7 +1294,11 @@ def _element_of(issue):
     for index, part in enumerate(parts):
         name, raw = part.group(1).lower(), part.group(2)
         last = index == len(parts) - 1
-        cut_open = raw is not None and raw[:1] in "\"'" and (
+        # `raw[:1] in "\"'"` alone is true for an empty value (`data-x=`
+        # before the cut): "" is in every string, and `raw[-1]` then raised
+        # IndexError - which ended a live run with "string index out of
+        # range" and an empty JSON.
+        cut_open = bool(raw) and raw[0] in "\"'" and (
             len(raw) == 1 or raw[-1] != raw[0])
         # The token the clip ran into: a quoted value left open, or the last
         # token with no space after it (an unquoted value or a name cut

@@ -57,6 +57,8 @@ class InARealBrowser(unittest.TestCase):
             result = _audit(LOADING % 600000)
         self.assertIn("Loading", result.html)
         self.assertIn("busy", result.engine_errors)
+        # Named, so the report can be checked against the page.
+        self.assertIn("div#s[role=status]", result.engine_errors["busy"])
 
 
 #: SharePoint's search suggestions popup: busy, empty and not rendered, on
@@ -88,6 +90,85 @@ class OnlyARenderedBusyElementIsWaitedFor(unittest.TestCase):
             "</body>", '<div role="listbox" aria-busy="true" hidden></div></body>')
         result = _audit(page)
         self.assertIn("<h1>Loaded</h1>", result.html)
+
+
+#: A region the run excludes, still loading: Microsoft's comments on a
+#: SharePoint page, as the shape of it.
+EXCLUDED_BUSY = """<!DOCTYPE html><html lang="en"><head><title>Intranet</title></head>
+<body><main><h1>News</h1></main>
+<div id="CommentsWrapper"><div role="region" aria-busy="true" style="height:200px">Loading comments</div></div>
+</body></html>"""
+
+
+class AnExcludedRegionIsNotWaitedFor(unittest.TestCase):
+    setUpClass = InARealBrowser.setUpClass
+
+    def test_a_busy_region_the_run_does_not_read_does_not_hold_it(self):
+        import time
+
+        from audit import browser, driver
+
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "page.html"
+            path.write_text(EXCLUDED_BUSY, encoding="utf-8")
+            options = browser.BrowserAuditOptions(
+                run_axe=False, run_htmlcs=False, run_states=False,
+                run_measurements=False, allow_local_files=True, settle_ms=100,
+                capture_html=True, capture_text=False,
+                exclude=["#CommentsWrapper"])
+            driver.ensure_headless_application()
+            runner = driver.BrowserAuditRunner(options)
+            try:
+                started = time.monotonic()
+                result = runner.audit(path.resolve().as_uri())
+                elapsed = time.monotonic() - started
+            finally:
+                runner.close()
+        self.assertNotIn("busy", result.engine_errors)
+        self.assertLess(elapsed, 6)
+
+    def test_without_the_exclusion_it_is_waited_for_and_named(self):
+        from audit import driver
+
+        with mock.patch.object(driver, "BUSY_WAIT_MS", 500):
+            result = _audit(EXCLUDED_BUSY)
+        self.assertIn("div[role=region]", result.engine_errors.get("busy", ""))
+
+
+#: A part below the fold, busy until it is scrolled into view - the shape
+#: of SharePoint's viewport containers (`div#vpc_...[role=region]`).
+BELOW_THE_FOLD = """<!DOCTYPE html><html lang="en"><head><title>Intranet</title></head>
+<body><main><h1>News</h1><div style="height:3000px"></div>
+<div id="vpc" role="region" aria-busy="true" style="height:200px">Loading</div></main>
+<script>new IntersectionObserver(function(entries, observer) {
+  if (entries.some(function(e) { return e.isIntersecting; })) {
+    document.getElementById('vpc').setAttribute('aria-busy', 'false');
+    observer.disconnect();
+  }
+}).observe(document.getElementById('vpc'));</script></body></html>"""
+
+
+class TheLazyScrollComesBeforeTheBusyWait(unittest.TestCase):
+    setUpClass = InARealBrowser.setUpClass
+
+    def test_a_part_busy_until_seen_is_scrolled_into_view_first(self):
+        from audit import browser, driver
+
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "page.html"
+            path.write_text(BELOW_THE_FOLD, encoding="utf-8")
+            options = browser.BrowserAuditOptions(
+                run_axe=False, run_htmlcs=False, run_states=False,
+                run_measurements=False, allow_local_files=True, settle_ms=100,
+                capture_html=True, capture_text=False)
+            driver.ensure_headless_application()
+            runner = driver.BrowserAuditRunner(options, lazy_scroll="always")
+            try:
+                with mock.patch.object(driver, "BUSY_WAIT_MS", 1500):
+                    result = runner.audit(path.resolve().as_uri())
+            finally:
+                runner.close()
+        self.assertNotIn("busy", result.engine_errors)
 
 
 FADING = """<!DOCTYPE html><html lang="en"><head><title>App</title><style>

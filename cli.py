@@ -2010,10 +2010,21 @@ def main(argv=None) -> int:
     except SystemExit:
         raise
     except Exception as exc:  # noqa: BLE001
+        # Where it broke, not only what: "string index out of range" alone
+        # cost a live re-run to place. The trace goes to the log always, and
+        # to stderr with XAUDIT_TRACEBACK=1.
+        import traceback
+
+        from app_identity import env as _env
+        trace = "".join(traceback.format_exception(exc))
         if not quiet:
             applog.error("command.failed", command=args.command,
                          error=f"{type(exc).__name__}: {exc}",
+                         trace=trace[-4000:],
                          seconds=round(time.monotonic() - started, 2))
+        if _env("TRACEBACK"):
+            from privacy import mask_text
+            print(mask_text(trace), file=sys.stderr, end="")
         progress.notice("error", f"{type(exc).__name__}: {exc}",
                         human=f"error: {exc}")
         progress.run_end(EXIT_ERROR)

@@ -226,3 +226,52 @@ class EveryRuleStampsTheConfidenceItDeclares(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AClipThroughAnEmptyValue(unittest.TestCase):
+    """`data-x=` just before the clip: the empty value made `raw[-1]` raise
+    IndexError, and a live run ended with "string index out of range" and
+    an empty JSON (T-2823)."""
+
+    def test_an_empty_unquoted_value_before_the_cut_does_not_raise(self):
+        for snippet in (f'<img src="{LONG}" data-x= …',
+                        f'<img src="{LONG}" data-x=…',
+                        f'<img src="{LONG}" alt="" …'):
+            with self.subTest(snippet=snippet):
+                identity = browser._element_of(_issue("image-alt", "static", snippet))
+                self.assertIsNotNone(identity)
+                self.assertTrue(identity.clipped)
+
+    def test_deduplicate_survives_it(self):
+        kept = browser.deduplicate([
+            _issue("image-alt", "static", f'<img src="{LONG}" data-x= …', "div > img"),
+            _issue("axe:image-alt", "axe", f'<img src="{LONG}" data-x="">', "img"),
+        ])
+        self.assertEqual(len(kept), 1)
+
+
+class TheCliSaysWhereItBroke(unittest.TestCase):
+
+    def test_the_trace_is_printed_on_request(self):
+        import io
+        import os
+        from contextlib import redirect_stderr
+        from unittest import mock
+
+        import cli
+
+        def boom(args):
+            raise IndexError("string index out of range")
+
+        buffer = io.StringIO()
+        args = mock.Mock(command="logs", func=boom, paths=[], progress=None,
+                         target="", color_scheme=None, no_update_check=True)
+        with mock.patch.dict(os.environ, {"XAUDIT_TRACEBACK": "1"}), \
+                mock.patch("app_identity.migrate_legacy_data"), \
+                mock.patch.object(cli, "build_parser") as parser, \
+                redirect_stderr(buffer):
+            parser.return_value.parse_args.return_value = args
+            code = cli.main(["logs"])
+        self.assertNotEqual(code, 0)
+        self.assertIn("Traceback", buffer.getvalue())
+        self.assertIn("boom", buffer.getvalue())
