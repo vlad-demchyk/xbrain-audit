@@ -3238,6 +3238,26 @@ _STRINGS: dict[str, dict[str, str]] = {
         "it": "Scrivi nel link stesso dove porta: «Piani e prezzi» invece di «leggi di più». Se il design impone una scritta breve, lasciala visibile e metti la descrizione completa in un aria-label che inizi con la stessa scritta: «Leggi di più: piani e prezzi».",
         "en": "Say in the link itself where it goes: \"Plans and pricing\" instead of \"read more\". If the design needs the short label, keep it visible and put the full description in an aria-label that starts with the same words: \"Read more: plans and pricing\".",
     },
+    "a11y_label_placeholder_only_title": {
+        "uk": "Поле підписане лише підказкою (placeholder)",
+        "it": "Campo etichettato solo dal segnaposto (placeholder)",
+        "en": "Field labelled only by its placeholder",
+    },
+    "a11y_label_placeholder_only_found": {
+        "uk": "Поле має лише підказку «{placeholder}», видимої мітки немає.",
+        "it": "Il campo ha solo il suggerimento «{placeholder}», nessuna etichetta visibile.",
+        "en": "The field has only the hint \"{placeholder}\" and no visible label.",
+    },
+    "a11y_label_placeholder_only_why": {
+        "uk": "Підказка зникає, щойно людина починає вводити: хто зупинився чи перевіряє введене, вже не бачить, що поле просить. Світло-сірий текст підказки рідко має достатній контраст. Програма читання з екрана назву поля оголосить, тому це не критична помилка.",
+        "it": "Il suggerimento sparisce appena si comincia a scrivere: chi si ferma o ricontrolla ciò che ha inserito non vede più che cosa chiede il campo. Il grigio chiaro del segnaposto raramente ha un contrasto sufficiente. Lo screen reader annuncia comunque il nome del campo, quindi non è un errore critico.",
+        "en": "The hint vanishes as soon as one types: whoever pauses or checks what they entered no longer sees what the field asks for. Its light grey rarely has enough contrast. A screen reader still announces the field's name, so this is not critical.",
+    },
+    "a11y_label_placeholder_only_fix": {
+        "uk": "Додайте видиму мітку <label for=\"…\">, яка лишається над полем. Якщо дизайн не має місця для мітки, дайте полю aria-label з тим самим текстом і лишіть підказку лише як приклад.",
+        "it": "Aggiungi un'etichetta visibile <label for=\"…\"> che resta sopra il campo. Se il design non ha spazio per un'etichetta, dai al campo un aria-label con lo stesso testo e lascia il segnaposto solo come esempio.",
+        "en": "Add a visible <label for=\"…\"> that stays above the field. If the design has no room for one, give the field an aria-label with the same text and keep the placeholder as an example only.",
+    },
     "a11y_label_in_name_title": {
         "uk": "Видимого напису немає в доступному імені",
         "it": "L'etichetta visibile non è nel nome accessibile",

@@ -525,6 +525,8 @@ def issues_from_axe(payload: str, source: str, exclude_rules=()) -> list:
                 engine_codes.note_unverified(engine_codes.AXE, entry.get("id", ""))
                 severity = MINOR
             for node in entry.get("nodes", []):
+                if _is_focus_sentinel(entry.get("id"), node.get("html", "")):
+                    continue
                 measured = _measured_details(entry.get("id"), node)
                 node_severity, category = severity, ACCESSIBILITY
                 if (entry.get("id") == "autocomplete-valid"
@@ -554,6 +556,24 @@ def issues_from_axe(payload: str, source: str, exclude_rules=()) -> list:
                     },
                 ))
     return issues
+
+
+def _is_focus_sentinel(rule: str, html: str) -> bool:
+    """A focus-trap sentinel that `aria-hidden-focus` reads as a defect.
+
+    Fluent UI's Tabster puts `<i tabindex="0" role="none" aria-hidden="true"
+    data-tabster-dummy>` before and after a focus zone. It is focusable on
+    purpose and hands focus on the moment it receives it, so a keyboard user
+    never stops on it and a screen reader never sees it - the situation the
+    rule exists for (focus landing on something announced as nothing) does
+    not arise. Seen on a live SharePoint intranet: 17 of 37
+    `aria-hidden-focus` rows were these, in custom web parts built on Fluent.
+    Only that marker is trusted; any other aria-hidden focusable element is
+    still reported.
+    """
+    if rule != "aria-hidden-focus":
+        return False
+    return bool(re.search(r"<\s*\w+\b[^>]*\bdata-tabster-dummy\b", html or "", re.I))
 
 
 #: The input purposes of WCAG 2.1 section 7 - what 1.3.5 Identify Input

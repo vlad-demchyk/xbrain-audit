@@ -69,8 +69,15 @@ def _folder_for(technology: str, root: Path) -> Path:
 #: What each broken fixture is broken in, and must therefore be caught for.
 #: Written per technology rather than as one list, because the point is that
 #: the same defect is caught through six different syntaxes.
-_NAMES_AND_ALT = {"control-name", "image-alt"}
+#: Each broken fixture also has a search field labelled only by its
+#: placeholder: named (the name computation falls back to the hint), so not
+#: `control-name`, but a 3.3.2 failure all the same.
+_NAMES_AND_ALT = {"control-name", "image-alt", "label-placeholder-only"}
 _AND_AN_EMPTY_LINK = _NAMES_AND_ALT | {"seo-empty-link"}
+#: The server-side template languages translate the hint
+#: (`placeholder="{% trans 'Search' %}"`): a bound value says nothing about
+#: what renders, so `label-placeholder-only` stays silent there.
+_SERVER_TEMPLATE = (_AND_AN_EMPTY_LINK - {"label-placeholder-only"})
 
 EXPECTED = {
     # JSX puts the expression in the attribute *value* (`alt={caption}`).
@@ -83,13 +90,13 @@ EXPECTED = {
     "alpine": _NAMES_AND_ALT,       # x-bind:alt, x-text
     "thymeleaf": _NAMES_AND_ALT,    # th:alt, th:text - and a whole page
     # And these six put code where an HTML parser expects text.
-    "php": {"control-name", "seo-empty-link"},
-    "twig": _AND_AN_EMPTY_LINK,
-    "django": _AND_AN_EMPTY_LINK,   # {% %} and {{ }}
-    "liquid": _AND_AN_EMPTY_LINK,
-    "handlebars": _AND_AN_EMPTY_LINK,
-    "erb": _AND_AN_EMPTY_LINK,
-    "blade": _AND_AN_EMPTY_LINK,
+    "php": {"control-name", "seo-empty-link", "label-placeholder-only"},
+    "twig": _SERVER_TEMPLATE,
+    "django": _SERVER_TEMPLATE,   # {% %} and {{ }}
+    "liquid": _SERVER_TEMPLATE,
+    "handlebars": _SERVER_TEMPLATE,
+    "erb": _SERVER_TEMPLATE,
+    "blade": _SERVER_TEMPLATE,
     "razor": _AND_AN_EMPTY_LINK,
     # Not a template language: the pair that guards the `security` category,
     # which had no rules in it at all until these six. Every one is `EXACT`

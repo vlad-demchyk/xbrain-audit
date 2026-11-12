@@ -193,7 +193,7 @@ ciascuno correggibile sul posto.
 
 **Regole del sito**, per categoria, con il numero che la suite verifica:
 
-`accessibility` (41), `best-practices` (13), `geo` (2), `performance` (8), `security` (10), `seo` (8)
+`accessibility` (42), `best-practices` (13), `geo` (2), `performance` (8), `security` (10), `seo` (8)
 
 Una regola gira dove significa qualcosa e da nessun'altra parte, e a deciderlo
 è una prova: la sintassi del file (le regole JSX solo in `.jsx`/`.tsx`), a cosa
@@ -222,6 +222,16 @@ controllo di reciprocità hreflang e contati in una riga; un link che
 HTML_CodeSniffer segnala come immagine senza `alt` ma che ha un nome da
 `aria-label`, `aria-labelledby` o `title` è un promemoria per verificare il nome,
 non una violazione.
+
+**Quanto è certo ogni rilievo.** Il rapporto conta nei totali solo i rilievi accertati. Ciò che un motore ha segnalato senza poterlo decidere nel browser (contrasto su un'immagine, sottotitoli di un video, impaginazione a 320 px) segue subito sotto «Da verificare manualmente»: ognuno può essere una violazione reale. Le raccomandazioni che non sono violazioni WCAG AA (formati delle immagini, criteri AAA) vengono per ultime, come consigli, e non cambiano alcun totale. Passa `--unsettled` perché entrambe arrivino nel rapporto.
+
+**Segnaposto come unica etichetta (3.3.2).** `label-placeholder-only`
+segnala un campo di testo nominato solo dal suo `placeholder`. Il campo ha un
+nome accessibile (il calcolo del nome ripiega sul suggerimento), quindi non è
+un `control-name` critico; il suggerimento però sparisce appena si scrive, ed
+è questo il problema del 3.3.2. Livello moderate. Un numero mostrato in un
+controllo (`38` like) è contenuto, non un'etichetta, e `label-in-name` lo
+ignora.
 
 **Etichetta nel nome (2.5.3).** `label-in-name` segnala un link o un pulsante il
 cui `aria-label` tralascia parole del testo visibile: `<a aria-label="Leggi

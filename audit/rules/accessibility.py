@@ -231,6 +231,14 @@ class ControlName(AccessibilityRule):
                 continue
             if _is_hidden(tag):
                 continue
+            if _placeholder_only(tag):
+                # The accessible name computation falls back to `placeholder`,
+                # so the field *has* a name and axe passes it: "no name,
+                # critical" was false on every page of a site whose header
+                # search box is labelled only by its hint. What is wrong is
+                # 3.3.2 - the hint vanishes as soon as one types - and that is
+                # `label-placeholder-only`'s finding, not this one.
+                continue
             selector, line = context.locate(tag)
             component = context.syntax == "jsx" and _written_as_component(tag)
             if component and any((tag.get(prop) or "").strip()
@@ -245,6 +253,56 @@ class ControlName(AccessibilityRule):
                 rule_id=self.id, severity=self.severity, selector=selector,
                 line=line, snippet=snippet_of(tag), source=context.source,
                 details={"element": tag.name, "component": component},
+            ))
+        return issues
+
+
+def _placeholder_only(tag) -> bool:
+    """A text field whose only name is its `placeholder` hint."""
+    if tag.name not in ("input", "textarea"):
+        return False
+    placeholder = (tag.get("placeholder") or "").strip()
+    # A bound placeholder (`placeholder={t("x")}`) says nothing about what it
+    # renders, and a design-system `<Input>` with only that keeps the full
+    # weight in `control-name` - see test_jsx_coach_false_positives.
+    return bool(placeholder) and not is_binding(placeholder)
+
+
+class PlaceholderOnlyLabel(AccessibilityRule):
+    """A field labelled only by its placeholder (3.3.2 Labels or Instructions).
+
+    The placeholder does give the field an accessible name - the name
+    computation falls back to it, which is why axe passes such a field and
+    why `control-name` does not report it. It is still not a label: it
+    disappears as soon as one types, so whoever pauses or checks what they
+    entered no longer sees what the field asks for, and its usual light grey
+    rarely reaches 4.5:1. W3C lists placeholder-only labelling as a failure
+    of the intent of 3.3.2; reported as moderate, because the field is
+    usable by a screen reader.
+    """
+    id = "label-placeholder-only"
+    severity = MODERATE
+    wcag = ("3.3.2",)
+
+    def check(self, document, context) -> list:
+        issues = []
+        for tag in document.find_all(("input", "textarea")):
+            if tag.name == "input" and tag.get("type", "text").lower() in _UNLABELLED_INPUT_TYPES:
+                continue
+            if not _placeholder_only(tag):
+                continue
+            if _has_label(tag, document) or _is_hidden(tag):
+                continue
+            # `_accessible_name` falls back to the placeholder, as the name
+            # computation does; a name that is anything else is a real label.
+            if _accessible_name(tag) not in ("", (tag.get("placeholder") or "").strip()):
+                continue
+            selector, line = context.locate(tag)
+            issues.append(Issue(
+                rule_id=self.id, severity=self.severity, selector=selector,
+                line=line, snippet=snippet_of(tag), source=context.source,
+                details={"element": tag.name,
+                         "placeholder": (tag.get("placeholder") or "").strip()[:120]},
             ))
         return issues
 
@@ -2284,7 +2342,7 @@ class AbbreviationExpansion(AccessibilityRule):
 
 
 for _rule in (
-    ImageAlt, ImageAltIsFilename, ControlName, VagueLinkText, LabelInName,
+    ImageAlt, ImageAltIsFilename, ControlName, PlaceholderOnlyLabel, VagueLinkText, LabelInName,
     DocumentLanguage,
     DocumentLanguageMismatch, DeclaredLanguageContradictsAddress,
     DocumentTitle, HeadingOrder, MissingH1, PositiveTabindex, DuplicateIds,

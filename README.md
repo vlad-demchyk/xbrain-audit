@@ -198,7 +198,7 @@ fixable in place.
 
 **Website rules**, by category, with the count the test suite enforces:
 
-`accessibility` (41), `best-practices` (13), `geo` (2), `performance` (8), `security` (10), `seo` (8)
+`accessibility` (42), `best-practices` (13), `geo` (2), `performance` (8), `security` (10), `seo` (8)
 
 A rule runs where it means something and nowhere else, decided on evidence:
 the file's syntax (JSX rules only in `.jsx`/`.tsx`), what the document is for
@@ -226,6 +226,15 @@ does not name themselves are left out of the hreflang reciprocity check and
 counted in one row; a link HTML_CodeSniffer reports as an image with no `alt`
 but that is named by `aria-label`, `aria-labelledby` or `title` is a note to
 check the name, not a violation.
+
+**How sure each finding is.** The report counts only settled findings in its totals. What an engine flagged but could not decide in the browser (contrast over an image, a video's captions, layout at 320 px) is listed right after them under "To check by hand": each may be a real failure. Recommendations that are not WCAG AA failures (image formats, AAA criteria) come last, as advice, and change no total. Pass `--unsettled` so both reach the report.
+
+**Placeholder as the only label (3.3.2).** `label-placeholder-only` reports a
+text field named only by its `placeholder`. The field does have an accessible
+name (the name computation falls back to the hint), so it is not a critical
+`control-name`; the hint still vanishes as one types, which is the 3.3.2
+problem. Moderate. A counter shown in a control (`38` likes) is content, not a
+label, and `label-in-name` leaves it alone.
 
 **Label in name (2.5.3).** `label-in-name` reports a link or button whose
 `aria-label` leaves out words of its visible text: `<a aria-label="Read
