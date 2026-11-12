@@ -328,9 +328,9 @@ class WaitReadyLoop(unittest.TestCase):
         self.assertIn("not ready after", str(ctx.exception))
 
 
-@unittest.skipUnless(os.environ.get("XANALYZE_LIVE_TESTS"),
+@unittest.skipUnless(os.environ.get("XAUDIT_LIVE_TESTS"),
                      "spawns a real subprocess; run with "
-                     "XANALYZE_LIVE_TESTS=1 to exercise the actual "
+                     "XAUDIT_LIVE_TESTS=1 to exercise the actual "
                      "Popen + thread + kill wiring end to end")
 class RealProcessEndToEnd(unittest.TestCase):
     def test_a_real_process_is_started_read_and_stopped(self):

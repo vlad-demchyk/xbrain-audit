@@ -475,7 +475,7 @@ def _build_matcher(patterns: list[str]):
         # disagree about one line would silently change what a run examines.
         # Checked differentially first, over the 36 patterns in
         # `DEFAULT_IGNORE_PATTERNS` and a set of edge cases the project does
-        # not use but a user's own `.xanalyze-ignore` might (negation,
+        # not use but a user's own `.xaudit-ignore` might (negation,
         # anchoring, `**`, character classes, escaped `#`, trailing space):
         # zero disagreements. `tests/test_ignore_patterns.py` keeps the
         # behaviour pinned as a table so a future pathspec cannot move it

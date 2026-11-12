@@ -43,7 +43,7 @@ class MainMenuScreen(XScreen):
     def compose(self) -> ComposeResult:
         yield from self.compose_chrome()
         with Vertical(id="main-menu"):
-            yield Label("XAnalyze", classes="menu-title")
+            yield Label("XBrain Audit", classes="menu-title")
             yield Label(f"v{config.APP_VERSION}", id="version-hint")
             yield Static("")
             for key, name in MENU:

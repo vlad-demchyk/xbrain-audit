@@ -1,6 +1,6 @@
 """Static audit of React source: what a run on Coach got wrong (T-2337).
 
-`xanalyze audit apps/coach/src --category accessibility` reported 25
+`xaudit audit apps/coach/src --category accessibility` reported 25
 problems, one of them real. Each test is the shape of one false group,
 checked against the file it came from.
 """

@@ -34,12 +34,12 @@ def _bundle_zip(path: Path) -> Path:
         return info
 
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(entry("XAnalyze.app/Contents/MacOS/XAnalyze", 0o100755), b"#!bin")
-        zf.writestr(entry("XAnalyze.app/Contents/Frameworks/Qt.framework/Versions/A/Qt",
+        zf.writestr(entry("XBrain Audit.app/Contents/MacOS/XBrain Audit", 0o100755), b"#!bin")
+        zf.writestr(entry("XBrain Audit.app/Contents/Frameworks/Qt.framework/Versions/A/Qt",
                           0o100755), b"qt")
-        zf.writestr(entry("XAnalyze.app/Contents/Frameworks/Qt.framework/Versions/Current",
+        zf.writestr(entry("XBrain Audit.app/Contents/Frameworks/Qt.framework/Versions/Current",
                           0o120777), b"A")
-        zf.writestr(entry("XAnalyze.app/Contents/Info.plist", 0o100644), b"<plist/>")
+        zf.writestr(entry("XBrain Audit.app/Contents/Info.plist", 0o100644), b"<plist/>")
     return path
 
 
@@ -51,12 +51,12 @@ class ArchiveLimits(TestCase):
 
     def test_a_normal_app_unpacks_into_the_given_folder(self):
         archive = _zip(self.root / "a.zip", [
-            ("XAnalyze.app/Contents/Info.plist", b"<plist/>"),
-            ("XAnalyze.app/Contents/MacOS/XAnalyze", b"\x7fELF" * 100),
+            ("XBrain Audit.app/Contents/Info.plist", b"<plist/>"),
+            ("XBrain Audit.app/Contents/MacOS/XBrain Audit", b"\x7fELF" * 100),
         ])
         dest = self.root / "unpacked"
         app = updater._extract_gui_app(archive, dest)
-        self.assertEqual(app, dest / "XAnalyze.app")
+        self.assertEqual(app, dest / "XBrain Audit.app")
         self.assertTrue((app / "Contents" / "Info.plist").is_file())
 
     def test_a_path_out_of_the_folder_is_refused_before_writing(self):
@@ -74,19 +74,19 @@ class ArchiveLimits(TestCase):
 
     def test_a_zip_bomb_is_refused(self):
         archive = _zip(self.root / "a.zip",
-                       [("XAnalyze.app/big", b"\0" * (8 * 1024 * 1024))])
+                       [("XBrain Audit.app/big", b"\0" * (8 * 1024 * 1024))])
         with self.assertRaisesRegex(RuntimeError, "ratio"):
             updater._extract_gui_app(archive, self.root / "u")
 
     def test_an_archive_bigger_than_the_ceiling_is_refused(self):
-        archive = _zip(self.root / "a.zip", [("XAnalyze.app/x", b"abc" * 100)])
+        archive = _zip(self.root / "a.zip", [("XBrain Audit.app/x", b"abc" * 100)])
         with mock.patch.object(updater, "_MAX_UNPACKED_BYTES", 100):
             with self.assertRaisesRegex(RuntimeError, "more than allowed"):
                 updater._extract_gui_app(archive, self.root / "u")
 
     def test_too_many_entries_are_refused(self):
         archive = _zip(self.root / "a.zip",
-                       [(f"XAnalyze.app/{i}", b"x") for i in range(5)])
+                       [(f"XBrain Audit.app/{i}", b"x") for i in range(5)])
         with mock.patch.object(updater, "_MAX_ARCHIVE_ENTRIES", 3):
             with self.assertRaisesRegex(RuntimeError, "too many entries"):
                 updater._extract_gui_app(archive, self.root / "u")
@@ -102,14 +102,14 @@ class ArchiveLimits(TestCase):
         current = app / "Contents/Frameworks/Qt.framework/Versions/Current"
         self.assertTrue(current.is_symlink())
         self.assertEqual(current.readlink(), Path("A"))
-        self.assertTrue((app / "Contents/MacOS/XAnalyze").stat().st_mode & 0o111)
+        self.assertTrue((app / "Contents/MacOS/XBrain Audit").stat().st_mode & 0o111)
         self.assertFalse((app / "Contents/Info.plist").stat().st_mode & 0o111)
 
     def test_a_link_out_of_the_bundle_is_refused(self):
         archive = self.root / "a.zip"
         with zipfile.ZipFile(archive, "w") as zf:
             for target in ("/etc/passwd", "../../../outside"):
-                info = zipfile.ZipInfo(f"XAnalyze.app/Contents/{len(target)}")
+                info = zipfile.ZipInfo(f"XBrain Audit.app/Contents/{len(target)}")
                 info.external_attr = 0o120777 << 16
                 zf.writestr(info, target.encode())
         with self.assertRaisesRegex(RuntimeError, "leaves the bundle"):
@@ -119,8 +119,8 @@ class ArchiveLimits(TestCase):
 class WhichAppIsUpdated(TestCase):
     def test_the_app_this_program_runs_from(self):
         with TemporaryDirectory() as tmp:
-            app = Path(tmp) / "Downloads" / "XAnalyze.app"
-            binary = app / "Contents" / "MacOS" / "XAnalyze"
+            app = Path(tmp) / "Downloads" / "XBrain Audit.app"
+            binary = app / "Contents" / "MacOS" / "XBrain Audit"
             binary.parent.mkdir(parents=True)
             binary.write_text("x")
             with mock.patch.object(updater, "_running_binary", return_value=binary):
@@ -141,21 +141,22 @@ class WhichAppIsUpdated(TestCase):
         import cli_install
 
         with TemporaryDirectory() as tmp:
-            app = Path(tmp) / "XAnalyze.app"
+            app = Path(tmp) / "XBrain Audit.app"
             (app / "Contents/MacOS").mkdir(parents=True)
-            (app / "Contents/MacOS/XAnalyze").write_text("x")
+            (app / "Contents/MacOS/XBrain Audit").write_text("x")
             legacy = Path(tmp) / "xanalyze-cli" / "xanalyze"
             with mock.patch.object(cli_install, "installed_target", return_value=None), \
                     mock.patch.object(cli_install, "install") as install:
                 updater._point_command_at(app, legacy)
-            install.assert_called_once_with(source=app / "Contents/MacOS/XAnalyze")
+            install.assert_called_once_with(source=app / "Contents/MacOS/XBrain Audit",
+                                            link_dir=cli_install.USER_BIN_DIR)
 
     def test_a_link_already_into_the_app_is_left_alone(self):
         import cli_install
 
-        app = Path("/Applications/XAnalyze.app")
+        app = Path("/Applications/XBrain Audit.app")
         with mock.patch.object(cli_install, "installed_target",
-                               return_value=app / "Contents/MacOS/XAnalyze"), \
+                               return_value=app / "Contents/MacOS/XBrain Audit"), \
                 mock.patch.object(cli_install, "install") as install:
             updater._point_command_at(app, None)
         install.assert_not_called()
@@ -171,14 +172,14 @@ class TheTransactionCleansUp(TestCase):
 
         release = updater.ReleaseInfo(tag="v99.0.0", version="99.0.0",
                                       body="", assets=[], html_url="")
-        asset = {"name": "XAnalyze.app.zip", "size": 1,
+        asset = {"name": "XBrainAudit.app.zip", "size": 1,
                  "browser_download_url": "https://github.com/x"}
         manifest = mock.Mock(signature_verified=True)
         with mock.patch.object(updater, "fetch_latest", return_value=release), \
                 mock.patch.object(updater, "fetch_update_manifest",
                                   return_value=manifest), \
                 mock.patch.object(updater, "_installed_app",
-                                  return_value=Path("/nonexistent/XAnalyze.app")), \
+                                  return_value=Path("/nonexistent/XBrain Audit.app")), \
                 mock.patch.object(updater, "_legacy_cli", return_value=None), \
                 mock.patch.object(updater, "find_gui_asset", return_value=asset), \
                 mock.patch.object(updater, "_asset_integrity"), \

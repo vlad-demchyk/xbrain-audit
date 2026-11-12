@@ -135,30 +135,25 @@ jobs:
           pip install pyinstaller==6.22.3
 
       # One bundle: the window, the command line and the terminal interface
-      # are one executable (app_entry.py), and `xanalyze` is a symlink into
+      # are one executable (app_entry.py), and `xaudit` is a symlink into
       # the app. A separate CLI archive used to ship beside it and be updated
       # on its own.
       - name: Build the app
         if: steps.tag_check.outputs.exists == 'false'
-        run: pyinstaller packaging/XAnalyze.spec --noconfirm --distpath dist
+        run: pyinstaller packaging/XBrainAudit.spec --noconfirm --distpath dist
 
-      # `ditto`, not `zip -r`: it keeps the bundle's symlinks (Qt's frameworks
-      # are made of them) and executable bits, which the updater restores.
-      - name: Package the app
-        if: steps.tag_check.outputs.exists == 'false'
-        run: |
-          cd dist
-          ditto -c -k --sequesterRsrc --keepParent XAnalyze.app XAnalyze.app.zip
-
-      - name: Build update integrity manifest
+      # The new assets and, under the names an installed XAnalyze (0.73 and
+      # older) looks for, the same app (`XAnalyze.app.zip`, top folder
+      # `XAnalyze.app`) and the same signed manifest
+      # (`xanalyze-update-manifest.json`). One script for this and for
+      # `make package`; it packs with `ditto`, which keeps the bundle's
+      # symlinks and executable bits for the updater to restore.
+      - name: Package the app and build the update manifests
         if: steps.tag_check.outputs.exists == 'false'
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: |
-          python scripts/update_manifest.py \
-            --release "v${{ steps.version.outputs.version }}" \
-            --output dist/xanalyze-update-manifest.json \
-            dist/XAnalyze.app.zip
+          PYTHON: python
+        run: scripts/package_release.sh "${{ steps.version.outputs.version }}"
 
       - name: Create tag and release
         if: steps.tag_check.outputs.exists == 'false'
@@ -167,9 +162,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: XAnalyze ${{ steps.version.outputs.version }}
+          name: XBrain Audit ${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
+            dist/XBrainAudit.app.zip
+            dist/xbrain-audit-update-manifest.json
+            dist/xbrain-audit-update-manifest.json.sig
             dist/XAnalyze.app.zip
             dist/xanalyze-update-manifest.json
             dist/xanalyze-update-manifest.json.sig

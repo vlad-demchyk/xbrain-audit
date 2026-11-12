@@ -1,6 +1,6 @@
-"""XAnalyze's design system, read from CSS.
+"""XBrain Audit's design system, read from CSS.
 
-The system is `ui/design/xanalyze-desktop.css`: every colour, radius, type
+The system is `ui/design/xbrain-audit-desktop.css`: every colour, radius, type
 size and space the window paints with, read off the design bundle's own
 artboards (17 of them, 2026-08-24) by counting the numbers they actually
 use. It is complete on its own.
@@ -10,7 +10,7 @@ web token file - only the values that differ - which made that file
 mandatory, and the consequence was not theoretical: no bundle ever shipped
 the overlay, `overlay_file()` degraded silently to the shared file, and every
 frozen build of this app painted in xFormat's web colours while the source
-tree painted in XAnalyze's. One severity had two different reds depending on
+tree painted in XBrain Audit's. One severity had two different reds depending on
 which surface you looked at.
 
 So the shared file is now a **base, not a requirement**. When it is present
@@ -40,6 +40,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import app_identity
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 #: Checked in order; the first one that exists wins.
@@ -52,13 +54,13 @@ TOKEN_SEARCH_PATHS = (
 #: found. It declares every token `Palette` reads, so the base is optional:
 #: `tokens.css` is shared with the web app, the landing page and the admin
 #: console, and the desktop design differs from all three - most visibly in
-#: muting every semantic hue - so stating XAnalyze's values in the shared
+#: muting every semantic hue - so stating XBrain Audit's values in the shared
 #: file would repaint three web surfaces to fix one desktop one.
 #:
-#: Pointing `$XANALYZE_DESKTOP_CSS` at nothing turns it off and leaves the
+#: Pointing `$XAUDIT_DESKTOP_CSS` at nothing turns it off and leaves the
 #: window on the plain xFormat palette, which is a complete theme in its own
 #: right. That is a debugging aid, not the shipping arrangement.
-OVERLAY_PATH = _REPO_ROOT / "ui" / "design" / "xanalyze-desktop.css"
+OVERLAY_PATH = _REPO_ROOT / "ui" / "design" / "xbrain-audit-desktop.css"
 
 # Stop at the first closing brace rather than requiring one at the start of a
 # line: the shipped file happens to be formatted that way, but a hand-edited
@@ -89,12 +91,12 @@ def token_file() -> Path | None:
 def overlay_file() -> Path | None:
     """The desktop overlay actually in use, or None when there is none.
 
-    `$XANALYZE_DESKTOP_CSS` points it elsewhere; setting it to an empty
+    `$XAUDIT_DESKTOP_CSS` points it elsewhere; setting it to an empty
     string turns the overlay off and leaves the window on the plain xFormat
     palette, which is the quickest way to see what the shared tokens alone
     look like.
     """
-    override = os.environ.get("XANALYZE_DESKTOP_CSS")
+    override = app_identity.env("DESKTOP_CSS")
     if override is not None:
         if not override.strip():
             return None
@@ -311,7 +313,7 @@ def toward_contrast(value: str, backgrounds: tuple, target: float) -> str:
     The design bundle states its colours as literal hexes, and several of the
     ones it uses for text do not reach WCAG AA on the surfaces it puts them
     on - the muted label, its single most-used colour, measures 3.04:1 on the
-    window canvas. XAnalyze reports exactly that as an accessibility finding
+    window canvas. XBrain Audit reports exactly that as an accessibility finding
     on other people's pages, so it cannot paint its own window that way.
 
     This is measured rather than tuned: the alternative is a table of
@@ -730,7 +732,7 @@ class Palette:
 def palettes(overlay: bool = True) -> dict:
     """Both themes, ready to use.
 
-    `overlay=False` returns the plain xFormat palette, without XAnalyze's
+    `overlay=False` returns the plain xFormat palette, without XBrain Audit's
     own system on top. That is a comparison tool - "what do the shared
     tokens alone look like" - and not a mode anything ships in. The styled
     report used to ask for it, on the argument that a report is a document

@@ -1,11 +1,11 @@
-"""`xanalyze-desktop.css` is the design system, and it is complete.
+"""`xbrain-audit-desktop.css` is the design system, and it is complete.
 
 It began as a thin layer over xFormat's shared web token file - only the
 values that differ - which quietly made that file mandatory. The cost was
 not theoretical: no bundle ever shipped the overlay, `overlay_file()`
 degrades to the shared file without saying so, and every frozen build
 painted in xFormat's web colours while the source tree painted in
-XAnalyze's. The same severity was #e5484d in one place and #c0564f in
+XBrain Audit's. The same severity was #e5484d in one place and #c0564f in
 another, in one product.
 
 Two properties keep that from coming back, and they are different claims:

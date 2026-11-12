@@ -91,7 +91,7 @@ from cli_impl import (  # noqa: F401 - re-exported for `import cli`
 
 
 #: The exit codes, in the one place a person or an agent will look for them:
-#: `xanalyze --help`. They were always the same four values, but the list
+#: `xaudit --help`. They were always the same four values, but the list
 #: existed only as constants in `cli_impl`, which is not a contract anybody
 #: outside this repository can read - and a caller that cannot tell 1
 #: ("found something") from 2 ("the command was wrong") has to parse prose to
@@ -108,7 +108,7 @@ EXIT_CODE_HELP = """exit codes:
   2  error - the command could not run: a path that does not exist, a flag
      that does not apply, a detector that could not read the text
   3  incomplete - a run stopped part-way and its work is on disk;
-     `xanalyze resume` continues it
+     `xaudit resume` continues it
 
 progress protocol:
   --progress jsonl writes one JSON object per line to stderr while the run
@@ -908,7 +908,7 @@ def cmd_login(args) -> int:
         return EXIT_OK
 
     if not host:
-        print("login needs a URL: xanalyze login https://example.com/admin",
+        print("login needs a URL: xaudit login https://example.com/admin",
               file=sys.stderr)
         return EXIT_ERROR
 
@@ -936,7 +936,7 @@ def cmd_login(args) -> int:
     # The count and the host, and nothing else. A terminal keeps scrollback
     # and scrollback gets pasted into issues.
     print(f"session stored for {host}; runs against that host will use it. "
-          f"Remove it with: xanalyze login --forget {host}")
+          f"Remove it with: xaudit login --forget {host}")
     del app
     return EXIT_OK
 
@@ -988,7 +988,7 @@ def cmd_logs(args) -> int:
     records = applog.read_records(limit=args.limit, level=args.level,
                                   contains=args.contains, run=args.run)
     if not records:
-        print("# nothing logged yet - run a scan, or set XANALYZE_LOG_LEVEL=debug")
+        print("# nothing logged yet - run a scan, or set XAUDIT_LOG_LEVEL=debug")
         return EXIT_OK
     # Oldest first on screen: a log reads forwards even though it is
     # collected backwards.
@@ -1106,10 +1106,10 @@ def _announce_auth_walls(result, session_host: str = "") -> None:
             "session",
             f"the stored session for {session_host} did not get past the "
             f"login - it has most likely expired. Sign in again with: "
-            f"xanalyze login {session_host}",
+            f"xaudit login {session_host}",
             human=f"# [session] the stored session for {session_host} did "
                   f"not get past the login - it has most likely expired. "
-                  f"Sign in again with: xanalyze login {session_host}",
+                  f"Sign in again with: xaudit login {session_host}",
             host=session_host, expired=True)
 
 
@@ -1246,7 +1246,7 @@ def _add_sharepoint_flags(parser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="xanalyze",
+        prog="xaudit",
         description="Find and fix characters no keyboard produces (and optionally "
                     "flag AI-sounding copy) in web pages' source files. "
                     "Designed to run after an LLM coding agent.",
@@ -1262,11 +1262,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="how the run reports itself on stderr: human (the default, "
              "unchanged) | jsonl (one JSON object per line, an event per "
              "step) | jsonl=findings (the same plus one object per finding). "
-             "$XANALYZE_PROGRESS sets it for every run in a shell; this flag "
+             "$XAUDIT_PROGRESS sets it for every run in a shell; this flag "
              "wins over it. See progress.py for the event list")
     parser.add_argument(
         "--version", action="version",
-        version=f"xanalyze {config.APP_VERSION}")
+        version=f"xaudit {config.APP_VERSION}")
     sub = parser.add_subparsers(dest="command", required=False)
 
     def common(p, with_paths=True):
@@ -1309,7 +1309,7 @@ def build_parser() -> argparse.ArgumentParser:
                             "Ukrainian/Italian typography)")
         p.add_argument("--no-ignore", action="store_true",
                        help="report everything, including findings suppressed by "
-                            "settings or by a .xanalyze-ignore file")
+                            "settings or by a .xaudit-ignore file")
         p.add_argument("--json", action="store_true", help="machine-readable output")
         p.add_argument("--check", action="store_true",
                        help="exit 1 when anything is found (for hooks and CI)")
@@ -1783,13 +1783,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_ignore = sub.add_parser(
         "ignore",
         help="dismiss one finding as a false positive, with the reason, in "
-             ".xanalyze-ignore")
+             ".xaudit-ignore")
     p_ignore.add_argument("fingerprint",
                           help="the finding's `fingerprint`, from `audit --json`")
     p_ignore.add_argument("--reason", required=True,
                           help="why it is not a problem; kept next to the entry")
     p_ignore.add_argument("--root", default=".",
-                          help="the project folder whose .xanalyze-ignore to "
+                          help="the project folder whose .xaudit-ignore to "
                                "write (default: the current folder)")
     p_ignore.set_defaults(func=cmd_ignore)
 
@@ -1800,7 +1800,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_uninstall = sub.add_parser(
         "uninstall",
-        help="remove XAnalyze from this machine (command, app, settings, keychain)")
+        help="remove XBrain Audit from this machine (command, app, settings, keychain)")
     p_uninstall.add_argument("--yes", action="store_true", default=False,
                              help="remove without asking for confirmation")
     p_uninstall.add_argument("--dry-run", action="store_true", default=False,
@@ -1838,12 +1838,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="hybrid merge: input contains both judgments and agent_findings")
     p_agent_judge.set_defaults(func=cmd_agent_judge)
 
-    # The global flags again, on every subcommand. `xanalyze fullscan X
+    # The global flags again, on every subcommand. `xaudit fullscan X
     # --no-update-check` is what people type - the flag reads as belonging to
     # the command, not to the program - and argparse answered it with
     # "unrecognized arguments", which is a wrong answer to a correct request.
     # `--progress` is here for the same reason and one more: an agent writes
-    # `xanalyze fullscan URL --progress jsonl`, never the other order.
+    # `xaudit fullscan URL --progress jsonl`, never the other order.
     #
     # `default=SUPPRESS` is what makes the two copies co-operate rather than
     # fight: without it the subparser's own default would write `False` over
@@ -1933,6 +1933,11 @@ def _utf8_streams() -> None:
 
 def main(argv=None) -> int:
     _utf8_streams()
+    # Before anything reads a path: the folders still named XAnalyze move to
+    # their new names once. The same call the window and the TUI make.
+    import app_identity
+
+    app_identity.migrate_legacy_data()
     args = build_parser().parse_args(argv)
     # Recorded before anything reads it, because argparse cannot be asked
     # afterwards which values came from the command line and which are its

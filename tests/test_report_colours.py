@@ -29,7 +29,7 @@ from ui.tokens import palettes
 class TheColoursComeFromTheDesignBundle(unittest.TestCase):
     """Not from the web palette, and not from a hex typed into a template."""
 
-    def test_the_report_paints_with_the_xanalyze_overlay(self):
+    def test_the_report_paints_with_the_xaudit_overlay(self):
         html = render_html(_model(), lang="en")
         overlay = palettes(overlay=True)["light"]
         web = palettes(overlay=False)["light"]

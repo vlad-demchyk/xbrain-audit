@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""macOS bundle for XAnalyze.
+"""macOS bundle for XBrain Audit.
 
 Run from the repository root:
 
-    venv/bin/pyinstaller packaging/XAnalyze.spec --noconfirm
+    venv/bin/pyinstaller packaging/XBrainAudit.spec --noconfirm
 
 Three things about this build are deliberate.
 
@@ -25,7 +25,7 @@ backend has to be imported by name or the app silently falls back to a
 plain-text credential file.
 
 **The entry point is `app_entry.py`, not `main.py`.** One frozen executable
-serves both the GUI and the `xanalyze` CLI command (installed via a button in
+serves both the GUI and the `xaudit` CLI command (installed via a button in
 Settings, see `cli_install.py`), told apart at runtime by the name it was
 invoked as (see `app_entry.py`'s docstring for why this beats building two
 executables and merging them with PyInstaller's `MERGE()`).
@@ -50,12 +50,12 @@ DIST = ROOT / "dist"
 datas = [
     # Both halves of the palette. Shipping only the shared token file left
     # every bundle - the CLI's styled report included - painting in the
-    # xFormat *web* colours while the source tree painted in XAnalyze's:
+    # xFormat *web* colours while the source tree painted in XBrain Audit's:
     # #e5484d against #c0564f for the same severity, in the same product.
     # `ui.tokens.overlay_file` degrades to the shared file when the overlay
     # is missing, so this failed silently and looked deliberate.
     (str(ROOT / "ui" / "design" / "xformat-tokens.css"), "ui/design"),
-    (str(ROOT / "ui" / "design" / "xanalyze-desktop.css"), "ui/design"),
+    (str(ROOT / "ui" / "design" / "xbrain-audit-desktop.css"), "ui/design"),
     (str(ROOT / "audit" / "vendor" / "axe.min.js"), "audit/vendor"),
     (str(ROOT / "audit" / "vendor" / "HTMLCS.js"), "audit/vendor"),
     # Which engine codes a person has weighed; without it every code counts
@@ -135,7 +135,7 @@ executable = EXE(
     analysis.scripts,
     [],
     exclude_binaries=True,
-    name="XAnalyze",
+    name="XBrain Audit",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -153,17 +153,17 @@ collected = COLLECT(
     analysis.datas,
     strip=False,
     upx=False,
-    name="XAnalyze",
+    name="XBrain Audit",
 )
 
 app = BUNDLE(
     collected,
-    name="XAnalyze.app",
-    icon=str(ROOT / "packaging" / "XAnalyze.icns"),
-    bundle_identifier="net.xformat.xanalyze",
+    name="XBrain Audit.app",
+    icon=str(ROOT / "packaging" / "XBrainAudit.icns"),
+    bundle_identifier="net.xformat.xbrain-audit",
     info_plist={
-        "CFBundleName": "XAnalyze",
-        "CFBundleDisplayName": "XAnalyze",
+        "CFBundleName": "XBrain Audit",
+        "CFBundleDisplayName": "XBrain Audit",
         # Read from `config.APP_VERSION`, not written here. A second copy
         # is a second answer to "what version is this", and it was the one
         # that went stale: the bundle reported 0.7.0 while the CLI built
@@ -184,14 +184,25 @@ app = BUNDLE(
 
 import os
 
-# Create xanalyze CLI copy inside the bundle
-macos_dir = DIST / "XAnalyze.app" / "Contents" / "MacOS"
-cli_copy = macos_dir / "xanalyze"
-gui_exe = macos_dir / "XAnalyze"
-if gui_exe.exists() and not cli_copy.exists():
-    import shutil
-    shutil.copy2(str(gui_exe), str(cli_copy))
-    print(f"XAnalyze: created CLI copy at {cli_copy}")
+# The executable under its pre-rename name, as a link to the real one.
+#
+# Before 0.74.0 the bundle was `XAnalyze.app` and its executable
+# `Contents/MacOS/XAnalyze`, and the `xanalyze` command an install put on
+# PATH points at exactly that file. An installed XAnalyze updates itself
+# from the pre-rename asset (`XAnalyze.app.zip`, this bundle under its old
+# folder name) and keeps that link as it is, since it already points into
+# the app - so without this file the old command would be a dangling link
+# the moment the update finished. A link, not a copy: one program.
+#
+# (A copy named `xanalyze` used to be made here. On a case-insensitive disk
+# that name *is* `XAnalyze`, so it never ran; the CLI is a PATH symlink, see
+# `cli_install.py`.)
+macos_dir = DIST / "XBrain Audit.app" / "Contents" / "MacOS"
+gui_exe = macos_dir / "XBrain Audit"
+legacy_exe = macos_dir / "XAnalyze"
+if gui_exe.exists() and not os.path.lexists(legacy_exe):
+    os.symlink(gui_exe.name, legacy_exe)
+    print(f"XBrain Audit: linked {legacy_exe.name} -> {gui_exe.name}")
 
 
 def repair_webengine_framework(framework_root: Path) -> bool:
@@ -246,19 +257,19 @@ def repair_webengine_framework(framework_root: Path) -> bool:
 
 
 FRAMEWORK = "PySide6/Qt/lib/QtWebEngineCore.framework"
-for root in (DIST / "XAnalyze" / "_internal" / FRAMEWORK,
-             DIST / "XAnalyze.app" / "Contents" / "Frameworks" / FRAMEWORK):
+for root in (DIST / "XBrain Audit" / "_internal" / FRAMEWORK,
+             DIST / "XBrain Audit.app" / "Contents" / "Frameworks" / FRAMEWORK):
     if repair_webengine_framework(root):
-        print(f"XAnalyze: repaired QtWebEngine framework in {root}")
+        print(f"XBrain Audit: repaired QtWebEngine framework in {root}")
 
 # A build whose browser cannot start is not a build worth shipping, so this is
 # checked rather than assumed.
-helper = (DIST / "XAnalyze.app" / "Contents" / "Frameworks" / FRAMEWORK
+helper = (DIST / "XBrain Audit.app" / "Contents" / "Frameworks" / FRAMEWORK
           / "Helpers" / "QtWebEngineProcess.app" / "Contents" / "MacOS"
           / "QtWebEngineProcess")
 if not helper.exists():
     raise SystemExit(
-        "XAnalyze: QtWebEngineProcess is missing from the bundle - the site "
+        "XBrain Audit: QtWebEngineProcess is missing from the bundle - the site "
         "preview and the browser audit pass would both be dead. Expected it "
         f"at {helper}"
     )

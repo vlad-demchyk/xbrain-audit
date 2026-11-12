@@ -6,7 +6,7 @@ the emphasised words are the controls. A restyled `QComboBox` cannot be that
 `InlineValue` is its own widget, and this file holds it to the behaviour a
 combo box would have given for free.
 
-The keyboard cases are the point. XAnalyze reports controls that cannot be
+The keyboard cases are the point. XBrain Audit reports controls that cannot be
 reached without a mouse as an accessibility finding on other people's pages,
 so a selector of its own that only opened on click would be the same defect
 shipped inwards.

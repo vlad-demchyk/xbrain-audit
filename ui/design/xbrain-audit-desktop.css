@@ -1,4 +1,4 @@
-/* XAnalyze desktop overlay
+/* XBrain Audit desktop overlay
  * =========================
  *
  * The desktop window's own layer, applied *on top of* the shared xFormat
@@ -101,7 +101,7 @@
    * file mandatory, and the consequence was not theoretical - no bundle ever
    * shipped this overlay, `overlay_file()` degraded silently to the shared
    * file, and every frozen build painted in xFormat's web colours while the
-   * source tree painted in XAnalyze's.
+   * source tree painted in XBrain Audit's.
    *
    * So the rest is stated here too, read off the same artboards by counting
    * the numbers they actually use. The shared file is now a base this can be

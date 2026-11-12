@@ -22,9 +22,9 @@ exactly what they were already doing.
 
 **The real agent-as-judge workflow is unaffected and is the two CLI steps:**
 
-    xanalyze agent-scan ./src --json > candidates.json
+    xaudit agent-scan ./src --json > candidates.json
     # the agent reads the candidates and writes judgments
-    xanalyze agent-judge ./src --judgments verdicts.json
+    xaudit agent-judge ./src --judgments verdicts.json
 
 Its findings are still stamped `agent-llm-judge` in `cli_impl/agentcmds.py`,
 which is accurate there: an agent did the judging.

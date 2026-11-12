@@ -3,7 +3,7 @@
 This is the case `P-13` existed for. `config.CONFIG_FILE` used to be a module
 constant resolved during import, so `XDG_CONFIG_HOME` set by a test came too
 late and `Settings.save()` always landed on the real
-`~/.config/xanalyze/settings.json`. Two tests found that out by damage rather
+`~/.config/xbrain-audit/settings.json`. Two tests found that out by damage rather
 than by failure - one flipped the developer's auto-start toggle on disk, one
 passed only because their `ui_language` happened to be `en` - and the fix was
 copy-pasted per test as `window.settings.save = lambda: None`.

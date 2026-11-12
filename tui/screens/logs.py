@@ -1,6 +1,6 @@
 """Logs screen - what the app wrote about its own runs.
 
-The same records `xanalyze logs` prints and the window's log panel shows,
+The same records `xaudit logs` prints and the window's log panel shows,
 because all three read `applog.read_records`. A viewer that parsed the files
 itself would be a second reader of the format, and the second reader is the
 one that goes out of date.

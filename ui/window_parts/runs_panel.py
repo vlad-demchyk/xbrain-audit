@@ -6,7 +6,7 @@ closing, someone wanting their machine back. Before this the interface had no
 idea any of that had happened: a stopped run was simply gone, and the only
 evidence was a folder in Documents nobody was told about.
 
-The list is built by walking the run folders, the same walk `xanalyze runs`
+The list is built by walking the run folders, the same walk `xaudit runs`
 does, and not from a registry the interface keeps of its own. One fact, one
 owner: a registry would be a second answer to "what runs exist", it would be
 the one that went stale the moment a folder was moved by hand, and the CLI and

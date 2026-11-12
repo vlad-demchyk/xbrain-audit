@@ -301,7 +301,7 @@ class RunState:
                 and self.next_phase() is not None)
 
     def resume_command(self) -> str:
-        return f"xanalyze resume {self.run_dir}"
+        return f"xaudit resume {self.run_dir}"
 
     def artifacts(self) -> list:
         """Files the run actually produced, in phase order.

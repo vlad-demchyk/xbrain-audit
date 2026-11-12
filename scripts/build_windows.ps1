@@ -1,5 +1,5 @@
-# Windows build of XAnalyze: dist\XAnalyze\XAnalyze.exe (window) and
-# dist\XAnalyze\xanalyze-cli.exe (command line and TUI), one folder.
+# Windows build of XBrain Audit: dist\XBrain Audit\XBrain Audit.exe (window) and
+# dist\XBrain Audit\xaudit.exe (command line and TUI), one folder.
 #
 # Run from anywhere, after creating the virtualenv described in README.md:
 #
@@ -24,24 +24,24 @@ try {
         throw "PyInstaller is not installed in venv: venv\Scripts\pip install pyinstaller"
     }
     $Version = (& $Python -c "import config; print(config.APP_VERSION)").Trim()
-    Write-Host "Building XAnalyze $Version ..."
+    Write-Host "Building XBrain Audit $Version ..."
 
-    $Out = Join-Path $Root "dist\XAnalyze"
+    $Out = Join-Path $Root "dist\XBrain Audit"
     if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }
-    & $Python -m PyInstaller packaging\XAnalyze-windows.spec --noconfirm --distpath dist
+    & $Python -m PyInstaller packaging\XBrainAudit-windows.spec --noconfirm --distpath dist
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
 
     # Read by app_entry._warn_if_stale: a binary built from other sources says so.
     Set-Content -Path (Join-Path $Out ".build_version") -Value $Version -NoNewline -Encoding ascii
 
     # The check the build is for: does the built program start and know its version?
-    $Reported = (& (Join-Path $Out "xanalyze-cli.exe") --version).Trim()
-    if ($Reported -ne "xanalyze $Version") {
-        throw "Built CLI reports '$Reported', expected 'xanalyze $Version'"
+    $Reported = (& (Join-Path $Out "xaudit.exe") --version).Trim()
+    if ($Reported -ne "xaudit $Version") {
+        throw "Built CLI reports '$Reported', expected 'xaudit $Version'"
     }
-    Write-Host "XAnalyze $Version built: $Out"
-    Write-Host "  window:       $Out\XAnalyze.exe"
-    Write-Host "  command line: $Out\xanalyze-cli.exe   (no arguments opens the TUI)"
+    Write-Host "XBrain Audit $Version built: $Out"
+    Write-Host "  window:       $Out\XBrain Audit.exe"
+    Write-Host "  command line: $Out\xaudit.exe   (no arguments opens the TUI)"
 }
 finally {
     Pop-Location

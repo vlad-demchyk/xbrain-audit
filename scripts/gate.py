@@ -64,7 +64,7 @@ def run_tests(result: Result) -> None:
     that is not the same suite. `tests/conftest.py` points `XDG_CONFIG_HOME`
     at a temporary directory at collection time, and unittest discovery does
     not read a conftest - so the gate ran every test against the
-    developer's real `~/.config/xanalyze/settings.json`, and
+    developer's real `~/.config/xbrain-audit/settings.json`, and
     `test_settings_isolation` correctly failed to say so. The release gate
     reported two failures of its own making on every run, which is the kind
     of noise that gets a gate ignored.
@@ -99,7 +99,7 @@ PAGE = """<!DOCTYPE html>
 def run_smoke(result: Result) -> None:
     """The CLI, on files it may safely write to."""
     print("smoke")
-    work = Path(tempfile.mkdtemp(prefix="xanalyze-gate-"))
+    work = Path(tempfile.mkdtemp(prefix="xaudit-gate-"))
     try:
         page = work / "index.html"
         page.write_text(PAGE, encoding="utf-8")

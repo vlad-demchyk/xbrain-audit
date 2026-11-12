@@ -44,7 +44,7 @@ class WhereTheDocumentsGo(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         patch = mock.patch.dict("os.environ",
-                                {"XANALYZE_REPORT_ROOT": self._tmp.name})
+                                {"XAUDIT_REPORT_ROOT": self._tmp.name})
         patch.start()
         self.addCleanup(patch.stop)
 

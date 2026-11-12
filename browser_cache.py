@@ -31,18 +31,20 @@ from __future__ import annotations
 import hashlib
 from copy import deepcopy
 import json
-import os
 import time
 from pathlib import Path
 from cache_store import merge_cache
 
 #: Where entries live.
-CACHE_DIR = Path.home() / ".xanalyze" / "browser"
+#: Under `app_identity.data_home()`, resolved at each call: the folder is
+#: renamed at startup, after this module may already be imported.
+CACHE_SUBDIR = "browser"
 
 #: Overrides the location. For CI, for containers and above all for tests:
 #: without it a test run writes into the developer's real cache and the next
-#: run reads its own leftovers back as browser answers.
-DIR_ENV = "XANALYZE_BROWSER_CACHE"
+#: run reads its own leftovers back as browser answers. The old
+#: `XANALYZE_BROWSER_CACHE` is still read when this is not set.
+DIR_ENV = "XAUDIT_BROWSER_CACHE"
 
 #: How long an entry is honoured. A week: long enough that a working session
 #: and the next day's re-check are free, short enough that an engine upgrade
@@ -70,8 +72,10 @@ PASS_REVISION = 7
 
 
 def cache_dir() -> Path:
-    override = os.environ.get(DIR_ENV)
-    return Path(override) if override else CACHE_DIR
+    import app_identity
+
+    override = app_identity.env("BROWSER_CACHE")
+    return Path(override) if override else app_identity.data_home() / CACHE_SUBDIR
 
 
 def markup_key(markup: str) -> str:

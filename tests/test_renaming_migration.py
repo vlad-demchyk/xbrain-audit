@@ -1,5 +1,8 @@
 """Migration paths for the ai-content-scanner -> XAnalyze rename.
 
+(XAnalyze is XBrain Audit since 0.74.0; that rename has its own tests in
+`tests/test_rename_xbrain_audit.py`.)
+
 A plain string rename of `config.APP_NAME` or `llm.credentials.SERVICE_NAME`
 would be invisible to anyone who already used the app: settings live in a
 config dir named after the old app, and account tokens (xFormat

@@ -61,7 +61,7 @@ def test_private_or_authenticated_urls_do_not_reach_crux(monkeypatch, url):
 
 
 def test_lighthouse_profile_and_repeated_values_come_from_its_own_results(monkeypatch):
-    monkeypatch.setenv("XANALYZE_LIGHTHOUSE", "/fixture/lighthouse")
+    monkeypatch.setenv("XAUDIT_LIGHTHOUSE", "/fixture/lighthouse")
     calls = []
     def run(command, **kwargs):
         calls.append(command)
@@ -81,7 +81,7 @@ def test_lighthouse_profile_and_repeated_values_come_from_its_own_results(monkey
 
 
 def test_lighthouse_failure_does_not_count_as_zero_or_success(monkeypatch):
-    monkeypatch.setenv("XANALYZE_LIGHTHOUSE", "/fixture/lighthouse")
+    monkeypatch.setenv("XAUDIT_LIGHTHOUSE", "/fixture/lighthouse")
     result = sources.lighthouse("https://example.test/", repeats=2,
                                 run=lambda *a, **kw: SimpleNamespace(returncode=1))
     assert result["status"] == "error"

@@ -719,7 +719,7 @@ def plan_sharepoint(target: str, args) -> SharePointRun:
 
 
 def login_hint(target: str) -> str:
-    return f"xanalyze login {target}"
+    return f"xaudit login {target}"
 
 
 def missing_session_message(target: str, host: str, no_session: bool) -> str:

@@ -37,20 +37,25 @@ from cache_store import merge_cache
 #: Where verdicts live. Beside the scan cache and the run history, under the
 #: user's home rather than the working directory: the same passage judged from
 #: two checkouts of one project is the same passage.
-CACHE_DIR = Path.home() / ".xanalyze" / "judgments"
+#: Resolved at each call (`app_identity.data_home`), not at import: the
+#: folder is renamed at startup, and a path fixed before that would point at
+#: the old one.
+CACHE_SUBDIR = "judgments"
 
 #: Overrides where verdicts are kept. For CI, for a container, and above all
 #: for tests: without it a test run writes into the developer's real cache and
 #: the *next* test run reads its own leftovers back as model answers, which is
-#: how a green suite stops meaning anything.
-DIR_ENV = "XANALYZE_JUDGMENT_CACHE"
+#: how a green suite stops meaning anything. `XANALYZE_JUDGMENT_CACHE` is
+#: still read when the new name is not set.
+DIR_ENV = "XAUDIT_JUDGMENT_CACHE"
 
 
 def cache_dir() -> Path:
-    import os
+    import app_identity
 
-    override = os.environ.get(DIR_ENV)
-    return Path(override).expanduser() if override else CACHE_DIR
+    override = app_identity.env("JUDGMENT_CACHE")
+    return (Path(override).expanduser() if override
+            else app_identity.data_home() / CACHE_SUBDIR)
 
 #: Entries older than this are dropped on load. Long enough that a monthly
 #: re-scan still hits, short enough that a model's behaviour changing under a

@@ -5,7 +5,7 @@ more than one dialect: `gitwildmatch`, which this project used and which is
 now deprecated, and `gitignore`, which replaced it. Swapping them decides
 what every scan reads, so it was not done on the strength of a deprecation
 warning - the two were compared over the project's own 36 default patterns
-and a set of edge cases a user's `.xanalyze-ignore` might contain, and they
+and a set of edge cases a user's `.xaudit-ignore` might contain, and they
 disagreed nowhere.
 
 This file is what remains after that comparison: the behaviour itself,

@@ -9,7 +9,7 @@ file that survives the run.
 **Written as JSON Lines, one file per day.** Both halves of that matter. A
 record is a dict, so a viewer can filter by level or by run without parsing
 prose, and a day per file makes retention a matter of deleting files rather
-than rewriting one. `xanalyze-2026-08-27.log`.
+than rewriting one. `xbrain-audit-2026-08-27.log`.
 
 **It never raises.** Every public function swallows its own errors: a log
 that can break a scan is worse than no log at all, and the one thing this
@@ -27,7 +27,7 @@ call: the cost is a directory listing, and paying it per log line would make
 logging expensive enough to think twice about - which is how logging stops
 being added.
 
-Read it with `xanalyze logs` (CLI), the Logs screen in the TUI, or the log
+Read it with `xaudit logs` (CLI), the Logs screen in the TUI, or the log
 panel in the window. All three call `read_records` here, so what they show
 is the same list in a different frame.
 """
@@ -41,7 +41,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-APP_NAME = "xanalyze"
+import app_identity
+
+APP_NAME = app_identity.APP_SLUG
 
 #: Anything older than this is deleted. Two weeks is long enough that a bug
 #: reported "last week" is still in the file and short enough that the
@@ -71,16 +73,16 @@ def log_dir() -> Path:
 
     Same reasoning as `config.config_file`: a module constant is computed
     once from whatever the environment was during import, which makes the
-    real directory unavoidable for a test. `XANALYZE_LOG_DIR` isolates a
+    real directory unavoidable for a test. `XAUDIT_LOG_DIR` isolates a
     whole process.
     """
-    override = os.environ.get("XANALYZE_LOG_DIR")
+    override = app_identity.env("LOG_DIR")
     if override:
         path = Path(override)
     else:
         import platform_dirs
 
-        path = platform_dirs.state_home() / APP_NAME / "logs"
+        path = app_identity.app_dir(platform_dirs.state_home()) / "logs"
     try:
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
         path.chmod(0o700)
@@ -89,8 +91,22 @@ def log_dir() -> Path:
     return path
 
 
+def _log_files(*, reverse: bool = False) -> list[Path]:
+    """Every day's file, oldest first, under the current and the old name.
+
+    Days logged before the rename are named `xanalyze-<date>.log` and moved
+    here with the folder; they are still read and still expire. Ordered by
+    the date part, so the two prefixes interleave by day, not by name.
+    """
+    directory = log_dir()
+    files = [path for prefix in (APP_NAME, app_identity.LEGACY_APP_SLUG)
+             for path in directory.glob(f"{prefix}-*.log")]
+    return sorted(files, key=lambda path: path.name.rsplit("-", 3)[-3:],
+                  reverse=reverse)
+
+
 def _level_floor() -> str:
-    wanted = (os.environ.get("XANALYZE_LOG_LEVEL") or DEFAULT_LEVEL).lower()
+    wanted = (app_identity.env("LOG_LEVEL") or DEFAULT_LEVEL).lower()
     return wanted if wanted in LEVELS else DEFAULT_LEVEL
 
 
@@ -221,7 +237,7 @@ def clean(retention_days: int = RETENTION_DAYS,
     """
     removed_old, removed_size, kept = 0, 0, 0
     try:
-        files = sorted(log_dir().glob(f"{APP_NAME}-*.log"))
+        files = _log_files()
         cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
         surviving = []
         for path in files:
@@ -279,7 +295,7 @@ def read_records(limit: int = 200, level: str = "", contains: str = "",
     needle = (contains or "").lower()
     records: list = []
     try:
-        files = sorted(log_dir().glob(f"{APP_NAME}-*.log"), reverse=True)[:max(1, days)]
+        files = _log_files(reverse=True)[:max(1, days)]
         for path in files:
             try:
                 lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -317,7 +333,7 @@ def summary() -> dict:
     """What the directory holds, for a viewer's header line."""
     files, total = [], 0
     try:
-        for path in sorted(log_dir().glob(f"{APP_NAME}-*.log")):
+        for path in _log_files():
             try:
                 size = path.stat().st_size
             except OSError:

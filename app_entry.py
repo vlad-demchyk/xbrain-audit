@@ -1,15 +1,15 @@
 """Frozen entry point: one executable, two roles, chosen by invocation name.
 
-Only used by `packaging/XAnalyze.spec` — a `python main.py` / `python cli.py`
+Only used by `packaging/XBrainAudit.spec` — a `python main.py` / `python cli.py`
 dev run never touches this file.
 
 The alternative considered was PyInstaller's `MERGE()`, building a genuinely
-separate `xanalyze-cli` executable alongside the GUI one. `MERGE()` gives
+separate `xaudit` executable alongside the GUI one. `MERGE()` gives
 every executable *after* the first "onefile" semantics: it has to extract
 its referenced dependencies from the first executable's directory into a
 temp dir on every single launch. The CLI depends on the same PySide6/
 QtWebEngine binaries as the GUI (`audit.driver`, used by `cli.py audit
---render`, imports `QtWebEngineCore` too), so every `xanalyze scan ...`
+--render`, imports `QtWebEngineCore` too), so every `xaudit scan ...`
 invocation would pay that extraction cost - fine for an app opened once,
 wrong for a command meant to start quickly and often.
 
@@ -19,35 +19,39 @@ not the name of the file the symlink resolves to - the same mechanism `git`
 uses for `git-<subcommand>` and BusyBox uses for its applets - so the two
 roles are told apart with no extra process, no extra copy, no extraction.
 
-When invoked as ``xanalyze`` with no subcommand, launches the interactive
-TUI (terminal interface). With a subcommand, runs the CLI. As
-``XAnalyze``, launches the GUI.
+When invoked as ``xaudit`` (or the pre-rename ``xanalyze``) with no
+subcommand, launches the interactive TUI (terminal interface). With a
+subcommand, runs the CLI. As ``XBrain Audit``, launches the GUI.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path, PureWindowsPath
 
-#: Must match `cli_install.CLI_NAME` - the name the symlink is installed
-#: under. Not imported from there to keep this dispatch trivial to read
-#: without following another module first.
-_CLI_INVOCATION_NAME = "xanalyze"
+import app_identity
 
-#: The Windows build's console executable (`packaging/XAnalyze-windows.spec`).
-#: Not `xanalyze.exe`: Windows file names ignore case, so it would be the same
-#: file as the window's `XAnalyze.exe`. A second executable at all, because
-#: Windows decides console versus window when the program is linked, not
-#: when it is run - one binary cannot be both.
-_WINDOWS_CLI_STEM = "xanalyze-cli"
+#: The names the command is installed under (`cli_install.LINK_NAMES`):
+#: `xaudit`, and `xanalyze` from before the rename, which keeps working.
+_CLI_INVOCATION_NAMES = frozenset({app_identity.CLI_NAME,
+                                   app_identity.LEGACY_CLI_NAME})
+
+#: The Windows build's console executable (`packaging/XBrainAudit-windows.spec`),
+#: `xaudit.exe`, and the pre-rename `xanalyze-cli.exe`, which a person may
+#: still have on PATH from an older folder. A second executable at all,
+#: because Windows decides console versus window when the program is linked,
+#: not when it is run - one binary cannot be both. (Before the rename the
+#: command could not be `xanalyze.exe`: Windows file names ignore case, and
+#: it would have been the same file as the window's `XAnalyze.exe`.)
+_WINDOWS_CLI_STEMS = frozenset({app_identity.CLI_NAME, "xanalyze-cli"})
 
 
 def _invoked_as_cli() -> bool:
     if sys.platform == "win32":
         # The executable itself rather than argv[0]: what cmd puts in
-        # argv[0] is what was typed, and `XAnalyze` typed in lower case
-        # would otherwise be taken for the command line.
-        return PureWindowsPath(sys.executable).stem.lower() == _WINDOWS_CLI_STEM
-    return Path(sys.argv[0]).name == _CLI_INVOCATION_NAME
+        # argv[0] is what was typed, and the window's name typed in lower
+        # case would otherwise be taken for the command line.
+        return PureWindowsPath(sys.executable).stem.lower() in _WINDOWS_CLI_STEMS
+    return Path(sys.argv[0]).name in _CLI_INVOCATION_NAMES
 
 
 def _warn_if_stale() -> None:
@@ -76,7 +80,8 @@ def _warn_if_stale() -> None:
 
 
 def _install_cli() -> int:
-    """`XAnalyze --install-cli`: link this app as `xanalyze`, without a window.
+    """`XBrain Audit --install-cli`: link this app as `xaudit` (and the old
+    `xanalyze`), without a window.
 
     For a person who wants only the command line: the app is the one
     download, and this is what the separate CLI archive used to be for.
@@ -90,13 +95,13 @@ def _install_cli() -> int:
         return 2
     print(f"installed: {link} -> {cli_install.bundled_cli_path()}")
     if not cli_install.is_dir_on_path(link.parent):
-        print(f"add {link.parent} to PATH to run it as `xanalyze`")
+        print(f"add {link.parent} to PATH to run it as `{cli_install.CLI_NAME}`")
     return 0
 
 
 def run() -> int:
     # A frozen binary re-executes *itself* to start a child process, so
-    # anything that spawns one hands the child our own argv - and `xanalyze`
+    # anything that spawns one hands the child our own argv - and `xaudit`
     # answered with `invalid choice: 'from multiprocessing.resource_tracker
     # import main;main(9)'`. Measured on the built CLI: every run of the
     # embedding detector (`scan --detector embedding`, `compare`) printed an
@@ -108,6 +113,10 @@ def run() -> int:
     import multiprocessing
 
     multiprocessing.freeze_support()
+    # Before anything reads a path: the folders still named XAnalyze are
+    # moved to their new names once, here, for the window, the command line
+    # and the terminal interface alike.
+    app_identity.migrate_legacy_data()
     _warn_if_stale()
     as_cli = _invoked_as_cli()
 

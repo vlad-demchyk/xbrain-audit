@@ -32,8 +32,8 @@ PAGE = """<!DOCTYPE html><html lang="en"><head><title>Theme</title><style>
 def _run(folder: str, *extra) -> dict:
     path = Path(folder) / "theme.html"
     path.write_text(PAGE, encoding="utf-8")
-    env = dict(os.environ, XANALYZE_BROWSER_CACHE=str(Path(folder) / "cache"),
-               XANALYZE_REPORT_ROOT=str(Path(folder) / "runs"))
+    env = dict(os.environ, XAUDIT_BROWSER_CACHE=str(Path(folder) / "cache"),
+               XAUDIT_REPORT_ROOT=str(Path(folder) / "runs"))
     env.pop("QTWEBENGINE_CHROMIUM_FLAGS", None)
     done = subprocess.run(
         [sys.executable, str(ROOT / "cli.py"), "audit", str(path), "--browser",

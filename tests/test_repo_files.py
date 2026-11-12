@@ -201,7 +201,7 @@ class TheSummaryOfARepositoryScan(unittest.TestCase):
         self.assertIn("412", self.window.summary_label.text())
 
     def test_it_says_how_many_were_skipped_on_purpose(self):
-        """A walk that read 412 and skipped 38 by `.xanalyze-ignore` is a
+        """A walk that read 412 and skipped 38 by `.xaudit-ignore` is a
         different result from one that read 450, and "no findings" means
         something different in each."""
         self.window._on_repo_finished(repo(

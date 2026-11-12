@@ -82,7 +82,11 @@ REFRESH_COOKIE = "xf_refresh_token"
 #: ledger. It is *not* authentication - what this app may do on someone's
 #: behalf is a row in `user_app_grants` that the user can revoke, which is why
 #: `sign_in` can succeed and an AI call can still come back asking for consent.
-CLIENT_APP_SLUG = "xanalyze"
+#: The client app's id in the xFormat backend (`client_apps.slug`). It was
+#: `xanalyze` before the rename to XBrain Audit; the backend keeps that as an
+#: alias forever (xformat-backend `appSlugAliases.ts`), so builds that still
+#: send it keep working.
+CLIENT_APP_SLUG = "xbrain-audit"
 CLIENT_APP_HEADER = "X-Client-App"
 
 ACCESS_TOKEN_KEY = "xformat_access_token"
@@ -584,13 +588,13 @@ def _remaining_tokens(data: dict, ep: XFormatEndpoints) -> int | None:
 #: allow the app, or an admin has to re-enable it.
 _APP_ERRORS = {
     "client_app_grant_required": (
-        "This xFormat account has not allowed XAnalyze to use it yet. Run "
+        "This xFormat account has not allowed XBrain Audit to use it yet. Run "
         "`cli.py ai grant`, or allow it in your xFormat account settings."
     ),
-    "client_app_disabled": "XAnalyze is currently disabled on the xFormat backend.",
+    "client_app_disabled": "XBrain Audit is currently disabled on the xFormat backend.",
     "unknown_client_app": (
         "The xFormat backend does not recognise this application. It may be "
-        "running against a deployment where XAnalyze is not registered."
+        "running against a deployment where XBrain Audit is not registered."
     ),
 }
 

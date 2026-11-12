@@ -26,13 +26,13 @@ def report_language(asked: str | None, detected: str | None = None) -> str:
 
 _STRINGS: dict[str, dict[str, str]] = {
     # Window title only (OS title bar / dock / taskbar) — the in-app header
-    # already shows the "XAnalyze" wordmark on its own (see main_window's
+    # already shows the "XBrain Audit" wordmark on its own (see main_window's
     # brand_name label), so this needs the name plus what the app does,
     # not the bare name again.
     "app_title": {
-        "uk": "XAnalyze — сканер ознак ШІ в тексті",
-        "it": "XAnalyze — scanner di contenuti IA",
-        "en": "XAnalyze — AI content scanner",
+        "uk": "XBrain Audit — сканер ознак ШІ в тексті",
+        "it": "XBrain Audit — scanner di contenuti IA",
+        "en": "XBrain Audit — AI content scanner",
     },
     "url_label": {
         "uk": "URL:",
@@ -457,11 +457,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "What not to show",
     },
     "noise_where": {
-        "uk": "записується у .xanalyze-ignore сканованої теки, або у ваші "
+        "uk": "записується у .xaudit-ignore сканованої теки, або у ваші "
               "налаштування для скану сайту",
-        "it": "scritto nel .xanalyze-ignore della cartella scansionata, o "
+        "it": "scritto nel .xaudit-ignore della cartella scansionata, o "
               "nelle tue impostazioni per la scansione di un sito",
-        "en": "written to .xanalyze-ignore in the scanned folder, or to your "
+        "en": "written to .xaudit-ignore in the scanned folder, or to your "
               "settings for a site scan",
     },
     "settings_tab_noise": {
@@ -516,16 +516,16 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "personal entry",
     },
     "noise_origin_project": {
-        "uk": ".xanalyze-ignore",
-        "it": ".xanalyze-ignore",
-        "en": ".xanalyze-ignore",
+        "uk": ".xaudit-ignore",
+        "it": ".xaudit-ignore",
+        "en": ".xaudit-ignore",
     },
     "noise_no_project_file": {
-        "uk": "Тека для .xanalyze-ignore не вибрана, тож правки йдуть у ваші "
+        "uk": "Тека для .xaudit-ignore не вибрана, тож правки йдуть у ваші "
               "особисті налаштування.",
-        "it": "Nessuna cartella scelta per .xanalyze-ignore, quindi le "
+        "it": "Nessuna cartella scelta per .xaudit-ignore, quindi le "
               "modifiche vanno nelle tue impostazioni personali.",
-        "en": "No folder chosen for a .xanalyze-ignore, so edits go to your "
+        "en": "No folder chosen for a .xaudit-ignore, so edits go to your "
               "personal settings.",
     },
     "ignore_finding": {
@@ -535,14 +535,14 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
     "ignore_finding_hint": {
         "uk": "Приховати саме цю знахідку, щоб вона не поверталась при "
-              "повторному скані. Запис іде у .xanalyze-ignore у сканованій "
+              "повторному скані. Запис іде у .xaudit-ignore у сканованій "
               "теці, або у ваші налаштування, якщо теки немає (скан сайту).",
         "it": "Nascondi esattamente questo rilievo, così non riappare a una "
-              "nuova scansione. Salvato in .xanalyze-ignore nella cartella "
+              "nuova scansione. Salvato in .xaudit-ignore nella cartella "
               "scansionata, o nelle tue impostazioni quando non c'è una "
               "cartella (scansione di un sito).",
         "en": "Suppress this exact finding at the fingerprint level, so it "
-              "does not reappear on a re-scan. Written to .xanalyze-ignore in "
+              "does not reappear on a re-scan. Written to .xaudit-ignore in "
               "the scanned folder, or to your personal settings when there is "
               "no folder to write into (a web scan).",
     },
@@ -849,9 +849,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "uk": "{count} файлів", "it": "{count} file", "en": "{count} files",
     },
     "summary_skipped_ignored": {
-        "uk": "{count} пропущено за .xanalyze-ignore",
-        "it": "{count} saltati per .xanalyze-ignore",
-        "en": "{count} skipped by .xanalyze-ignore",
+        "uk": "{count} пропущено за .xaudit-ignore",
+        "it": "{count} saltati per .xaudit-ignore",
+        "en": "{count} skipped by .xaudit-ignore",
     },
     "summary_in_files": {
         "uk": "у {count} файлах", "it": "in {count} file",
@@ -1806,9 +1806,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Install did not finish (exit {code}).",
     },
     "tui_update_restart": {
-        "uk": "Перезапустіть xanalyze, щоб працювала нова версія.",
-        "it": "Riavvia xanalyze per usare la nuova versione.",
-        "en": "Restart xanalyze to run the new version.",
+        "uk": "Перезапустіть xaudit, щоб працювала нова версія.",
+        "it": "Riavvia xaudit per usare la nuova versione.",
+        "en": "Restart xaudit to run the new version.",
     },
     "tui_col_when": {"uk": "Коли", "it": "Quando", "en": "When"},
     "tui_col_target": {"uk": "Ціль", "it": "Obiettivo", "en": "Target"},
@@ -2020,9 +2020,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Uninstalled ({n} item(s)).",
     },
     "tui_uninstall_none": {
-        "uk": "XAnalyze не встановлено - видаляти нема чого.",
-        "it": "XAnalyze non è installato - non c'è nulla da rimuovere.",
-        "en": "XAnalyze is not installed - nothing to remove.",
+        "uk": "XBrain Audit не встановлено - видаляти нема чого.",
+        "it": "XBrain Audit non è installato - non c'è nulla da rimuovere.",
+        "en": "XBrain Audit is not installed - nothing to remove.",
     },
     "rewrite_progress_title": {
         "uk": "Генерую заміну {done}/{total}",
@@ -2375,26 +2375,26 @@ _STRINGS: dict[str, dict[str, str]] = {
               "run.",
     },
     "settings_cli_install": {
-        "uk": "Встановити команду «xanalyze»",
-        "it": "Installa il comando «xanalyze»",
-        "en": "Install the 'xanalyze' command",
+        "uk": "Встановити команду «xaudit»",
+        "it": "Installa il comando «xaudit»",
+        "en": "Install the 'xaudit' command",
     },
     "cli_offer_title": {
-        "uk": "Команда «xanalyze» у терміналі",
-        "it": "Il comando «xanalyze» nel terminale",
-        "en": "The 'xanalyze' command in your terminal",
+        "uk": "Команда «xaudit» у терміналі",
+        "it": "Il comando «xaudit» nel terminale",
+        "en": "The 'xaudit' command in your terminal",
     },
     "cli_offer_body": {
         "uk": "Цей застосунок уміє працювати і з термінала: скани, аудити та "
-              "текстовий інтерфейс. Для цього потрібне посилання «xanalyze» у "
+              "текстовий інтерфейс. Для цього потрібне посилання «xaudit» у "
               "{dir}. Встановити зараз? Це можна зробити й пізніше в "
               "налаштуваннях.",
         "it": "Questa app funziona anche da terminale: scansioni, audit e "
-              "interfaccia testuale. Serve un collegamento «xanalyze» in "
+              "interfaccia testuale. Serve un collegamento «xaudit» in "
               "{dir}. Installarlo ora? Puoi farlo anche dopo, dalle "
               "impostazioni.",
         "en": "This app also works from a terminal: scans, audits and the "
-              "text interface. That needs an 'xanalyze' link in {dir}. "
+              "text interface. That needs an 'xaudit' link in {dir}. "
               "Install it now? You can also do it later in Settings.",
     },
     "cli_offer_yes": {
@@ -2407,17 +2407,17 @@ _STRINGS: dict[str, dict[str, str]] = {
         "uk": "Готово: {path}", "it": "Fatto: {path}", "en": "Done: {path}",
     },
     "settings_cli_remove": {
-        "uk": "Прибрати команду «xanalyze»",
-        "it": "Rimuovi il comando «xanalyze»",
-        "en": "Remove the 'xanalyze' command",
+        "uk": "Прибрати команду «xaudit»",
+        "it": "Rimuovi il comando «xaudit»",
+        "en": "Remove the 'xaudit' command",
     },
     "settings_cli_absent": {
-        "uk": "Не встановлено. Додає «xanalyze» у ваш PATH, щоб запускати "
+        "uk": "Не встановлено. Додає «xaudit» у ваш PATH, щоб запускати "
               "скани й аудити з термінала, не відкриваючи це вікно.",
-        "it": "Non installato. Aggiunge «xanalyze» al tuo PATH, così puoi "
+        "it": "Non installato. Aggiunge «xaudit» al tuo PATH, così puoi "
               "eseguire scansioni e audit da terminale senza aprire questa "
               "finestra.",
-        "en": "Not installed. Adds 'xanalyze' to your PATH, so you can run "
+        "en": "Not installed. Adds 'xaudit' to your PATH, so you can run "
               "scans and audits from a terminal without opening this window.",
     },
     "settings_cli_installed": {
@@ -2443,9 +2443,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Delete {path}? The next run will ask the model again.",
     },
     "settings_uninstall": {
-        "uk": "Видалити XAnalyze з цього компʼютера",
-        "it": "Rimuovi XAnalyze da questo computer",
-        "en": "Remove XAnalyze from this machine",
+        "uk": "Видалити XBrain Audit з цього компʼютера",
+        "it": "Rimuovi XBrain Audit da questo computer",
+        "en": "Remove XBrain Audit from this machine",
     },
     "settings_uninstall_confirm": {
         "uk": "Буде видалено:",
@@ -6076,9 +6076,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "What the run actually did: which pages were read, which engine refused to start, which rule raised.",
     },
     "tui_logs_empty": {
-        "uk": "Ще нічого не записано. Запустіть скан, або поставте XANALYZE_LOG_LEVEL=debug.",
-        "it": "Non c'è ancora nulla. Avvia una scansione, o imposta XANALYZE_LOG_LEVEL=debug.",
-        "en": "Nothing logged yet. Run a scan, or set XANALYZE_LOG_LEVEL=debug.",
+        "uk": "Ще нічого не записано. Запустіть скан, або поставте XAUDIT_LOG_LEVEL=debug.",
+        "it": "Non c'è ancora nulla. Avvia una scansione, o imposta XAUDIT_LOG_LEVEL=debug.",
+        "en": "Nothing logged yet. Run a scan, or set XAUDIT_LOG_LEVEL=debug.",
     },
     "tui_col_level": {"uk": "Рівень", "it": "Livello", "en": "Level"},
     "tui_col_event": {"uk": "Подія", "it": "Evento", "en": "Event"},
@@ -7260,9 +7260,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "{n} older reports will remain on the Desktop",
     },
     "tui_uninstall_history_kept": {
-        "uk": ".xanalyze/ та .xanalyze-ignore у ваших репозиторіях залишаться без змін",
-        "it": ".xanalyze/ e .xanalyze-ignore nei repository resteranno invariati",
-        "en": ".xanalyze/ history and .xanalyze-ignore files in repositories stay untouched",
+        "uk": ".xaudit/ та .xaudit-ignore у ваших репозиторіях залишаться без змін",
+        "it": ".xaudit/ e .xaudit-ignore nei repository resteranno invariati",
+        "en": ".xaudit/ history and .xaudit-ignore files in repositories stay untouched",
     },
 }
 

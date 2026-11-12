@@ -109,7 +109,7 @@ def test_standalone_report_cannot_borrow_comparison_ledger_without_membership(ex
 
 def test_real_cli_comparison_on_offline_fixture_consumes_test_once(tmp_path, monkeypatch):
     from scripts.benchmark import main
-    monkeypatch.setenv("XANALYZE_VALIDATION_LEDGER", str(tmp_path / "ledger"))
+    monkeypatch.setenv("XAUDIT_VALIDATION_LEDGER", str(tmp_path / "ledger"))
     data = tmp_path / "data.json";data.write_text(json.dumps(dataset()))
     methods = tmp_path / "methods.json";methods.write_text(json.dumps([{**m, "fixed_threshold": 1.} for m in METHODS]))
     frozen = tmp_path / "frozen.json";report = tmp_path / "report.json"

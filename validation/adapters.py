@@ -115,7 +115,7 @@ def score_samples(samples: list[dict], name: str, config: dict, reference: list[
     remote = name in REMOTE
     import tempfile
     import json
-    with tempfile.TemporaryDirectory(prefix="xanalyze-reference-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="xaudit-reference-") as temporary:
         settings = dict(config)
         if name == "embedding":
             path = Path(temporary) / "reference.jsonl"

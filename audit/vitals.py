@@ -29,7 +29,7 @@ def bootstrap_script() -> str:
 
 BOOTSTRAP = r"""
 ;(function() {
-  const state = window.__xanalyzeVitals = {
+  const state = window.__xauditVitals = {
     metrics: {}, errors: {}, startedAt: performance.now(),
     capturedAt: new Date().toISOString(), initialVisibility: document.visibilityState,
     supported: typeof PerformanceObserver === 'function' ? Array.from(PerformanceObserver.supportedEntryTypes || []) : []
@@ -88,7 +88,7 @@ BOOTSTRAP = r"""
 
 # Appended inside the measurement probe in the same isolated world.
 SNAPSHOT = r"""
-      const state = window.__xanalyzeVitals;
+      const state = window.__xauditVitals;
       result.vitals = {};
       const types = {LCP: 'largest-contentful-paint', CLS: 'layout-shift', INP: 'event'};
       const keys = {LCP: 'largestContentfulPaint', CLS: 'cumulativeLayoutShift', INP: 'interactionToNextPaint'};

@@ -121,10 +121,10 @@ class _Page:
 class ReadOncePerRun(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        os.environ["XANALYZE_JUDGMENT_CACHE"] = self.tmp.name
+        os.environ["XAUDIT_JUDGMENT_CACHE"] = self.tmp.name
 
     def tearDown(self):
-        os.environ.pop("XANALYZE_JUDGMENT_CACHE", None)
+        os.environ.pop("XAUDIT_JUDGMENT_CACHE", None)
         self.tmp.cleanup()
 
     def _run(self, pages, detector, args=None):
@@ -181,10 +181,10 @@ class ReadOnceAcrossRuns(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        os.environ["XANALYZE_JUDGMENT_CACHE"] = self.tmp.name
+        os.environ["XAUDIT_JUDGMENT_CACHE"] = self.tmp.name
 
     def tearDown(self):
-        os.environ.pop("XANALYZE_JUDGMENT_CACHE", None)
+        os.environ.pop("XAUDIT_JUDGMENT_CACHE", None)
         self.tmp.cleanup()
 
     def _run(self, detector, args=None):

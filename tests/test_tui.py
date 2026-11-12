@@ -22,7 +22,7 @@ from unittest import mock
 
 from textual.widgets import Button, Checkbox, DataTable, Input, Label, Select
 
-from tui.app import XAnalyzeApp
+from tui.app import XBrainAuditApp
 from tui import runner as tui_runner
 from tui.runner import RunResult
 
@@ -115,7 +115,7 @@ class ArrowNavigation(unittest.TestCase):
 
     def test_down_moves_focus_forward(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 app.screen.focus_next()
@@ -131,7 +131,7 @@ class ArrowNavigation(unittest.TestCase):
 
     def test_up_moves_focus_back(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 app.screen.focus_next()
@@ -150,7 +150,7 @@ class ArrowNavigation(unittest.TestCase):
         from textual.widgets import Footer
 
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 return len(app.screen.query(Footer))
@@ -161,7 +161,7 @@ class ArrowNavigation(unittest.TestCase):
 class MenuNavigation(unittest.TestCase):
     def test_narrow_menu_scrolls_to_the_last_action(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(80, 24)) as pilot:
                 await pilot.pause()
                 menu = app.screen.query_one("#main-menu")
@@ -176,7 +176,7 @@ class MenuNavigation(unittest.TestCase):
 
     def test_number_shortcut_opens_the_screen(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("4")
@@ -187,7 +187,7 @@ class MenuNavigation(unittest.TestCase):
 
     def test_escape_returns_to_the_menu(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("2")
@@ -202,7 +202,7 @@ class MenuNavigation(unittest.TestCase):
         from tui.screens.main_menu import MENU
 
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 missing = []
@@ -219,7 +219,7 @@ class SchemelessTarget(unittest.TestCase):
 
     def test_fullscan_passes_the_bare_host_through(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             captured: list = []
 
             async with app.run_test() as pilot:
@@ -248,7 +248,7 @@ class SchemelessTarget(unittest.TestCase):
 
     def test_empty_target_is_refused_with_a_sentence(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("3")
@@ -264,7 +264,7 @@ class SchemelessTarget(unittest.TestCase):
         # be "en". With tests isolated (`P-13`) the default is "uk".
         from i18n.translations import t
 
-        self.assertIn(t("tui_need_target", XAnalyzeApp().lang), run(body()))
+        self.assertIn(t("tui_need_target", XBrainAuditApp().lang), run(body()))
 
 
 class ResultsScreenShowsTheResult(unittest.TestCase):
@@ -295,7 +295,7 @@ class ResultsScreenShowsTheResult(unittest.TestCase):
         from tui.screens.results import ResultsScreen
 
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 app.push_screen(ResultsScreen("Scan of x", self.result()))
@@ -345,7 +345,7 @@ class ResultsScreenShowsTheResult(unittest.TestCase):
         )
 
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 app.push_screen(ResultsScreen("Scan of x", result))
@@ -410,7 +410,7 @@ class ReportsScreenReacts(unittest.TestCase):
         from tui.screens import reports as screen_module
 
         async def body(tmp):
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 with mock.patch.object(screen_module, "load_runs",
@@ -433,7 +433,7 @@ class ReportsScreenReacts(unittest.TestCase):
         from tui.screens import reports as screen_module
 
         async def body(tmp):
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             opened: list = []
             async with app.run_test() as pilot:
                 await pilot.pause()
@@ -458,7 +458,7 @@ class ReportsScreenReacts(unittest.TestCase):
         from tui.screens import reports as screen_module
 
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 with mock.patch.object(screen_module, "load_runs",
@@ -470,7 +470,7 @@ class ReportsScreenReacts(unittest.TestCase):
 
         from i18n.translations import t
 
-        self.assertIn(t("tui_reports_empty", XAnalyzeApp().lang), run(body()))
+        self.assertIn(t("tui_reports_empty", XBrainAuditApp().lang), run(body()))
 
     def test_the_list_is_rebuilt_on_every_visit(self):
         """It used to be built once, in `on_mount`, and never again."""
@@ -479,7 +479,7 @@ class ReportsScreenReacts(unittest.TestCase):
         from tui.screens import reports as screen_module
 
         async def body(tmp):
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 with mock.patch.object(screen_module, "load_runs",
@@ -502,7 +502,7 @@ class ReportsScreenReacts(unittest.TestCase):
 class SettingsAreEditable(unittest.TestCase):
     def test_saving_writes_the_changed_value(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("5")
@@ -520,7 +520,7 @@ class SettingsAreEditable(unittest.TestCase):
 
     def test_saving_nothing_says_nothing_changed(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("5")
@@ -536,11 +536,11 @@ class SettingsAreEditable(unittest.TestCase):
         self.assertEqual(calls, 0)
         from i18n.translations import t
 
-        self.assertIn(t("tui_settings_nothing", XAnalyzeApp().lang), status)
+        self.assertIn(t("tui_settings_nothing", XBrainAuditApp().lang), status)
 
     def test_integer_settings_are_saved_as_integers(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("5")
@@ -563,7 +563,7 @@ class OneRunAtATime(unittest.TestCase):
         gate = threading.Event()
 
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("1")
@@ -582,7 +582,7 @@ class OneRunAtATime(unittest.TestCase):
 
     def test_the_run_button_is_disabled_while_running(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("1")
@@ -615,7 +615,7 @@ class DevServerConfirm(unittest.TestCase):
         async def body():
             with tempfile.TemporaryDirectory() as tmp:
                 repo = self._repo_with_missing_deps(Path(tmp))
-                app = XAnalyzeApp()
+                app = XBrainAuditApp()
                 captured: list = []
                 async with app.run_test() as pilot:
                     await pilot.pause()
@@ -645,7 +645,7 @@ class DevServerConfirm(unittest.TestCase):
         async def body():
             with tempfile.TemporaryDirectory() as tmp:
                 repo = self._repo_with_missing_deps(Path(tmp))
-                app = XAnalyzeApp()
+                app = XBrainAuditApp()
                 captured: list = []
                 async with app.run_test() as pilot:
                     await pilot.pause()
@@ -673,7 +673,7 @@ class DevServerConfirm(unittest.TestCase):
         async def body():
             with tempfile.TemporaryDirectory() as tmp:
                 repo = self._repo_with_missing_deps(Path(tmp))
-                app = XAnalyzeApp()
+                app = XBrainAuditApp()
                 captured: list = []
                 async with app.run_test() as pilot:
                     await pilot.pause()
@@ -704,7 +704,7 @@ class DevServerConfirm(unittest.TestCase):
         async def body():
             with tempfile.TemporaryDirectory() as tmp:
                 repo = self._repo_with_missing_deps(Path(tmp))
-                app = XAnalyzeApp()
+                app = XBrainAuditApp()
                 captured: list = []
                 async with app.run_test() as pilot:
                     await pilot.pause()
@@ -735,7 +735,7 @@ class DevServerConfirm(unittest.TestCase):
                 repo = Path(tmp)
                 (repo / "package.json").write_text("{}", encoding="utf-8")
                 (repo / "node_modules").mkdir()
-                app = XAnalyzeApp()
+                app = XBrainAuditApp()
                 captured: list = []
                 async with app.run_test() as pilot:
                     await pilot.pause()
@@ -756,7 +756,7 @@ class DevServerConfirm(unittest.TestCase):
 
     def test_a_url_target_never_triggers_a_devserver_check(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             captured: list = []
             async with app.run_test() as pilot:
                 await pilot.pause()
@@ -790,7 +790,7 @@ async def _selector_widths_in_sentence(menu_key: str):
     widths here, while the app is still mounted, and returning plain tuples
     is what makes the caller's assertions real.
     """
-    app = XAnalyzeApp()
+    app = XBrainAuditApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press(menu_key)
@@ -811,7 +811,7 @@ class FullscanReadsAsASentence(unittest.TestCase):
 
     def test_the_three_selectors_still_answer_to_their_old_ids(self):
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 await pilot.press("3")
@@ -885,7 +885,7 @@ class InterfaceLanguage(unittest.TestCase):
     def _app(self, lang):
         import config
 
-        app = XAnalyzeApp()
+        app = XBrainAuditApp()
         app.lang = lang
         return app
 
@@ -963,7 +963,7 @@ class InterfaceLanguage(unittest.TestCase):
         async def body():
             result = {}
             for lang in LANGUAGES:
-                app = XAnalyzeApp()
+                app = XBrainAuditApp()
                 app.lang = lang
                 async with app.run_test(size=(80, 24)) as pilot:
                     await pilot.pause()
@@ -986,7 +986,7 @@ class InterfaceLanguage(unittest.TestCase):
 
         with mock.patch.object(config.Settings, "load",
                                staticmethod(lambda: config.Settings(ui_language="it"))):
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
         self.assertEqual(app.lang, "it")
 
 
@@ -1062,7 +1062,7 @@ class NothingUntranslated(unittest.TestCase):
                 "add_row", "update"}
 
     #: Strings that are the same in every language, or are not sentences.
-    ALLOWED = {"XAnalyze", "ok", "-", "?", "·", ""}
+    ALLOWED = {"XBrain Audit", "ok", "-", "?", "·", ""}
 
     def _offences(self, path):
         import ast
@@ -1129,7 +1129,7 @@ class TheFooterIsInTheInterfaceLanguage(unittest.TestCase):
             # language the app happened to be *constructed* in - and in a full
             # suite run that was Italian, left over from a neighbouring test.
             # A test that depends on the order it runs in is not a test.
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test() as pilot:
                 await pilot.pause()
                 app.set_language("uk")

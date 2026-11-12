@@ -142,9 +142,9 @@ class TranslationCatalog(unittest.TestCase):
 
     def test_tui_header_subtitle_is_localized_in_every_language(self):
         import config
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
-        app = XAnalyzeApp()
+        app = XBrainAuditApp()
         for lang in LANGUAGES:
             with self.subTest(lang=lang):
                 app.lang = lang

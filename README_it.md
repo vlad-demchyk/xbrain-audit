@@ -1,4 +1,4 @@
-# XAnalyze
+# XBrain Audit
 
 Trova testo scritto da un modello, caratteri invisibili e difetti di
 accessibilità, SEO, prestazioni e sicurezza in un sito, in un file HTML o in un
@@ -6,12 +6,38 @@ repository - e indica la riga esatta, non un punteggio.
 
 [English](README.md) | [Українська](README_ua.md)
 
+## Rinominato da XAnalyze
+
+Fino alla 0.74.0 XBrain Audit si chiamava XAnalyze. Ora il comando è `xaudit`
+e l'app `XBrain Audit.app`. Cosa funziona ancora come prima:
+
+- **Il comando `xanalyze`.** `--install-cli` e l'aggiornamento lo collegano
+  accanto a `xaudit`, allo stesso programma; la disinstallazione li rimuove
+  entrambi.
+- **Le variabili `XANALYZE_*`.** Ognuna viene ancora letta quando la
+  corrispondente `XAUDIT_*` non è impostata (`XAUDIT_REPORT_ROOT` prevale su
+  `XANALYZE_REPORT_ROOT`).
+- **I tuoi dati, spostati una volta al primo avvio.** `~/.xanalyze` diventa
+  `~/.xbrain-audit`, `~/.config/xanalyze` (`%APPDATA%\xanalyze` su Windows)
+  diventa `~/.config/xbrain-audit` e `~/Documents/XAnalyze` diventa
+  `~/Documents/XBrain Audit`. Una cartella viene rinominata, mai unita né
+  cancellata; se non si può rinominare, si continua a usare quella vecchia e
+  il log dell'app spiega perché.
+- **`.xanalyze-ignore` e `.xanalyze/` di un progetto.** Vengono ancora letti,
+  e le modifiche vanno nel file che il progetto ha già; un progetto senza
+  riceve `.xaudit-ignore`.
+- **Gli account a cui hai fatto l'accesso.** Trovati nel portachiavi sotto il
+  vecchio servizio `xanalyze` e copiati in `xbrain-audit`.
+- **Aggiornamenti.** Un XAnalyze installato si aggiorna a questa versione
+  come prima; poi `xaudit update` sposta l'app da `XAnalyze.app` a
+  `XBrain Audit.app` e punta entrambi i comandi su di essa.
+
 ## A cosa serve
 
 Vi consegnano una pagina, un tema, una web part o un repository e dovete
 rispondere a tre domande: questo testo lo ha scritto un modello, il markup
 contiene caratteri che nessuna tastiera produce, e la cosa è accessibile e
-corretta. XAnalyze risponde a tutte e tre in una sola esecuzione e nomina il
+corretta. XBrain Audit risponde a tutte e tre in una sola esecuzione e nomina il
 file e la riga dietro ogni risposta.
 
 Compreso un **sito SharePoint Online dietro un accesso Microsoft 365**: accedete
@@ -29,28 +55,28 @@ disaccordo su cosa sia stato misurato.
 **App macOS**
 
 ```bash
-curl -L -o XAnalyze.app.zip https://github.com/vlad-demchyk/xAnalyze-/releases/latest/download/XAnalyze.app.zip
-ditto -x -k XAnalyze.app.zip /Applications/
+curl -L -o XBrainAudit.app.zip https://github.com/vlad-demchyk/xbrain-audit/releases/latest/download/XBrainAudit.app.zip
+ditto -x -k XBrainAudit.app.zip /Applications/
 ```
 
-Al primo avvio l'app propone una volta di installarsi come `xanalyze` in
+Al primo avvio l'app propone una volta di installarsi come `xaudit` in
 `~/.local/bin`, così CLI e TUI non richiedono un secondo download, e
-`xanalyze update` aggiorna tutti e tre insieme. Il bundle non
+`xaudit update` aggiorna tutti e tre insieme. Il bundle non
 è ancora firmato: il primo avvio richiede Control-click -> Apri.
 
 **Solo riga di comando**
 
 Il download è uno, l'app: finestra, CLI e TUI sono un solo programma. Per avere
-il comando `xanalyze` senza aprire la finestra:
+il comando `xaudit` senza aprire la finestra:
 
 ```bash
-/Applications/XAnalyze.app/Contents/MacOS/XAnalyze --install-cli
+"/Applications/XBrain Audit.app/Contents/MacOS/XBrain Audit" --install-cli
 ```
 
 **Dai sorgenti**
 
 ```bash
-git clone https://github.com/vlad-demchyk/xAnalyze-.git && cd xAnalyze-
+git clone https://github.com/vlad-demchyk/xbrain-audit.git && cd xbrain-audit
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python main.py                                  # finestra
@@ -64,7 +90,7 @@ Non c'è ancora un download per Windows: si avvia da un checkout. Serve
 Python 3.13 o successivo da python.org (con il launcher `py`), in PowerShell:
 
 ```powershell
-git clone https://github.com/vlad-demchyk/xAnalyze-.git; cd xAnalyze-
+git clone https://github.com/vlad-demchyk/xbrain-audit.git; cd xbrain-audit
 py -3.13 -m venv venv
 venv\Scripts\pip install -r requirements.txt
 venv\Scripts\python main.py                              # finestra
@@ -75,24 +101,24 @@ venv\Scripts\python cli.py                               # interfaccia da termin
 L'output è sempre UTF-8, qualunque sia la code page della console, quindi si
 può reindirizzare su file o passare a un agente. Impostazioni, file di riserva
 delle credenziali e sessioni dei siti con accesso stanno in
-`%APPDATA%\xanalyze`, il log dell'app in `%LOCALAPPDATA%\xanalyze\logs`, le
-chiavi vanno in Gestione credenziali di Windows. `xanalyze update` aggiorna
+`%APPDATA%\xbrain-audit`, il log dell'app in `%LOCALAPPDATA%\xbrain-audit\logs`, le
+chiavi vanno in Gestione credenziali di Windows. `xaudit update` aggiorna
 solo l'app macOS; su Windows il checkout si aggiorna con `git pull`.
 
-La build per Windows (`dist\XAnalyze\XAnalyze.exe` per la finestra e
-`xanalyze-cli.exe` per riga di comando e TUI): `pip install pyinstaller`, poi
+La build per Windows (`dist\XBrain Audit\XBrain Audit.exe` per la finestra e
+`xaudit.exe` per riga di comando e TUI): `pip install pyinstaller`, poi
 `powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1`.
 
 ## Come si usa
 
 ```bash
-xanalyze                                      # interfaccia da terminale
-xanalyze fullscan https://example.com         # tutto, in una sola esecuzione
-xanalyze fullscan ./my-project                # lo stesso, su un repository
-xanalyze scan ./src                           # solo pattern AI e caratteri
-xanalyze audit ./page.html                    # solo le regole del sito
-xanalyze fix ./src                            # applica le correzioni (tiene i .bak)
-xanalyze runs                                 # elenco, ripresa, confronto
+xaudit                                      # interfaccia da terminale
+xaudit fullscan https://example.com         # tutto, in una sola esecuzione
+xaudit fullscan ./my-project                # lo stesso, su un repository
+xaudit scan ./src                           # solo pattern AI e caratteri
+xaudit audit ./page.html                    # solo le regole del sito
+xaudit fix ./src                            # applica le correzioni (tiene i .bak)
+xaudit runs                                 # elenco, ripresa, confronto
 ```
 
 `fullscan` è la risposta a «controlla questo». Un URL viene percorso e
@@ -109,7 +135,7 @@ finita che è.
 | `audit BERSAGLIO` | solo le regole del sito: URL, file HTML o cartella |
 | `fix` / `undo` | applica le correzioni esatte dei caratteri; ripristina le copie `.bak` |
 | `runs` / `resume` / `compare` | l'esecuzione è un oggetto: elencarla, riprenderla, confrontarla |
-| `ignore FINGERPRINT --reason TEXT` | segnare un risultato come falso positivo in `.xanalyze-ignore`, con il motivo; l'impronta è in `audit --json` e ogni esecuzione successiva dice quanti ne ha nascosti e perché |
+| `ignore FINGERPRINT --reason TEXT` | segnare un risultato come falso positivo in `.xaudit-ignore`, con il motivo; l'impronta è in `audit --json` e ogni esecuzione successiva dice quanti ne ha nascosti e perché |
 | `login URL` | accedere a mano, in un browser vero, perché l'esecuzione veda oltre la porta; salvato solo dopo «Fatto» |
 | `logs` | cosa ha fatto davvero l'esecuzione, in JSON Lines |
 | `ai` | l'account dietro i passaggi con modello: `status`, `login`, `rewrite` |
@@ -129,7 +155,7 @@ La scansione incrementale confronta testo analizzato, opzioni, esclusioni e vers
 dell'app. I verdetti AI usano la cache dedicata. Le scritture concorrenti delle cache
 di scansione, browser e giudizi uniscono le modifiche sotto lock e sostituiscono il file atomicamente.
 
-`xanalyze COMANDO --help` stampa tutte le opzioni. Quelle che vale la pena
+`xaudit COMANDO --help` stampa tutte le opzioni. Quelle che vale la pena
 conoscere:
 
 | Opzione | A cosa serve |
@@ -311,8 +337,8 @@ risultati che nessuno aveva mai letto.
 
 ## Siti dietro un accesso
 
-`xanalyze login https://example.com/admin` apre un browser vero sul modulo del
-sito. 2FA, SSO e captcha funzionano, perché è un browser. XAnalyze non vede mai
+`xaudit login https://example.com/admin` apre un browser vero sul modulo del
+sito. 2FA, SSO e captcha funzionano, perché è un browser. XBrain Audit non vede mai
 un nome utente né una password: si conserva ciò che il sito ha dato a quel
 browser, per host, leggibile solo da voi. `--no-session` legge il sito come lo
 vede un estraneo; `login --list` e `login --forget HOST` gestiscono ciò che è
@@ -331,7 +357,7 @@ gli stessi flag, gli stessi rifiuti (codice 2) e le stesse zone nel JSON - ogni 
 **ciò che impostate voi ha la precedenza**:
 
 - **Prima l'accesso.** Senza una sessione salvata SharePoint risponde a ogni
-  indirizzo con la pagina di accesso Microsoft. `xanalyze login https://contoso.sharepoint.com/sites/ExampleSite`
+  indirizzo con la pagina di accesso Microsoft. `xaudit login https://contoso.sharepoint.com/sites/ExampleSite`
   apre una vera finestra del browser; completate lì l'accesso a Microsoft 365,
   MFA compresa, e premete «Fatto» quando siete di nuovo sul sito. La finestra
   evidenzia «Accedi al sito», il modulo da terminale stampa quel comando, e la
@@ -379,13 +405,13 @@ Limiti:
 ## Report
 
 Ogni comando scrive una cartella datata, per impostazione predefinita in
-`~/Documents/XAnalyze/` (`XANALYZE_REPORT_ROOT` la sposta). Un archivio rimasto
-in `~/Desktop/XAnalyze/` da una versione precedente viene spostato alla prima
+`~/Documents/XBrain Audit/` (`XAUDIT_REPORT_ROOT` la sposta). Un archivio rimasto
+in `~/Desktop/XBrain Audit/` da una versione precedente viene spostato alla prima
 esecuzione, così lo storico che serve al confronto resta dove lo strumento lo
 cerca.
 
 ```text
-XAnalyze/example.com/2026-09-02-0930/
+XBrain Audit/example.com/2026-09-02-0930/
   report.md     briefing raggruppato per un agente
   report.pdf    report per una persona
   timings.md    tempi delle fasi
@@ -412,7 +438,7 @@ una bloccata. `--progress jsonl` scrive un oggetto JSON per riga su **stderr**
 mentre la scansione avviene, e stdout resta esattamente quello di prima:
 
 ```bash
-xanalyze fullscan https://example.com --progress jsonl
+xaudit fullscan https://example.com --progress jsonl
 ```
 
 ```json
@@ -441,10 +467,10 @@ decine di migliaia di eventi.
 Non è il default, e di proposito: una persona al terminale vuole le frasi, e il
 progresso è già acceso - `jsonl` cambia il **formato**, non se la scansione si
 racconta. Chi sta leggendo è una proprietà dell'ambiente, non del comando:
-imposta `XANALYZE_PROGRESS=jsonl` una volta e ogni scansione in quella shell lo
+imposta `XAUDIT_PROGRESS=jsonl` una volta e ogni scansione in quella shell lo
 parla; `--progress human` su un singolo comando vince comunque, così una
 scansione resta sempre leggibile a occhio. Una riga che non si legge come JSON non l'ha
-scritta XAnalyze - Qt scrive la propria diagnostica sullo stesso flusso -
+scritta XBrain Audit - Qt scrive la propria diagnostica sullo stesso flusso -
 quindi va saltata, non trattata come un errore.
 
 **I codici di uscita** sono gli stessi per ogni comando:
@@ -454,7 +480,7 @@ quindi va saltata, non trattata come un errore.
 | `0` | pulito - il comando ha fatto il suo lavoro e non ha nulla da segnalare |
 | `1` | risultati, e solo con `--check`. `scan`/`fix`/`clean`: qualsiasi risultato. `audit`/`fullscan`: uno critico o serio |
 | `2` | errore - il comando non poteva essere eseguito: un percorso inesistente, un flag non applicabile, un rilevatore che non ha potuto leggere il testo |
-| `3` | incompleto - una scansione si è fermata a metà e il suo lavoro è su disco; `xanalyze resume` la continua |
+| `3` | incompleto - una scansione si è fermata a metà e il suo lavoro è su disco; `xaudit resume` la continua |
 
 ## Interfacce
 
@@ -464,7 +490,7 @@ sorgente o della pagina renderizzata, con correzioni, revisione delle
 sostituzioni ed esportazione del report. Due larghezze possono stare sullo
 schermo insieme, per chiudere la questione «si rompe solo su mobile».
 
-**Terminale** (`xanalyze` senza argomenti). Scan, Audit, Full Scan, Reports,
+**Terminale** (`xaudit` senza argomenti). Scan, Audit, Full Scan, Reports,
 Settings, Account, Update, Logs. Frecce, scorciatoie numeriche, `Tab`, `Esc` e
 `Ctrl+R` per avviare.
 
@@ -475,10 +501,10 @@ automatiche.
 
 ## Configurazione
 
-Le impostazioni stanno in `~/.config/xanalyze/settings.json` (su Windows
-`%APPDATA%\xanalyze\settings.json`): lingua, provider, `max_pages`, categorie di caratteri.
+Le impostazioni stanno in `~/.config/xbrain-audit/settings.json` (su Windows
+`%APPDATA%\xbrain-audit\settings.json`): lingua, provider, `max_pages`, categorie di caratteri.
 
-`.xanalyze-ignore` nella radice del progetto usa la sintassi di gitignore e può
+`.xaudit-ignore` nella radice del progetto usa la sintassi di gitignore e può
 anche silenziare per regola, selettore o impronta:
 
 ```text
@@ -492,7 +518,7 @@ meta-viewport
 083bea550659aadb  # il testo del logo è già nel link
 ```
 
-Scartare un risultato con il motivo è un solo comando: `xanalyze ignore
+Scartare un risultato con il motivo è un solo comando: `xaudit ignore
 FINGERPRINT --reason "…"`, con l'impronta presa da `audit --json`. Ogni
 esecuzione successiva dice quanti risultati le liste hanno nascosto e ne cita i
 motivi, così un risultato nascosto non sembra mai una pagina pulita.
@@ -573,9 +599,12 @@ clic le annulla.
 ```bash
 make version        # cosa dice config.py
 make rebuild        # l'unico bundle: finestra, CLI e TUI, a quella versione
-make package        # XAnalyze.app.zip e il suo manifest, ciò che `xanalyze update` cerca
+make package        # XBrainAudit.app.zip e il suo manifest, ciò che `xaudit update` cerca
 ```
 
+Scrive anche `XAnalyze.app.zip` e `xanalyze-update-manifest.json`: la
+stessa app e lo stesso manifest con i nomi che cerca un XAnalyze installato
+(`scripts/package_release.sh`, condiviso con il workflow di rilascio).
 `make package` si rifiuta di lavorare su un bundle non aggiornato. L'archivio
 non è ancora firmato né notarizzato.
 

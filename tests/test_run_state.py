@@ -265,7 +265,7 @@ class Feedback(unittest.TestCase):
 
     def test_it_offers_exactly_one_command(self):
         command = self.state.feedback()["resume_with"]
-        self.assertTrue(command.startswith("xanalyze resume "))
+        self.assertTrue(command.startswith("xaudit resume "))
         self.assertIn(self.tmp.name, command)
 
     def test_artifacts_are_read_off_disk_not_trusted_from_the_record(self):
@@ -283,7 +283,7 @@ class Feedback(unittest.TestCase):
         text = self.state.write_markdown().read_text(encoding="utf-8")
         self.assertIn("audit", text)
         self.assertIn("parser error", text)
-        self.assertIn("xanalyze resume", text)
+        self.assertIn("xaudit resume", text)
 
 
 class Catalogue(unittest.TestCase):

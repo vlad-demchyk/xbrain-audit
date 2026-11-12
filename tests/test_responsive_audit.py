@@ -175,7 +175,7 @@ class AtRealWidths(unittest.TestCase):
         return int(answer.get("width") or 0)
 
 
-@unittest.skipIf(os.environ.get("XANALYZE_NO_QT"), "Qt disabled")
+@unittest.skipIf(os.environ.get("XAUDIT_NO_QT"), "Qt disabled")
 class PreviewSwitcher(unittest.TestCase):
     """The other half of "audited at three widths": being able to look at
     the page at the width a finding came from."""

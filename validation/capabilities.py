@@ -29,7 +29,7 @@ RESEARCH = {
                          "spaCy en_core_web_sm POS model in the reviewed implementation"],
         "limitations": ["upstream POS pipeline is English; uk/it support is unverified",
                         "upstream library uses pickle and its training-derived threshold",
-                        "XAnalyze would freeze a calibration threshold without importing an upstream test optimum"],
+                        "XBrain Audit would freeze a calibration threshold without importing an upstream test optimum"],
     },
 }
 WATERMARK = {

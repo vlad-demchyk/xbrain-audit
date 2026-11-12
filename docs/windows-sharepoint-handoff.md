@@ -58,7 +58,7 @@
 
 | Пакет | Файли | Суть |
 |---|---|---|
-| Windows | `platform_dirs.py`, `config.py`, `cli.py`, `app_entry.py`, `applog.py`, `scan_cache.py`, `uninstaller.py`, `llm/credentials.py`, `packaging/XAnalyze-windows.spec`, `scripts/build_windows.ps1`, таймаут рендера в `crawler.py` | середовище, тести, платформні шляхи, збірка, README x3 |
+| Windows | `platform_dirs.py`, `config.py`, `cli.py`, `app_entry.py`, `applog.py`, `scan_cache.py`, `uninstaller.py`, `llm/credentials.py`, `packaging/XBrainAudit-windows.spec`, `scripts/build_windows.ps1`, таймаут рендера в `crawler.py` | середовище, тести, платформні шляхи, збірка, README x3 |
 | B. Зони | новий `audit/sharepoint_zones.py`, `audit/engine.py`, `audit/within.py`, `audit/browser.py`, `report/*`, `cli_impl/reports.py`, `finding_contract.py` | класифікатор зон, усі екземпляри part, include/exclude для axe, поле `zone` у звіті |
 | C. Дерево | новий `sharepoint_tree.py` | REST: `_api/web`, `GetList('<web>/SitePages')` з пагінацією, підсайти, навігація, пошук, 429 з повтором, детекція «потрібен вхід» |
 | A. Вхід і детекція | `audit/authwall.py`, `site_session.py`, `ui/site_sign_in.py`, `project_profile.py`, `run_profile.py` | IdP-редиректи, фільтр cookies, стек `sharepoint` за хостом |
@@ -113,7 +113,7 @@ python -m pytest tests/
       краулері, відмова з exit 2 до створення теки;
     - D2: прокрутка лінивих web parts, GUI, TUI, i18n, README;
     - `fullscan` для SharePoint;
-    - ізоляція тестів від реального `~/.xanalyze`.
+    - ізоляція тестів від реального `~/.xbrain-audit`.
   - **Класифікатор зон переписано за живим DOM.** Мітки хрому відкидаються, корінь зони -
     `CanvasControl`, формат `<Alias> web part (<title>)`, `data-viewport-id`. Нерендерені частини
     показуються окремо, SPFx поза канвасом визначається евристикою.
@@ -177,12 +177,12 @@ python -m pytest tests/
   `70268eb`). Прибрати їх звідти можна лише переписуванням історії і force-push.
 - **`corpus/prose.jsonl`:** 12 рядків зі статті Вікіпедії про місто клієнта. Назву прибрано, але
   зміст однаково вказує на місто. Варіант: замінити іншою статтею і оновити тест `len == 334`.
-- **`~/.xanalyze/history`** на машині розробки має 91 тестовий запис з часів до ізоляції тестів.
+- **`~/.xbrain-audit/history`** на машині розробки має 91 тестовий запис з часів до ізоляції тестів.
 
 ### Відомі обмеження
 
 - **Windows:**
-  - `xanalyze update` і `--install-cli` не підтримуються;
+  - `xaudit update` і `--install-cli` не підтримуються;
   - бандл займає близько 1.3 ГБ (`scripts/build_windows.ps1`);
   - CI для Windows немає.
 - Діагностика CLI про SharePoint лише англійською, як і решта stderr.

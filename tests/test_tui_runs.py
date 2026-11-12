@@ -120,7 +120,7 @@ class TheScreensReadThem(unittest.TestCase):
 
         from textual.widgets import Select
 
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
         stored = run_defaults.RunDefaults(depth="2", max_pages=10,
                                           scope="technical", detector="hybrid")
@@ -129,7 +129,7 @@ class TheScreensReadThem(unittest.TestCase):
 
         async def scenario():
             with mock.patch.object(run_defaults, "load", return_value=stored):
-                app = XAnalyzeApp()
+                app = XBrainAuditApp()
                 async with app.run_test(size=(140, 50)) as pilot:
                     app.push_screen("audit")
                     await pilot.pause()

@@ -636,7 +636,7 @@ def sign_a_jpeg(directory: Path) -> Path:
     now = datetime.datetime.now(datetime.UTC)
     ca_key = ec.generate_private_key(ec.SECP256R1())
     ca_name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "Test CA"),
-                         x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "XAnalyze")])
+                         x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "XBrain Audit")])
     ca = (x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name)
           .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
           .not_valid_before(now - datetime.timedelta(days=1))
@@ -651,7 +651,7 @@ def sign_a_jpeg(directory: Path) -> Path:
     leaf = (x509.CertificateBuilder()
             .subject_name(x509.Name([
                 x509.NameAttribute(x509.NameOID.COMMON_NAME, "Test Signer"),
-                x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "XAnalyze")]))
+                x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "XBrain Audit")]))
             .issuer_name(ca_name).public_key(leaf_key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(now - datetime.timedelta(days=1))
@@ -795,7 +795,7 @@ class TheBundlesCarryTheReader(unittest.TestCase):
     """
 
     # One bundle since T-2571: the CLI is the app under another name.
-    SPECS = ("packaging/XAnalyze.spec",)
+    SPECS = ("packaging/XBrainAudit.spec",)
 
     def spec_text(self, name: str) -> str:
         root = Path(__file__).resolve().parent.parent

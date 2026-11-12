@@ -49,17 +49,27 @@ def signature_bytes(payload: bytes, private_key_text: str) -> bytes:
 
 
 def write_manifest(release: str, assets: list[Path], output: Path,
-                   private_key_text: str) -> None:
+                   private_key_text: str,
+                   also: tuple[Path, ...] = ()) -> None:
+    """Write the manifest and its `.sig` to `output`, and to each of `also`.
+
+    `also` is the pre-rename name (`xanalyze-update-manifest.json`), which
+    an installed XAnalyze looks for. The same bytes and the same signature:
+    one manifest under two names, so both readers verify the same document.
+    """
     payload = manifest_bytes(release, assets)
-    output.write_bytes(payload)
-    output.with_name(output.name + ".sig").write_bytes(
-        signature_bytes(payload, private_key_text))
+    signature = signature_bytes(payload, private_key_text)
+    for path in (output, *also):
+        path.write_bytes(payload)
+        path.with_name(path.name + ".sig").write_bytes(signature)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--release", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--also-output", type=Path, action="append", default=[],
+                        help="write the same manifest and signature here too")
     parser.add_argument("assets", type=Path, nargs="+")
     args = parser.parse_args()
     write_manifest(
@@ -67,9 +77,11 @@ def main() -> int:
         args.assets,
         args.output,
         os.environ.get("UPDATE_SIGNING_KEY", ""),
+        tuple(args.also_output),
     )
     mode = "signed" if os.environ.get("UPDATE_SIGNING_KEY", "").strip() else "unsigned fallback"
-    print(f"Wrote {args.output} and {args.output.name}.sig ({mode})")
+    for path in (args.output, *args.also_output):
+        print(f"Wrote {path} and {path.name}.sig ({mode})")
     return 0
 
 

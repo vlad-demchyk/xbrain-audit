@@ -1,6 +1,6 @@
 """The window learns what a folder is, and says so.
 
-Two gaps this closes, both of which existed because `xanalyze audit` knew
+Two gaps this closes, both of which existed because `xaudit audit` knew
 something the desktop app did not.
 
 **The exclusions.** `cli_impl.scanning._build_ignore_list` has applied the

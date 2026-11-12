@@ -866,7 +866,7 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
         A repository is described by its own counts rather than by a page
         count it does not have (artboard 3f). The two skip numbers are the
         interesting half: a walk that read 412 files and skipped 38 of them
-        by `.xanalyze-ignore` is a different result from one that read 450,
+        by `.xaudit-ignore` is a different result from one that read 450,
         and "no findings" means something different in each.
         """
         parts = [self._current_target() or ""]
@@ -975,7 +975,7 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
         else:
             self.brand_mark = None
 
-        self.brand_name = QLabel("XAnalyze")
+        self.brand_name = QLabel("XBrain Audit")
         self.brand_name.setProperty("class", theme.CLASS_HEADING)
         layout.addWidget(self.brand_name)
 
@@ -3164,7 +3164,7 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
 
         A repository scan has one, obviously; a single file's suppression
         also goes there, so a second finding in a sibling file lands in the
-        same list instead of starting a second `.xanalyze-ignore` next to it.
+        same list instead of starting a second `.xaudit-ignore` next to it.
         A site has no folder on this machine - see `_add_fingerprint_suppression`.
         """
         if self.source == SOURCE_REPO:
@@ -3178,7 +3178,7 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
     def _add_fingerprint_suppression(self, value: str, label: str = "") -> None:
         """Record "ignore this exact finding", in whichever list applies.
 
-        The project's `.xanalyze-ignore` when the source is a folder or a
+        The project's `.xaudit-ignore` when the source is a folder or a
         file on disk - that is the shared, committed list `suppression.py`
         documents. A personal, cross-project setting otherwise, since a page
         fetched over the network has no folder to hold a project file in.

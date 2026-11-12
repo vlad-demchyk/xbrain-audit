@@ -1,4 +1,4 @@
-"""`xanalyze fullscan` reads a SharePoint Online site the way `audit` does.
+"""`xaudit fullscan` reads a SharePoint Online site the way `audit` does.
 
 Same plan, same page tree, same refusals and the same exit code, through the
 same functions in `cli_impl.auditpass`. Also: a refusal for a missing
@@ -85,7 +85,7 @@ class NoSignInLeavesNothingBehind(unittest.TestCase):
                 ["fullscan", SITE, "--no-browser", "--no-hints"],
                 signed_in=False, crawl_site=_never)
         self.assertEqual(code, 2)
-        self.assertIn(f"xanalyze login {SITE}", err)
+        self.assertIn(f"xaudit login {SITE}", err)
 
     def test_audit_refuses_before_the_run_folder(self):
         from cli_impl import runfolder
@@ -96,7 +96,7 @@ class NoSignInLeavesNothingBehind(unittest.TestCase):
                 ["audit", SITE, "--no-browser", "--no-hints"],
                 signed_in=False, crawl_site=_never)
         self.assertEqual(code, 2)
-        self.assertIn(f"xanalyze login {SITE}", err)
+        self.assertIn(f"xaudit login {SITE}", err)
 
     def test_no_session_flag_is_refused_with_its_own_sentence(self):
         code, _out, err = _main(
@@ -131,7 +131,7 @@ class NoSignInLeavesNothingBehind(unittest.TestCase):
                     signed_in=True, cookies=False, crawl_site=_never,
                     extra=(cookie_mode,))
                 self.assertEqual(code, 2)
-                self.assertIn(f"xanalyze login {SITE}", err)
+                self.assertIn(f"xaudit login {SITE}", err)
 
     def test_browser_mode_crawls_with_an_empty_copy(self):
         """In browser mode the session is the profile's; an empty copy is
@@ -152,7 +152,7 @@ class NoSignInLeavesNothingBehind(unittest.TestCase):
                     signed_in=True, cookies=False, crawl_site=reached,
                     extra=(browser_mode,))
                 self.assertEqual(crawled, [True])
-                self.assertNotIn("xanalyze login", err)
+                self.assertNotIn("xaudit login", err)
 
     def test_an_ordinary_site_is_not_asked_for_a_sign_in(self):
         self.assertEqual(auditpass.sign_in_refusal(
@@ -170,7 +170,7 @@ class FullscanReadsTheTree(unittest.TestCase):
                     signed_in=True, crawl_site=lambda *a, t=tree, **k: ([], t))
                 self.assertEqual(code, 2)
                 self.assertIn(words, err)
-                self.assertIn(f"xanalyze login {SITE}", err)
+                self.assertIn(f"xaudit login {SITE}", err)
 
     def test_the_folder_of_a_refused_run_says_why(self):
         """The tree needs the network, so it is asked after the folder: the
@@ -178,7 +178,7 @@ class FullscanReadsTheTree(unittest.TestCase):
         import os
 
         tree = _tree(spt.STATUS_ACCESS_DENIED)
-        root = Path(os.environ["XANALYZE_REPORT_ROOT"])
+        root = Path(os.environ["XAUDIT_REPORT_ROOT"])
         before = set(root.rglob("state.json"))
         code, _out, _err = _main(
             ["fullscan", SITE, "--no-browser", "--no-hints"],

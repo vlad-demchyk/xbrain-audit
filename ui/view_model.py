@@ -1039,7 +1039,7 @@ class MainViewModel(QObject):
 
         The same folder layout the CLI writes, through the same functions:
         `report.md` and its history come from `cli_impl.reports`, so a run
-        started from the window and a run started from `xanalyze fullscan`
+        started from the window and a run started from `xaudit fullscan`
         share one history and each can be the previous run of the other.
 
         Returns a `RunDocuments`. `changes.md` is absent on a first run,

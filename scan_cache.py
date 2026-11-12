@@ -14,11 +14,18 @@ from cache_store import merge_cache
 from platform_dirs import default_config_home
 
 
-# Default cache location
-# The platform config base (`%APPDATA%` on Windows), not `$XDG_CONFIG_HOME`:
-# this is a module constant and kept its old, import-time-independent value.
-CACHE_DIR = default_config_home() / "xanalyze" / "cache"
-CACHE_FILE = CACHE_DIR / "scan_cache.json"
+#: Set to a path to move the cache (the test suite does). `None` means the
+#: default below, resolved when a cache is opened rather than at import:
+#: the config folder is renamed at startup, after this module may be loaded.
+CACHE_FILE: Path | None = None
+
+
+def default_cache_file() -> Path:
+    """The platform config base (`%APPDATA%` on Windows), not
+    `$XDG_CONFIG_HOME`: this location never followed that variable."""
+    import app_identity
+
+    return app_identity.app_dir(default_config_home()) / "cache" / "scan_cache.json"
 
 
 def _content_hash(text: str) -> str:
@@ -38,7 +45,7 @@ class ScanCache:
     """Cache for scan results."""
     
     def __init__(self, cache_path: Path | None = None):
-        self.cache_path = cache_path or CACHE_FILE
+        self.cache_path = cache_path or CACHE_FILE or default_cache_file()
         self._cache: dict[str, Any] = {}
         self._load()
         self._baseline = deepcopy(self._cache)

@@ -200,7 +200,7 @@ class WritingTheFolder(unittest.TestCase):
         os.environ["USERPROFILE"] = self.home.name
         self.addCleanup(self._restore_home)
         # And the working directory, because `_read_history` also merges in
-        # the legacy `./.xanalyze/` files - this repository has its own, full
+        # the legacy `./.xaudit/` files - this repository has its own, full
         # of real runs against example.com, so a "first run" test standing in
         # it compares against the developer's history and finds a previous
         # run that has nothing to do with the test.

@@ -1,15 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Windows build of XAnalyze: one folder, two executables.
+"""Windows build of XBrain Audit: one folder, two executables.
 
 Run from the repository root (or use `scripts/build_windows.ps1`):
 
-    venv\\Scripts\\pyinstaller packaging\\XAnalyze-windows.spec --noconfirm
+    venv\\Scripts\\pyinstaller packaging\\XBrainAudit-windows.spec --noconfirm
 
-The result is `dist\\XAnalyze\\` with
+The result is `dist\\XBrain Audit\\` with
 
-* `XAnalyze.exe` - the window. Linked as a GUI program, so starting it does
+* `XBrain Audit.exe` - the window. Linked as a GUI program, so starting it does
   not open a console next to it.
-* `xanalyze-cli.exe` - the command line and, with no subcommand, the TUI.
+* `xaudit.exe` - the command line and, with no subcommand, the TUI.
   Linked as a console program, because Windows decides that when a program
   is linked: a GUI executable has no stdout to print `--help` to.
 
@@ -17,7 +17,7 @@ Both are built from the same `Analysis` and share one `_internal\\` folder,
 so the second executable costs a few hundred kilobytes, not a second copy of
 Qt. `app_entry.py` tells them apart by the executable's name.
 
-What is the same as `packaging/XAnalyze.spec`, and why it is copied rather
+What is the same as `packaging/XBrainAudit.spec`, and why it is copied rather
 than shared: the data files below must stay the list the macOS spec ships
 (`tests/test_windows_packaging.py` compares the two), but the macOS spec is
 built only on a Mac and is the release path - changing its structure without
@@ -38,7 +38,7 @@ DIST = Path(DISTPATH).resolve()
 
 datas = [
     (str(ROOT / "ui" / "design" / "xformat-tokens.css"), "ui/design"),
-    (str(ROOT / "ui" / "design" / "xanalyze-desktop.css"), "ui/design"),
+    (str(ROOT / "ui" / "design" / "xbrain-audit-desktop.css"), "ui/design"),
     (str(ROOT / "audit" / "vendor" / "axe.min.js"), "audit/vendor"),
     (str(ROOT / "audit" / "vendor" / "HTMLCS.js"), "audit/vendor"),
     (str(ROOT / "audit" / "vendor" / "engine_codes.json"), "audit/vendor"),
@@ -115,8 +115,8 @@ def _executable(name: str, console: bool):
     )
 
 
-window = _executable("XAnalyze", console=False)
-command_line = _executable("xanalyze-cli", console=True)
+window = _executable("XBrain Audit", console=False)
+command_line = _executable("xaudit", console=True)
 
 collected = COLLECT(
     window,
@@ -125,13 +125,13 @@ collected = COLLECT(
     analysis.datas,
     strip=False,
     upx=False,
-    name="XAnalyze",
+    name="XBrain Audit",
 )
 
 # A build whose browser cannot start is not a build worth shipping: the site
 # preview and the whole browser audit pass run in this helper process.
-_helpers = list((DIST / "XAnalyze").rglob("QtWebEngineProcess.exe"))
+_helpers = list((DIST / "XBrain Audit").rglob("QtWebEngineProcess.exe"))
 if not _helpers:
     raise SystemExit(
-        "XAnalyze: QtWebEngineProcess.exe is missing from the build - the "
+        "XBrain Audit: QtWebEngineProcess.exe is missing from the build - the "
         "site preview and the browser audit pass would both be dead.")

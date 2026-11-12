@@ -9,28 +9,28 @@ import pytest
 from textual.widgets import Button, Label
 
 import updater
-from tui.app import XAnalyzeApp
+from tui.app import XBrainAuditApp
 from tui.screens.update import UpdateScreen
 
 
 def bundle(path, content):
-    executable = path / "Contents/MacOS/XAnalyze"
+    executable = path / "Contents/MacOS/XBrain Audit"
     executable.parent.mkdir(parents=True)
     executable.write_text(content)
     (path / "Contents/Info.plist").write_bytes(plistlib.dumps({
-        "CFBundlePackageType": "APPL", "CFBundleExecutable": "XAnalyze",
+        "CFBundlePackageType": "APPL", "CFBundleExecutable": "XBrain Audit",
     }))
     return path
 
 
 @pytest.mark.parametrize("failure", ["none", "stage", "install", "rollback", "invalid"])
 def test_bundle_transaction(tmp_path, monkeypatch, failure):
-    old = bundle(tmp_path / "installed/XAnalyze.app", "old")
-    new = bundle(tmp_path / "download/XAnalyze.app", "new")
+    old = bundle(tmp_path / "installed/XBrain Audit.app", "old")
+    new = bundle(tmp_path / "download/XBrain Audit.app", "new")
     rename = Path.rename
 
     def fail_rename(source, target):
-        if source.name == "XAnalyze.app" and source.parent.name.startswith(".xanalyze-"):
+        if source.name == "XBrain Audit.app" and source.parent.name.startswith(".xaudit-"):
             raise OSError("install failed")
         if failure == "rollback" and source.name == "previous.app":
             raise OSError("rollback failed")
@@ -44,7 +44,7 @@ def test_bundle_transaction(tmp_path, monkeypatch, failure):
         (new / "Contents/Info.plist").write_bytes(plistlib.dumps({}))
     if failure == "none":
         updater._replace_gui_app(old, new)
-        binary = old / "Contents/MacOS/XAnalyze"
+        binary = old / "Contents/MacOS/XBrain Audit"
         assert binary.read_text() == "new"
         # A macOS bundle's executable bit; Windows has no such bit to keep.
         if sys.platform != "win32":
@@ -53,11 +53,11 @@ def test_bundle_transaction(tmp_path, monkeypatch, failure):
         with pytest.raises((OSError, RuntimeError)):
             updater._replace_gui_app(old, new)
         if failure == "rollback":
-            backups = list(old.parent.glob(".xanalyze-update-*/previous.app"))
+            backups = list(old.parent.glob(".xaudit-update-*/previous.app"))
             assert len(backups) == 1
-            assert (backups[0] / "Contents/MacOS/XAnalyze").read_text() == "old"
+            assert (backups[0] / "Contents/MacOS/XBrain Audit").read_text() == "old"
         else:
-            assert (old / "Contents/MacOS/XAnalyze").read_text() == "old"
+            assert (old / "Contents/MacOS/XBrain Audit").read_text() == "old"
     if failure != "rollback":
         assert list(old.parent.iterdir()) == [old]
 
@@ -68,7 +68,7 @@ def test_bundle_transaction(tmp_path, monkeypatch, failure):
 def test_update_reports_the_one_artifact(tmp_path, monkeypatch, capsys, state, expected):
     """One app to replace: missing or failing is reported, never "Updated"."""
     release = updater.ReleaseInfo("v9.9.9", "9.9.9", "", [], "https://github.com/release")
-    asset = {"name": "XAnalyze.app.zip", "size": 3,
+    asset = {"name": "XBrainAudit.app.zip", "size": 3,
              "browser_download_url": "https://github.com/asset"}
     monkeypatch.setattr(updater, "fetch_latest", lambda: release)
     monkeypatch.setattr(updater, "fetch_update_manifest", lambda _: updater.UpdateManifest("v9.9.9", {}, True))
@@ -88,9 +88,9 @@ def test_update_reports_the_one_artifact(tmp_path, monkeypatch, capsys, state, e
     assert updater.do_update() == expected
     output = capsys.readouterr()
     if expected:
-        assert "Updated XAnalyze" not in output.out
+        assert "Updated XBrain Audit" not in output.out
     else:
-        assert "Updated XAnalyze" in output.out
+        assert "Updated XBrain Audit" in output.out
     if state in ("failure", "missing"):
         assert "not updated: app" in output.err
 
@@ -98,7 +98,7 @@ def test_update_reports_the_one_artifact(tmp_path, monkeypatch, capsys, state, e
 @pytest.mark.parametrize("language", ["uk", "it", "en"])
 def test_install_confirmation_in_each_language(language):
     async def exercise():
-        app = XAnalyzeApp()
+        app = XBrainAuditApp()
         app.lang = language
         async with app.run_test(size=(100, 40)) as pilot:
             screen = UpdateScreen()
@@ -129,7 +129,7 @@ def test_tui_runs_worker_and_displays_completion(exit_code):
         return exit_code
 
     async def exercise():
-        app = XAnalyzeApp()
+        app = XBrainAuditApp()
         async with app.run_test(size=(100, 40)) as pilot:
             screen = UpdateScreen()
             await app.push_screen(screen)
@@ -159,7 +159,7 @@ def test_a_failure_after_the_swap_is_not_a_failed_update(tmp_path, monkeypatch, 
     the new bundle's archive from the old process and the run said "app update
     failed". The app is new either way; the command link is reported apart."""
     release = updater.ReleaseInfo("v9.9.9", "9.9.9", "", [], "https://github.com/release")
-    asset = {"name": "XAnalyze.app.zip", "size": 3,
+    asset = {"name": "XBrainAudit.app.zip", "size": 3,
              "browser_download_url": "https://github.com/asset"}
     monkeypatch.setattr(updater, "fetch_latest", lambda: release)
     monkeypatch.setattr(updater, "fetch_update_manifest", lambda _: updater.UpdateManifest("v9.9.9", {}, True))
@@ -177,5 +177,5 @@ def test_a_failure_after_the_swap_is_not_a_failed_update(tmp_path, monkeypatch, 
     monkeypatch.setattr(updater, "_point_command_at", broken)
     assert updater.do_update() == 0
     output = capsys.readouterr()
-    assert "Updated XAnalyze" in output.out
+    assert "Updated XBrain Audit" in output.out
     assert "app update failed" not in output.err

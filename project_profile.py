@@ -713,7 +713,7 @@ class Profile:
         CLI had them and the window did not, which is why a folder audited
         from the window walked into `wp-includes/` and reported hundreds of
         findings against code the developer cannot change, while the same
-        folder audited from `xanalyze audit` did not.
+        folder audited from `xaudit audit` did not.
         """
         merged = list(patterns or [])
         for pattern in self.excludes():

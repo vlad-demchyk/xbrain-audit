@@ -47,8 +47,8 @@ class BuildTextualThemeAgreesWithThePalette(unittest.TestCase):
 
     def test_light_and_dark_themes_are_named_for_the_palette_they_carry(self):
         built = theme.build_textual_themes()
-        self.assertEqual(built["light"].name, "xanalyze-light")
-        self.assertEqual(built["dark"].name, "xanalyze-dark")
+        self.assertEqual(built["light"].name, "xaudit-light")
+        self.assertEqual(built["dark"].name, "xaudit-dark")
         self.assertFalse(built["light"].dark)
         self.assertTrue(built["dark"].dark)
 

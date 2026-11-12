@@ -38,7 +38,7 @@ def _query_account_and_provider(settings, generation, results):
         pass
     if getattr(provider, "name", None) != "xformat":
         Thread(target=_query_provider_ready, args=(provider, generation, results),
-               daemon=True, name="xanalyze-provider-status").start()
+               daemon=True, name="xaudit-provider-status").start()
     try:
         status = account.auth_status(read_only=True)
         account_status = status if status and status.signed_in else None
@@ -116,7 +116,7 @@ class AccountMixin:
         self._update_account_run_button()
         Thread(target=_query_account_and_provider,
                args=(deepcopy(self.settings), getattr(self, "_account_generation", 0), self._account_results),
-               daemon=True, name="xanalyze-account-status").start()
+               daemon=True, name="xaudit-account-status").start()
 
     def _poll_account_check(self):
         if getattr(self, "_account_probe_closed", False):

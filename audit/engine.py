@@ -868,7 +868,7 @@ def _mask_for_audit(markup: str, path: str) -> str:
 
     One function because there were two call sites and only one of them did
     it: `analyze_files` masked, `analyze_page_file` did not, so
-    `xanalyze audit header.php` and the same file inside a folder scan
+    `xaudit audit header.php` and the same file inside a folder scan
     disagreed about whether its link had a name. Measured 2026-09-02.
     """
     from repo_scanner import (

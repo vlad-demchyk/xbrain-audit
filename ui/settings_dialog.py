@@ -632,7 +632,7 @@ class SettingsDialog(QDialog):
         self.noise_count.setText(t("noise_count", self.lang).format(count=total))
 
     def _project_ignore_root(self) -> str | None:
-        """The folder whose `.xanalyze-ignore` is worth showing, if the
+        """The folder whose `.xaudit-ignore` is worth showing, if the
         window this dialog was opened from has one at the moment."""
         window = self.parent()
         for attr in ("repo_path_edit", "file_path_edit"):
@@ -829,7 +829,7 @@ class SettingsDialog(QDialog):
         self._refresh_cache_label()
 
     def _on_uninstall(self) -> None:
-        """Remove XAnalyze from this machine, after saying what that means.
+        """Remove XBrain Audit from this machine, after saying what that means.
 
         The list is enumerated first and shown in the question, because
         "uninstall" covers four different things here - the app, the command

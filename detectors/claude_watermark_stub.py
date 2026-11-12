@@ -48,7 +48,7 @@ class ClaudeOfficialWatermarkDetector(Detector):
         raise DetectorUnavailable(
             "Anthropic's official text-watermark API is in private preview. "
             "Approved access and an endpoint contract are not configured in "
-            "XAnalyze. A general Anthropic API key is insufficient. "
+            "XBrain Audit. A general Anthropic API key is insufficient. "
             "Watermark evidence concerns Claude involvement; its absence "
             "does not prove human authorship."
         )

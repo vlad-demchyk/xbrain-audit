@@ -1,4 +1,4 @@
-"""The first-launch offer to put `xanalyze` on `PATH` (`main.offer_cli_install`).
+"""The first-launch offer to put `xaudit` on `PATH` (`main.offer_cli_install`).
 
 `cli_install.offer_is_due` decides *whether* to ask, and its own tests cover
 that. This file covers what needs a window: that the question is asked once
@@ -91,7 +91,7 @@ class TheFirstLaunchOffer(unittest.TestCase):
         box = type("Box", (_Box,), {"accepted": accepted})
         with mock.patch("main.QMessageBox", box), \
                 mock.patch("cli_install.install",
-                           install or mock.Mock(return_value=Path("/x/xanalyze"))) as installed:
+                           install or mock.Mock(return_value=Path("/x/xaudit"))) as installed:
             main.offer_cli_install(None, self.settings)
         return installed
 

@@ -1,13 +1,13 @@
 {
-  "name": "xanalyze",
-  "owner": { "name": "XAnalyze" },
-  "metadata": { "description": "XAnalyze for agents: how to run the analyzer, read its output and prove a fix" },
+  "name": "xbrain-audit",
+  "owner": { "name": "XBrain Audit" },
+  "metadata": { "description": "XBrain Audit for agents: how to run the analyzer, read its output and prove a fix" },
   "plugins": [
     {
-      "name": "xanalyze",
-      "source": "./xanalyze",
-      "version": "0.71.1",
-      "description": "How an agent works with XAnalyze: AI-copy and character scans, website audits, fixes, runs and the agent protocol"
+      "name": "xbrain-audit",
+      "source": "./xbrain-audit",
+      "version": "0.74.0",
+      "description": "How an agent works with XBrain Audit: AI-copy and character scans, website audits, fixes, runs and the agent protocol"
     }
   ]
 }

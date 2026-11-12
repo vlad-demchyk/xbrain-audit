@@ -57,12 +57,12 @@ class TheAccountScreenCanBeUsed(_Isolated):
         whole form - so the one screen that signs in to the subscription was
         unusable until the subscription was already selected."""
         import config
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
         self.assertNotEqual(config.Settings().llm_provider, "xformat")
 
         async def main():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(100, 44)) as pilot:
                 screen = await self._open(pilot, app)
                 self.assertFalse(screen.query_one("#account-email", Input).disabled)
@@ -73,10 +73,10 @@ class TheAccountScreenCanBeUsed(_Isolated):
 
     def test_switching_who_pays_is_offered_only_when_somebody_else_pays(self):
         import config
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
         async def main():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(100, 44)) as pilot:
                 screen = await self._open(pilot, app)
                 self.assertTrue(screen.query_one("#use-xformat", Button).display)
@@ -94,10 +94,10 @@ class TheAccountScreenCanBeUsed(_Isolated):
         second silently as part of the first bills somebody somewhere they
         did not choose."""
         import config
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
         async def main():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(100, 44)) as pilot:
                 screen = await self._open(pilot, app)
                 screen._use_xformat()
@@ -113,14 +113,14 @@ class EveryRunScreenAnswersTheKeyboard(_Isolated):
     def test_each_one_binds_escape_and_a_run_key(self):
         import importlib
 
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
         async def main():
             for name in self.SCREENS:
                 module = importlib.import_module(f"tui.screens.{name}")
                 cls = next(v for k, v in vars(module).items()
                            if k.endswith("Screen") and k != "RunScreen")
-                app = XAnalyzeApp()
+                app = XBrainAuditApp()
                 async with app.run_test(size=(100, 44)) as pilot:
                     await app.push_screen(cls())
                     await pilot.pause()
@@ -132,11 +132,11 @@ class EveryRunScreenAnswersTheKeyboard(_Isolated):
         run(main())
 
     def test_the_run_key_starts_the_run_and_says_what_is_missing(self):
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
         from tui.screens.audit import AuditScreen
 
         async def main():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(100, 44)) as pilot:
                 await app.push_screen(AuditScreen())
                 await pilot.pause()
@@ -148,11 +148,11 @@ class EveryRunScreenAnswersTheKeyboard(_Isolated):
         run(main())
 
     def test_a_modal_can_be_answered_without_a_mouse(self):
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
         from tui.screens.confirm import ConfirmModal
 
         async def main():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             answers = []
             async with app.run_test(size=(100, 44)) as pilot:
                 app.push_screen(ConfirmModal("Sure?"), answers.append)
@@ -192,12 +192,12 @@ class NothingIsDrawnPastTheEdge(_Isolated):
         ]
 
     def test_no_widget_is_wider_than_the_terminal(self):
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
         async def main():
             for width, height in self.SIZES:
                 for cls, name in self._screens():
-                    app = XAnalyzeApp()
+                    app = XBrainAuditApp()
                     async with app.run_test(size=(width, height)) as pilot:
                         await app.push_screen(cls())
                         await pilot.pause()
@@ -218,16 +218,16 @@ class NothingIsDrawnPastTheEdge(_Isolated):
     def test_a_narrow_terminal_turns_sentences_into_columns(self):
         """Below ~72 columns three selectors cannot share a line, so the row
         becomes a column - taller, and on screen."""
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
         from tui.screens.fullscan import FullscanScreen
 
         async def main():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(60, 20)) as pilot:
                 await app.push_screen(FullscanScreen())
                 await pilot.pause()
                 self.assertTrue(app.screen.has_class("narrow"))
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 40)) as pilot:
                 await app.push_screen(FullscanScreen())
                 await pilot.pause()
@@ -242,11 +242,11 @@ class TheFormsAskWhatTheCommandAsks(_Isolated):
     change what a run reads."""
 
     def test_audit_can_narrow_to_a_selector_and_refuse_the_session(self):
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
         from tui.screens.audit import AuditScreen
 
         async def main():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(100, 44)) as pilot:
                 await app.push_screen(AuditScreen())
                 await pilot.pause()
@@ -263,11 +263,11 @@ class TheFormsAskWhatTheCommandAsks(_Isolated):
         run(main())
 
     def test_fullscan_can_reuse_the_cache_and_refuse_the_session(self):
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
         from tui.screens.fullscan import FullscanScreen
 
         async def main():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(100, 44)) as pilot:
                 await app.push_screen(FullscanScreen())
                 await pilot.pause()

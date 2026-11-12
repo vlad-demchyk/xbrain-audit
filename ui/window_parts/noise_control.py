@@ -14,7 +14,7 @@ a whole check everywhere. They are read differently and they are undone
 differently, so they are not one list of five levels.
 
 Two lists, kept apart on purpose: a personal entry travels with the user
-across every project, a project entry lives in a committed `.xanalyze-ignore`
+across every project, a project entry lives in a committed `.xaudit-ignore`
 and belongs to the team. `Suppressions.load` merges them, which is right for
 "is this hidden" and wrong here - "put it back" has to remove the line from
 the list it is actually in, and a merged object can no longer say which that

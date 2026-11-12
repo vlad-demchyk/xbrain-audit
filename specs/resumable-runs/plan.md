@@ -58,11 +58,11 @@ skips straight to the reports.
 
 ## CLI
 
-- `xanalyze runs [--json]` - the catalogue, newest first.
-- `xanalyze resume <run>` - continue from the first unfinished phase.
-- `xanalyze pause <run>` - ask a running one to stop at the next boundary.
+- `xaudit runs [--json]` - the catalogue, newest first.
+- `xaudit resume <run>` - continue from the first unfinished phase.
+- `xaudit pause <run>` - ask a running one to stop at the next boundary.
 
-The catalogue is derived by walking `XAnalyze/*/*/state.json`, not from an
+The catalogue is derived by walking `XBrain Audit/*/*/state.json`, not from an
 index file. One fact, one owner: an index would be a second answer to "what
 runs exist" and would be the one that goes stale.
 

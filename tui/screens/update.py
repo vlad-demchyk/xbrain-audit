@@ -126,7 +126,7 @@ class UpdateScreen(XScreen):
         self._busy = True
         self._status(self.tr("tui_update_installing"))
 
-        # `do_update` is the same flow `xanalyze update` runs: it checks,
+        # `do_update` is the same flow `xaudit update` runs: it checks,
         # downloads, and replaces the binary, reporting progress on stderr.
         # Driven through the shared runner so that progress reaches the
         # screen instead of the terminal underneath it.

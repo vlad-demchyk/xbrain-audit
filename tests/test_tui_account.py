@@ -4,7 +4,7 @@ Settings offers three providers. Two of them own their credentials
 elsewhere - Claude Code has its own `claude auth login`, Anthropic takes a
 key - and the third, xFormat, takes an email and a password. The TUI let a
 person select it and gave them nowhere to sign in, so the only ways to make
-the setting mean anything were the desktop window or `xanalyze ai login`.
+the setting mean anything were the desktop window or `xaudit ai login`.
 A setting whose one prerequisite lives on another surface is a setting that
 lies about what it does.
 
@@ -44,10 +44,10 @@ class ItIsReachable(unittest.TestCase):
         self.assertIn("account", [name for _key, name in MENU])
 
     def test_the_app_installs_it_like_every_other_screen(self):
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
-        self.assertIn("account", XAnalyzeApp.SCREENS_IN_ORDER)
-        self.assertIn("account", XAnalyzeApp()._screen_classes())
+        self.assertIn("account", XBrainAuditApp.SCREENS_IN_ORDER)
+        self.assertIn("account", XBrainAuditApp()._screen_classes())
 
     def test_a_new_entry_did_not_renumber_the_old_ones(self):
         """The existing shortcuts are documented, are in muscle memory and

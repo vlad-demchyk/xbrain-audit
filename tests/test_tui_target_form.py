@@ -106,9 +106,9 @@ class TheAuditFormFollowsTheTarget(_Form):
 
     def test_crawl_controls_are_for_sites_only(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 folder = self.tree({"index.html": "<html></html>"})
@@ -124,9 +124,9 @@ class TheAuditFormFollowsTheTarget(_Form):
 
     def test_an_spfx_checkout_is_offered_the_site_it_ships_to(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 await self.aim(pilot, screen, str(self.tree(
@@ -138,9 +138,9 @@ class TheAuditFormFollowsTheTarget(_Form):
 
     def test_a_plain_folder_is_not(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 await self.aim(pilot, screen,
@@ -155,9 +155,9 @@ class TheAuditFormFollowsTheTarget(_Form):
         names the file behind each finding, and `--web-parts` keeps the
         audit to the parts that checkout ships."""
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 folder = self.tree({"config/package-solution.json": "{}"})
@@ -185,9 +185,9 @@ class TheFullScanFormFollowsTheTarget(_Form):
 
     def test_a_served_stack_pre_ticks_its_dev_server(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 await self.aim(pilot, screen, str(self.tree(
@@ -200,9 +200,9 @@ class TheFullScanFormFollowsTheTarget(_Form):
 
     def test_the_reason_is_on_screen_beside_it(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 await self.aim(pilot, screen, str(self.tree(
@@ -217,9 +217,9 @@ class TheFullScanFormFollowsTheTarget(_Form):
 
     def test_a_switch_the_person_set_is_not_overwritten(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 box = screen.query_one("#devserver", Checkbox)
@@ -237,9 +237,9 @@ class TheFullScanFormFollowsTheTarget(_Form):
         """Ticked for a repository, then a single file is audited: the run
         must not carry a dev server it has no repository to start."""
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 folder = self.tree({"vite.config.ts": "export default {}",
@@ -259,9 +259,9 @@ class TheFullScanFormFollowsTheTarget(_Form):
 
     def test_several_projects_are_named_rather_than_merged_silently(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 60)) as pilot:
                 screen = await self.open(pilot, app)
                 folder = self.tree({
@@ -298,9 +298,9 @@ class OneProjectOutOfSeveral(_Form):
 
     def test_the_projects_are_offered_and_the_choice_reaches_the_run(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 70)) as pilot:
                 screen = await self.open(pilot, app)
                 await self.aim(pilot, screen, str(self._monorepo()))
@@ -324,9 +324,9 @@ class OneProjectOutOfSeveral(_Form):
 
     def test_a_folder_with_one_project_is_not_asked(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 70)) as pilot:
                 screen = await self.open(pilot, app)
                 await self.aim(pilot, screen, str(self.tree(
@@ -341,9 +341,9 @@ class OneProjectOutOfSeveral(_Form):
 
     def test_the_dev_server_overrides_appear_only_where_a_server_does(self):
         async def go():
-            from tui.app import XAnalyzeApp
+            from tui.app import XBrainAuditApp
 
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             async with app.run_test(size=(120, 70)) as pilot:
                 screen = await self.open(pilot, app)
                 folder = self.tree({"package.json": '{"scripts":{"dev":"v"}}',

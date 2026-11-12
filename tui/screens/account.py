@@ -3,7 +3,7 @@
 Settings has always let a person choose `xformat` as the provider, and the
 TUI had no way to sign in to it - so choosing it and having no session was
 reachable from here and only fixable from the window or from
-`xanalyze ai login`. A setting whose one prerequisite lives on another
+`xaudit ai login`. A setting whose one prerequisite lives on another
 surface is a setting that lies about what it does.
 
 The password is never stored, here or anywhere: `sign_in` exchanges it for a
@@ -32,7 +32,7 @@ from tui.screens.base import XScreen
 #: The only provider with credentials to take. Claude Code owns its own
 #: sign-in and Anthropic takes a key, so for those this screen says where to
 #: go rather than pretending to a flow it does not have - the same three-way
-#: answer `xanalyze ai login` gives.
+#: answer `xaudit ai login` gives.
 SIGNS_IN = "xformat"
 
 

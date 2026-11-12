@@ -19,10 +19,20 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 
-SERVICE_NAME = "xanalyze"
+import app_identity
+
+SERVICE_NAME = app_identity.APP_SLUG
+# The service the 0.x XAnalyze releases saved under. `load_secret` reads it
+# when the new service has nothing and copies the item across; the old item
+# is left in place, so going back to an older release still finds it.
+LEGACY_SERVICE_NAME = app_identity.LEGACY_APP_SLUG
 # Pre-rename service/dir name. `load_secret` falls back to this so a token
 # saved before the rename doesn't become invisible; see its docstring.
 OLD_SERVICE_NAME = "ai-content-scanner"
+#: Older service names in the order they are tried, and whether the item is
+#: removed from the old service once it is copied. `ai-content-scanner` has
+#: had no release reading it for a long time; `xanalyze` has.
+_LEGACY_SERVICES = ((LEGACY_SERVICE_NAME, False), (OLD_SERVICE_NAME, True))
 _file_mutex = threading.Lock()
 
 
@@ -30,7 +40,7 @@ def _fallback_path() -> Path:
     import platform_dirs
 
     base = str(platform_dirs.config_home())
-    d = Path(base) / SERVICE_NAME
+    d = app_identity.app_dir(Path(base))
     d.mkdir(mode=0o700, parents=True, exist_ok=True)
     d.chmod(0o700)
     return d / "credentials.json"
@@ -174,20 +184,26 @@ def load_secret(account: str) -> str | None:
         # clutter with no code left pointing at it. Only removed after the
         # copy under the new name actually succeeds, so a failure here never
         # loses the only copy of the secret.
-        try:
-            old_value = kr.get_password(OLD_SERVICE_NAME, account)
-        except Exception:  # noqa: BLE001
-            old_value = None
-        if old_value is not None:
+        #
+        # The XAnalyze service is copied, not moved: an older release
+        # installed beside this one still reads it.
+        for old_service, remove_after_copy in _LEGACY_SERVICES:
+            try:
+                old_value = kr.get_password(old_service, account)
+            except Exception:  # noqa: BLE001
+                old_value = None
+            if old_value is None:
+                continue
             try:
                 kr.set_password(SERVICE_NAME, account, old_value)
             except Exception:  # noqa: BLE001
                 pass
             else:
-                try:
-                    kr.delete_password(OLD_SERVICE_NAME, account)
-                except Exception:  # noqa: BLE001 - stale copy left behind is harmless
-                    pass
+                if remove_after_copy:
+                    try:
+                        kr.delete_password(old_service, account)
+                    except Exception:  # noqa: BLE001 - stale copy left behind is harmless
+                        pass
             return old_value
     # Also checked when a keyring exists: a secret may have been written to
     # the file earlier, before a backend became available.
@@ -197,10 +213,13 @@ def load_secret(account: str) -> str | None:
 def delete_secret(account: str) -> None:
     kr = _keyring()
     if kr is not None:
-        try:
-            kr.delete_password(SERVICE_NAME, account)
-        except Exception:  # noqa: BLE001 - already absent is fine
-            pass
+        # The old services too: `load_secret` copies from them, so a copy
+        # left there would bring a signed-out account back on the next read.
+        for service in (SERVICE_NAME, *(name for name, _ in _LEGACY_SERVICES)):
+            try:
+                kr.delete_password(service, account)
+            except Exception:  # noqa: BLE001 - already absent is fine
+                pass
     # Always clear the file copy too, so signing out really removes it.
     try:
         with _locked_file() as path:

@@ -63,7 +63,7 @@ class TheIgnoreCommand(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(self._run(fingerprint="0123456789abcdef",
                                        reason="  a  false alarm ", root=tmp), 0)
-            text = (Path(tmp) / ".xanalyze-ignore").read_text(encoding="utf-8")
+            text = (Path(tmp) / ".xaudit-ignore").read_text(encoding="utf-8")
             self.assertIn("0123456789abcdef  # a false alarm", text)
             parsed = suppression.Suppressions.parse(text)
             self.assertEqual(parsed.labels["0123456789abcdef"], "a false alarm")
@@ -72,7 +72,7 @@ class TheIgnoreCommand(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(self._run(fingerprint="0123456789abcdef",
                                        reason="  ", root=tmp), 2)
-            self.assertFalse((Path(tmp) / ".xanalyze-ignore").exists())
+            self.assertFalse((Path(tmp) / ".xaudit-ignore").exists())
 
     def test_something_that_is_not_a_fingerprint_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:

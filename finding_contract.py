@@ -58,7 +58,7 @@ def serialize_issue(issue, *, source="") -> dict:
         # the rule id alone: recomputed, never stored, so a record written
         # before a rule learned its criteria reads the same today.
         wcag=list(_wcag_for(issue.rule_id)),
-        # What `.xanalyze-ignore` and `xanalyze ignore` take to dismiss this
+        # What `.xaudit-ignore` and `xaudit ignore` take to dismiss this
         # one finding, so a reader of the JSON can act on it without
         # recomputing a hash.
         fingerprint=_fingerprint(issue, data["source"]),

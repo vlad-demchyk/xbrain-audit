@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT))
 
 #: Directories that are not this project's code.
 _SKIP = ("venv", "build", "dist", "__pycache__", ".git", "simulations",
-         ".xanalyze", "tests")
+         ".xaudit", ".xanalyze", "tests")
 
 #: Names a local variable may legitimately reuse. `config` is the pattern
 #: this codebase uses everywhere - `CrawlConfig` instances are called

@@ -24,9 +24,10 @@ its own errors. A progress stream that can kill a scan is worse than none.
 from __future__ import annotations
 
 import json
-import os
 import sys
 from datetime import datetime, timezone
+
+import app_identity
 
 #: Every event name this module will ever emit. The list is the contract:
 #: `tests/test_progress_protocol.py` runs real commands and fails on any line
@@ -74,11 +75,12 @@ _summary: dict = {}
 #: sentences, an agent wants the objects, and which one is reading is a
 #: property of the environment rather than of the command. The flag wins over
 #: it, so one run can always be read by eye.
-ENV_VAR = "XANALYZE_PROGRESS"
+ENV_VAR = "XAUDIT_PROGRESS"
 
 
 def configure(spec: str | None) -> str:
-    """Read `--progress`, falling back to `$XANALYZE_PROGRESS`.
+    """Read `--progress`, falling back to `$XAUDIT_PROGRESS`
+    (or the old `$XANALYZE_PROGRESS`).
 
     Accepts `human`, `jsonl` and `jsonl=findings`. An unknown spelling is
     argparse's job to reject on the command line, so anything unrecognised
@@ -94,7 +96,7 @@ def configure(spec: str | None) -> str:
         # `--progress human` is a deliberate "give me the sentences", so it
         # overrides the environment; an absent flag is not, so it does not.
         if spec is None or not spec.strip():
-            text = (os.environ.get(ENV_VAR) or "").strip().lower()
+            text = (app_identity.env("PROGRESS") or "").strip().lower()
     if not text or text == MODE_HUMAN:
         return _mode
     name, _, option = text.partition("=")

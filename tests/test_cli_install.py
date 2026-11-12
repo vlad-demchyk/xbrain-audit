@@ -32,7 +32,7 @@ class _ScratchCase(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.base = Path(self._tmp.name)
         self.link_dir = self.base / "bin"
-        self.source = self.base / "xanalyze-cli"
+        self.source = self.base / "xaudit-cli"
         self.source.write_text("#!/bin/sh\necho fake cli\n", encoding="utf-8")
         os.chmod(self.source, 0o755)
 
@@ -47,7 +47,7 @@ class BundledCliPath(unittest.TestCase):
 
     def test_the_running_executables_own_path_when_frozen(self):
         with tempfile.TemporaryDirectory() as tmp:
-            fake_executable = Path(tmp).resolve() / "XAnalyze"
+            fake_executable = Path(tmp).resolve() / "XBrain Audit"
             fake_executable.write_text("stub", encoding="utf-8")
             with mock.patch.object(sys, "frozen", True, create=True), \
                  mock.patch.object(sys, "executable", str(fake_executable)):
@@ -187,7 +187,7 @@ class OnWindows(_ScratchCase):
         with mock.patch.object(sys, "platform", "win32"):
             with self.assertRaises(cli_install.CliInstallError) as caught:
                 cli_install.install(self.source, self.link_dir)
-        self.assertIn("xanalyze-cli.exe", str(caught.exception))
+        self.assertIn("xaudit.exe", str(caught.exception))
         self.assertFalse((self.link_dir / cli_install.CLI_NAME).exists())
 
     def test_the_first_run_offer_is_not_made(self):

@@ -461,7 +461,7 @@ MEASUREMENT_SCRIPT = """
           result.imagesAboveFold.push(src.slice(0, 500));
         }
       }
-      // XANALYZE_VITALS_SNAPSHOT
+      // XAUDIT_VITALS_SNAPSHOT
       // A supported observer reporting no entries is a real zero. An engine
       // that has no long-task observer exposes no metric at all, so it cannot
       // be mistaken for an idle page.
@@ -475,7 +475,7 @@ MEASUREMENT_SCRIPT = """
 # Early web-vitals collector owns CLS session windows and input percentiles.
 from .vitals import SNAPSHOT as _VITALS_SNAPSHOT
 MEASUREMENT_SCRIPT = MEASUREMENT_SCRIPT.replace(
-    "// XANALYZE_VITALS_SNAPSHOT", _VITALS_SNAPSHOT)
+    "// XAUDIT_VITALS_SNAPSHOT", _VITALS_SNAPSHOT)
 
 
 # ------------------------------------------------------------- normalisation

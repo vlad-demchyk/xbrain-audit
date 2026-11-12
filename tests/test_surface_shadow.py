@@ -7,7 +7,7 @@ part worth testing is not the look but the fallback: a token file without the
 desktop overlay must produce `shadow_blur == 0`, and a zero blur must clear
 any effect already on the widget rather than draw a blurless smudge. That is
 what keeps the plain xFormat palette - which the window still starts on when
-`$XANALYZE_DESKTOP_CSS` is empty - on its hairline-border look.
+`$XAUDIT_DESKTOP_CSS` is empty - on its hairline-border look.
 
 Headless: Qt runs on the offscreen platform, like the other widget tests.
 """
@@ -59,7 +59,7 @@ class TheReportIsPaintedInTheProductsOwnPalette(unittest.TestCase):
     This class used to say the opposite, and pinned the report to the plain
     xFormat web palette on the argument that a report is paper while the
     desktop overlay is a screen decision. The argument does not survive
-    looking at the bundle: the overlay *is* XAnalyze's palette, the bundle
+    looking at the bundle: the overlay *is* XBrain Audit's palette, the bundle
     draws the report itself in it (artboard 3h, down to the severity dots),
     and its sheet is a paper tone rather than a screen one. What the old
     arrangement actually produced was one severity in two different reds - the
@@ -270,9 +270,9 @@ class EveryBundleCarriesWhatTheCodeReads(unittest.TestCase):
     Two assets went missing this way, and both failed silently, which is what
     makes the class worth a test rather than two fixes:
 
-    * `xanalyze-desktop.css` - `overlay_file()` degrades to the shared token
+    * `xbrain-audit-desktop.css` - `overlay_file()` degrades to the shared token
       file, so every bundle ever built painted in xFormat's web colours while
-      the source tree painted in XAnalyze's, and it looked deliberate.
+      the source tree painted in XBrain Audit's, and it looked deliberate.
     * `ui/design/assets` in the CLI spec - `report/template._logo_data_uri`
       returns `""` when it cannot read the mark, so the built CLI produced
       perfectly valid, unbranded reports and said nothing.
@@ -283,7 +283,7 @@ class EveryBundleCarriesWhatTheCodeReads(unittest.TestCase):
     """
 
     # One bundle since T-2571: the CLI is the app under another name.
-    SPECS = ("packaging/XAnalyze.spec",)
+    SPECS = ("packaging/XBrainAudit.spec",)
 
     #: Every runtime resource under `ui/design`, as the module that reads it
     #: names it. A new one added to the tree and to no spec fails here.

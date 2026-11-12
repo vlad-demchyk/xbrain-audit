@@ -391,7 +391,7 @@ def _analyze(file_results, args, unjudged_out: list | None = None):
 
     # Applied before anything is reported, so a suppressed finding never
     # reaches --json, the exit code, or `fix`. The project's own
-    # `.xanalyze-ignore` is read from the first scanned path.
+    # `.xaudit-ignore` is read from the first scanned path.
     spans = suppression.filter_spans(
         spans, blocks_by_id,
         suppression.Suppressions.load(_settings_for_ignore(args), _ignore_root(args)),

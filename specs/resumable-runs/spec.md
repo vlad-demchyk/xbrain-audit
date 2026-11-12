@@ -56,8 +56,8 @@ crawling is thrown away because the last step of six failed.
 
 ### C. The interface can pause and resume
 
-10. `xanalyze runs` lists known runs with status, target, stage and age.
-11. `xanalyze resume <run>` continues a paused or failed run from its first
+10. `xaudit runs` lists known runs with status, target, stage and age.
+11. `xaudit resume <run>` continues a paused or failed run from its first
     unfinished phase.
 12. The GUI shows a catalogue of runs with their status, and can pause a
     running one and resume a paused one.

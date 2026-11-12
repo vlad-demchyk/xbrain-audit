@@ -318,7 +318,7 @@ def cmd_agent_scan(args) -> int:
     Runs the free offline detector (heuristic + unicode anomalies) and
     outputs every block that scored >= threshold as JSON. The agent
     (opencode, Claude Code, Cursor) reads this, judges each block with
-    its own LLM, and pipes the judgments to `xanalyze agent-judge`.
+    its own LLM, and pipes the judgments to `xaudit agent-judge`.
 
     With --full: also outputs all blocks for the agent to read and judge
     independently (hybrid mode). The agent judges both offline candidates

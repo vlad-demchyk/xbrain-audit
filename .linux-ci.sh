@@ -11,7 +11,7 @@ PYTHON_VERSION=3.14
 # workflow's list, installed once and then a no-op. The second block is what
 # GitHub's runner image already carries and a clean Ubuntu does not: without
 # it QtWebEngine fails to load (`libsnappy.so.1`) and 450 Qt tests skip.
-if [ ! -f /var/lib/linux-ci/xanalyze-qt-libs-v2 ]; then
+if [ ! -f /var/lib/linux-ci/xaudit-qt-libs-v2 ]; then
   sudo apt-get update -qq
   for pkg in \
     libegl1 libgl1 libdbus-1-3 libnss3 libgbm1 libdrm2 \
@@ -30,13 +30,13 @@ if [ ! -f /var/lib/linux-ci/xanalyze-qt-libs-v2 ]; then
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$pkg" >/dev/null 2>&1 \
       || echo "not on this image, skipped: $pkg"
   done
-  sudo touch /var/lib/linux-ci/xanalyze-qt-libs-v2
+  sudo touch /var/lib/linux-ci/xaudit-qt-libs-v2
 fi
 
 # One venv per requirements file, outside the synced tree (rsync --delete
 # would remove it), rebuilt only when the requirements change.
 key=$(sha256sum requirements.txt | cut -c1-12)
-VENV="$HOME/.cache/linux-ci/xanalyze-$PYTHON_VERSION-$key"
+VENV="$HOME/.cache/linux-ci/xaudit-$PYTHON_VERSION-$key"
 if [ ! -x "$VENV/bin/python" ]; then
   echo "# creating venv $VENV"
   uv venv -q --python "$PYTHON_VERSION" "$VENV"

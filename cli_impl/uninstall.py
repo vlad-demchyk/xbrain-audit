@@ -1,4 +1,4 @@
-"""The `uninstall` command: remove XAnalyze from this machine."""
+"""The `uninstall` command: remove XBrain Audit from this machine."""
 from __future__ import annotations
 
 import sys
@@ -16,12 +16,12 @@ def _confirm(items) -> bool:
 
 
 def cmd_uninstall(args) -> int:
-    """Remove everything XAnalyze put on this machine.
+    """Remove everything XBrain Audit put on this machine.
 
     Lists what was found (PATH symlinks, the application bundle, the config
     directory, keychain entries), asks for confirmation, then removes it.
-    Repository files (.xanalyze-ignore, .bak backups, run history inside
-    scanned projects) and reports in ~/Documents/XAnalyze are never touched.
+    Repository files (.xaudit-ignore, .bak backups, run history inside
+    scanned projects) and reports in ~/Documents/XBrain Audit are never touched.
 
     With --dry-run: only list. With --yes: skip the confirmation.
     """
@@ -31,7 +31,7 @@ def cmd_uninstall(args) -> int:
     present = [i for i in items if i.exists]
 
     if not present:
-        print("XAnalyze is not installed - nothing to remove.")
+        print("XBrain Audit is not installed - nothing to remove.")
         for note in uninstaller.remaining_notes():
             print(f"note: {note}")
         return EXIT_OK

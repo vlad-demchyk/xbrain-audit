@@ -1,6 +1,6 @@
-"""XAnalyze TUI — interactive terminal interface.
+"""XBrain Audit TUI — interactive terminal interface.
 
-Launch with no arguments: ``xanalyze`` or ``python cli.py``.
+Launch with no arguments: ``xaudit`` or ``python cli.py``.
 """
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ import config
 from ui.theme import build_textual_themes
 
 #: Registered in `on_mount` below and matched by name (`ui.theme.build_
-#: textual_theme` names them `xanalyze-{light,dark}`), so the terminal
+#: textual_theme` names them `xaudit-{light,dark}`), so the terminal
 #: paints from the same `Palette` the Qt window's `build_qss` does instead
 #: of Textual's stock design. `dark` is the default because a terminal's own
 #: background is dark far more often than not, and there is no equivalent of
 #: Qt's `QGuiApplication.styleHints().colorScheme()` to ask the terminal
-#: instead - `light`/`dark` stay one setting away (`XAnalyzeApp().theme =
-#: "xanalyze-light"`) for the person whose terminal is not.
-DEFAULT_THEME = "xanalyze-dark"
+#: instead - `light`/`dark` stay one setting away (`XBrainAuditApp().theme =
+#: "xaudit-light"`) for the person whose terminal is not.
+DEFAULT_THEME = "xaudit-dark"
 
 
 def _resolve_theme(theme: str) -> str:
@@ -33,10 +33,10 @@ def _resolve_theme(theme: str) -> str:
     return "dark"
 
 
-class XAnalyzeApp(App):
-    """Interactive terminal interface for XAnalyze."""
+class XBrainAuditApp(App):
+    """Interactive terminal interface for XBrain Audit."""
 
-    TITLE = "XAnalyze"
+    TITLE = "XBrain Audit"
     SUB_TITLE = ""
 
     CSS = """
@@ -252,7 +252,7 @@ class XAnalyzeApp(App):
         #: nothing" looks like from the outside.
         self.lang = settings.ui_language or "uk"
         self.sub_title = self._localized_subtitle()
-        #: The resolved theme name, matching the registered `xanalyze-{name}`
+        #: The resolved theme name, matching the registered `xaudit-{name}`
         #: themes. Read from config once; `set_theme` updates it at runtime.
         self._theme_name = _resolve_theme(settings.theme)
         self._translate_own_bindings()
@@ -265,7 +265,7 @@ class XAnalyzeApp(App):
         # fails to load at all rather than falling back to something close.
         for theme in build_textual_themes().values():
             self.register_theme(theme)
-        self.theme = f"xanalyze-{self._theme_name}"
+        self.theme = f"xaudit-{self._theme_name}"
 
     def _localized_subtitle(self) -> str:
         from i18n.translations import t
@@ -359,7 +359,7 @@ class XAnalyzeApp(App):
         if resolved == self._theme_name:
             return
         self._theme_name = resolved
-        self.theme = f"xanalyze-{resolved}"
+        self.theme = f"xaudit-{resolved}"
 
     def on_mount(self) -> None:
         self.install_all_screens()
@@ -368,6 +368,12 @@ class XAnalyzeApp(App):
 
 def run_tui() -> int:
     """Entry point for the TUI."""
-    app = XAnalyzeApp()
+    import app_identity
+
+    # Started from `python cli.py` with no subcommand, the CLI has already
+    # done this; started on its own, the TUI must not be the one place that
+    # reads the old folders after the rename. Idempotent either way.
+    app_identity.migrate_legacy_data()
+    app = XBrainAuditApp()
     app.run()
     return 0

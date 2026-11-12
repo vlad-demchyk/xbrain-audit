@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timezone
-import os
 from pathlib import Path
 
 from .adapters import detector_identity, inference_policy, score_samples
@@ -14,8 +13,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def ledger_dir() -> Path:
-    override = os.environ.get("XANALYZE_VALIDATION_LEDGER")
-    return Path(override) if override else Path.home() / ".xanalyze" / "validation" / "test-access"
+    import app_identity
+
+    override = app_identity.env("VALIDATION_LEDGER")
+    return Path(override) if override else app_identity.data_home() / "validation" / "test-access"
 
 
 def _test_paths(samples):

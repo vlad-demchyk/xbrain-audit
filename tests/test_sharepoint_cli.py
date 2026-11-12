@@ -282,7 +282,7 @@ class WhatTheRunSays(unittest.TestCase):
     def test_refusals_name_the_way_back_in(self):
         auth = auditpass.tree_refusal(_tree(spt.STATUS_AUTH), SITE)
         denied = auditpass.tree_refusal(_tree(spt.STATUS_ACCESS_DENIED), SITE)
-        self.assertIn(f"xanalyze login {SITE}", auth)
+        self.assertIn(f"xaudit login {SITE}", auth)
         self.assertIn("expired", auth)
         self.assertIn("no permission", denied)
         self.assertEqual(auditpass.tree_refusal(_tree(spt.STATUS_OK, [SITE]),
@@ -415,7 +415,7 @@ class TheBrowserPassReadsZones(unittest.TestCase):
 
 
 class TheCommand(unittest.TestCase):
-    """`xanalyze audit` on a SharePoint Online address."""
+    """`xaudit audit` on a SharePoint Online address."""
 
     def _main(self, argv, *, session_host="", crawl_site=None):
         import contextlib
@@ -457,7 +457,7 @@ class TheCommand(unittest.TestCase):
             ["audit", SITE, "--no-browser", "--json", "--no-hints"],
             crawl_site=never)
         self.assertEqual(code, 2)
-        self.assertIn(f"xanalyze login {SITE}", err)
+        self.assertIn(f"xaudit login {SITE}", err)
         self.assertIn("SharePoint Online", err)
 
     def test_an_expired_session_is_an_error_not_an_audit(self):
@@ -468,7 +468,7 @@ class TheCommand(unittest.TestCase):
             crawl_site=lambda *a, **k: ([], tree))
         self.assertEqual(code, 2)
         self.assertIn("expired", err)
-        self.assertIn(f"xanalyze login {SITE}", err)
+        self.assertIn(f"xaudit login {SITE}", err)
         self.assertEqual(out.strip(), "")
 
     def test_access_denied_is_its_own_sentence(self):

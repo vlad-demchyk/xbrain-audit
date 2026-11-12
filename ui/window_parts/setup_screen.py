@@ -343,7 +343,7 @@ class SetupScreen(QWidget):
         `.eml` to mistake for a page.
 
         The exclusions are the point. Until now the window applied only the
-        flat default list while `xanalyze audit` also applied the detected
+        flat default list while `xaudit audit` also applied the detected
         stack's - so the same WordPress folder produced hundreds of findings
         in vendored core from the window and none from the CLI. Applying them
         without saying so would trade that for the opposite failure: a scan

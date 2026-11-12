@@ -5,7 +5,7 @@
 ## Candidates only (default)
 
 ```bash
-xanalyze agent-scan PATHS --json > candidates.json
+xaudit agent-scan PATHS --json > candidates.json
 ```
 
 The payload carries `candidates` (each with `block_id`, `file`, `line`, `text`, the offline `score` and what fired), `detection_rules` and an `instruction`. Judge each candidate against the rules and write a JSON list:
@@ -17,7 +17,7 @@ The payload carries `candidates` (each with `block_id`, `file`, `line`, `text`, 
 `score` is 0.0 for human, 1.0 for AI. Echo `file`, `line` and `text`: a `block_id` is minted per run, and those three fields are what lets a verdict match when the scan is re-run in a new process. Then:
 
 ```bash
-xanalyze agent-judge PATHS --judgments verdicts.json --json > final.json
+xaudit agent-judge PATHS --judgments verdicts.json --json > final.json
 ```
 
 (`--judgments` omitted reads stdin.)
@@ -25,7 +25,7 @@ xanalyze agent-judge PATHS --judgments verdicts.json --json > final.json
 ## Hybrid: judge and read everything
 
 ```bash
-xanalyze agent-scan PATHS --full --json > all.json
+xaudit agent-scan PATHS --full --json > all.json
 ```
 
 Adds `blocks`: every passage. Return `{"judgments": [...], "agent_findings": [...], "blocks": [...]}`, where an agent finding is `{"block_id", "quote" (verbatim), "score", "reason"}` for a passage the offline pass missed, and `blocks` is passed through unchanged. Merge with `agent-judge PATHS --judgments FILE --hybrid`.

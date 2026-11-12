@@ -357,10 +357,10 @@ class TheTuiAsksForThemToo(unittest.TestCase):
                        site_controls: bool, medium: str = "") -> argparse.Namespace:
         from textual.widgets import Checkbox, Input, Select
 
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             captured: list = []
             async with app.run_test() as pilot:
                 await pilot.pause()
@@ -414,10 +414,10 @@ class TheTuiAsksForThemToo(unittest.TestCase):
     def test_the_selected_medium_reaches_the_fullscan_command(self):
         from textual.widgets import Input, Select
 
-        from tui.app import XAnalyzeApp
+        from tui.app import XBrainAuditApp
 
         async def body():
-            app = XAnalyzeApp()
+            app = XBrainAuditApp()
             captured: list = []
             async with app.run_test() as pilot:
                 await pilot.pause()

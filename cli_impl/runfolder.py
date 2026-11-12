@@ -2,7 +2,7 @@
 
 One folder per target, one sub-folder per run inside it:
 
-    ~/Documents/XAnalyze/example.com/
+    ~/Documents/XBrain Audit/example.com/
         2026-08-24-0930/
             report.md
             report.pdf
@@ -27,16 +27,20 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import app_identity
 import progress
 
 #: The folder every project folder lives under. Named, not the bare parent:
 #: a tool that drops folders directly into someone's Documents is a tool
-#: they uninstall.
-REPORTS_FOLDER = "XAnalyze"
+#: they uninstall. `~/Documents/XAnalyze` from before the rename is moved
+#: here at startup (`app_identity.migrate_legacy_data`).
+REPORTS_FOLDER = app_identity.REPORTS_FOLDER
 
 #: Where it used to live. Kept only so `default_root` can move an existing
-#: one across; nothing writes here any more.
+#: one across; nothing writes here any more. Under its pre-rename name,
+#: because that is the only name a Desktop folder ever had.
 _OLD_PARENT = "Desktop"
+_OLD_DESKTOP_FOLDER = app_identity.LEGACY_REPORTS_FOLDER
 
 #: Anything that is not a letter, digit, dot or dash becomes one dash, so a
 #: URL or a path turns into one readable folder name. Dots are kept because
@@ -84,8 +88,7 @@ def _documents() -> Path:
     A machine without `~/Documents` - a container, a server - must still get
     its documents somewhere findable rather than an error.
     """
-    documents = Path.home() / "Documents"
-    return documents if documents.is_dir() else Path.home()
+    return app_identity.documents_dir()
 
 
 def _move_old_root(new_root: Path) -> None:
@@ -102,7 +105,7 @@ def _move_old_root(new_root: Path) -> None:
     minute, and quietly picking one is worse than leaving both where the
     person can see them.
     """
-    old = Path.home() / _OLD_PARENT / REPORTS_FOLDER
+    old = Path.home() / _OLD_PARENT / _OLD_DESKTOP_FOLDER
     if new_root.exists() or not old.is_dir() or old == new_root:
         return
     try:
@@ -218,7 +221,7 @@ class RunDocuments:
 #: Overrides where project folders are created. For a machine with no
 #: Documents folder worth writing to - a CI runner, a container - and for
 #: tests, which must not write into the person's actual Documents.
-ROOT_ENV = "XANALYZE_REPORT_ROOT"
+ROOT_ENV = "XAUDIT_REPORT_ROOT"
 
 
 def default_root(*, migrate: bool = True) -> Path:
@@ -228,11 +231,12 @@ def default_root(*, migrate: bool = True) -> Path:
     listing what it will leave behind must not move the person's archive as
     a side effect of describing it.
     """
-    import os
-    override = os.environ.get(ROOT_ENV)
+    override = app_identity.env("REPORT_ROOT")
     if override:
         return Path(override).expanduser()
-    root = _documents() / REPORTS_FOLDER
+    # `~/Documents/XAnalyze` while it has not been moved to its new name yet
+    # (or could not be): the runs are there, so new runs go beside them.
+    root = app_identity.reports_root()
     # Checked on every call rather than once at import: this is the only
     # place that knows the answer, and an app left open across the upgrade
     # would otherwise never notice. It costs one `exists()` on a path that
@@ -246,7 +250,7 @@ def prepare(target: str, *, root: Path | None = None) -> RunFolder:
     """Create this run's folder under this target's folder, and return it.
 
     `root` overrides the default, for tests and for anyone who would rather
-    the documents landed elsewhere; so does `XANALYZE_REPORT_ROOT`.
+    the documents landed elsewhere; so does `XAUDIT_REPORT_ROOT`.
     """
     base = Path(root) if root is not None else default_root()
     project = base / slug_for(target)

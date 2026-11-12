@@ -52,10 +52,10 @@ ends the scenario. A trusted native event, not `element.click()`, produces the
 Event Timing evidence. A short scenario INP is provisional and is not a field
 INP percentile for the site's visitors.
 
-`--lighthouse` uses an already installed CLI (or `XANALYZE_LIGHTHOUSE` pointing
+`--lighthouse` uses an already installed CLI (or `XAUDIT_LIGHTHOUSE` pointing
 at one), with `--lighthouse-profile mobile|desktop` and the requested repeats.
 It creates a separate Chrome session, retaining Lighthouse version and its
-actual screen/network/CPU simulation settings. It does not inherit XAnalyze's
+actual screen/network/CPU simulation settings. It does not inherit XBrain Audit's
 stored sign-in. Navigation Lighthouse LCP/CLS are separate lab results; TBT
 is never substituted for an unmeasured INP. No CLI means unknown; process or
 runtime failures mean error. The adapter does not install software.

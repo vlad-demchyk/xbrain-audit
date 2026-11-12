@@ -11,7 +11,7 @@ Two people are hurt by that. Whoever reads the output sees a clean bill of
 health for a target nothing was opened in. Whatever runs next - an agent, a
 CI step - opens `--report` and finds no file, after a success exit.
 
-Found on `~/Desktop/XAnalyze/contrast.html`, which is a directory of old run
+Found on `~/Desktop/XBrain Audit/contrast.html`, which is a directory of old run
 folders rather than the page its name suggests. An over-broad `--exclude`, an
 `--ext` that matches nothing, or one wrong path component all land here.
 """

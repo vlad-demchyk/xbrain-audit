@@ -100,7 +100,7 @@ TEXT_SNAPSHOT_SCRIPT = r"""
   const candidates = 'h1,h2,h3,h4,h5,h6,p,li,a,button,span,figcaption,blockquote,td,th,label';
   const containers = 'div,section,article,dd,dt,figure,summary,caption';
   const skip = 'script,style,noscript,template,svg,path,head,meta,link';
-  const scope = ""; // XANALYZE_SCOPE
+  const scope = ""; // XAUDIT_SCOPE
   result.conditions.within = scope;
   function query(root, selector) {
     const found = [...root.querySelectorAll(selector)];

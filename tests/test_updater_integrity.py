@@ -49,7 +49,7 @@ def _release(*assets) -> updater.ReleaseInfo:
         version="9.9.9",
         body="",
         assets=list(assets),
-        html_url="https://github.com/vlad-demchyk/xAnalyze-/releases/tag/v9.9.9",
+        html_url="https://github.com/vlad-demchyk/xbrain-audit/releases/tag/v9.9.9",
     )
 
 
@@ -88,7 +88,7 @@ class OnlyGitHubMayDeliverAnUpdate(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "untrusted update URL"):
             handler.redirect_request(
                 None, None, 302, "Found", {},
-                "https://downloads.evil.example/XAnalyze.app.zip",
+                "https://downloads.evil.example/XBrainAudit.app.zip",
             )
 
 
@@ -111,7 +111,7 @@ class TheApiTokenStaysOnTheApiHost(unittest.TestCase):
     def test_the_credential_is_dropped_when_the_host_changes(self):
         followed = self.redirected(
             updater.API_URL,
-            "https://objects.githubusercontent.com/XAnalyze-cli.tar.gz")
+            "https://objects.githubusercontent.com/XBrain Audit-cli.tar.gz")
         names = {name.lower() for name in followed.headers}
         self.assertNotIn("authorization", names)
         self.assertIn("accept", names)
@@ -135,8 +135,8 @@ class TheManifestIsTheReleaseContract(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         root = Path(self._tmp.name)
-        self.cli = root / "xanalyze-cli-macos-arm64.tar.gz"
-        self.gui = root / "XAnalyze.app.zip"
+        self.cli = root / "xaudit-cli-macos-arm64.tar.gz"
+        self.gui = root / "XBrainAudit.app.zip"
         self.cli.write_bytes(b"cli")
         self.gui.write_bytes(b"gui-app")
         self.payload = update_manifest.manifest_bytes(

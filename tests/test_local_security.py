@@ -40,7 +40,7 @@ def test_admin_paths_are_shell_data(tmp_path, monkeypatch):
 
 
 def test_log_redacts_nested_urls_and_secrets_before_writing(tmp_path, monkeypatch):
-    monkeypatch.setenv("XANALYZE_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setenv("XAUDIT_LOG_DIR", str(tmp_path / "logs"))
     applog._reset_for_tests()
     url = "https://user:password@example.org/page?custom=QUERYSECRET#FRAGMENTSECRET"
     applog.info(url, nested={"values": [url], "refresh_token": "TOKENSECRET"}, error=ValueError(url))
@@ -86,7 +86,7 @@ def test_concurrent_credential_writers_preserve_all_accounts(tmp_path):
                  for i in range(12)]
     for process in processes:
         assert process.wait(timeout=15) == 0
-    path = tmp_path / "xanalyze/credentials.json"
+    path = tmp_path / "xbrain-audit/credentials.json"
     assert set(json.loads(path.read_text())) == {str(i) for i in range(12)}
     assert not _POSIX_MODES or stat.S_IMODE(path.stat().st_mode) == 0o600
 

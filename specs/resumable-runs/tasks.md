@@ -13,7 +13,7 @@
 - [x] 5. Phase wrapping in `cmd_fullscan`; partial artifacts on failure.
       *Verified end to end: forced failure -> exit 3 + feedback -> fix ->
       `resume` reused scan and audit and finished.*
-- [x] 6. `xanalyze runs` / `resume` / `pause`.
+- [x] 6. `xaudit runs` / `resume` / `pause`.
 - [x] 7. GUI runs catalogue + tests. *15 tests.*
 - [x] 8. README x3 (0 broken anchors), `Devs/`, `Problems.md`, STATE, Planning.
 

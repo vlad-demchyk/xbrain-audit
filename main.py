@@ -22,6 +22,7 @@ from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 import cli_install
+import app_identity
 import config
 import detectors  # noqa: F401 -- side effect: registers built-in detectors
 from i18n.translations import t
@@ -31,7 +32,7 @@ from ui.main_window import MainWindow
 
 def offer_cli_install(parent, settings: "config.Settings") -> None:
     """Ask once, on the first launch of the packaged app, whether to put the
-    `xanalyze` command on `PATH`.
+    `xaudit` command on `PATH`.
 
     Why here and not silently: the symlink lands in the user's `PATH`, and
     writing there without asking is the installer behaviour this app does
@@ -71,19 +72,24 @@ def offer_cli_install(parent, settings: "config.Settings") -> None:
 
 
 def main() -> int:
+    # Before anything reads a path: folders from before the rename move to
+    # their new names once (`app_identity.migrate_legacy_data`). The command
+    # line and the terminal interface make the same call.
+    app_identity.migrate_legacy_data()
+
     # `--version` before a QApplication exists. The Makefile tells whoever
     # builds the bundle to verify it with
-    # `XAnalyze.app/Contents/MacOS/XAnalyze --version`, and that opened the
+    # `XBrain Audit.app/Contents/MacOS/XBrain Audit --version`, and that opened the
     # window and sat there instead: the one instruction written down for
     # checking a build could not be followed, on the surface where a stale
     # binary is hardest to notice.
     if "--version" in sys.argv[1:]:
-        print(f"XAnalyze {config.APP_VERSION}")
+        print(f"{app_identity.PRODUCT_NAME} {config.APP_VERSION}")
         return 0
 
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
-    app.setApplicationName("XAnalyze")
+    app.setApplicationName(app_identity.PRODUCT_NAME)
     app.setOrganizationName("xFormat")
 
     # Styled before the window is built, so every widget is created with the

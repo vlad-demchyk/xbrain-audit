@@ -1,6 +1,6 @@
 """A target typed without `https://` is a website, not a missing path.
 
-`xanalyze fullscan example.com` answered `path not found: example.com` -
+`xaudit fullscan example.com` answered `path not found: example.com` -
 the wrong answer to a question with one obvious reading. These pin the
 heuristic that decides, in both directions: a bare host is a site, and
 anything that could be a path stays a path.
@@ -35,7 +35,7 @@ class LooksLikeUrl(unittest.TestCase):
         self.assertTrue(looks_like_url("приклад.укр"))
 
     def test_paths_stay_paths(self):
-        for target in ("./src", "src", "/tmp", "~/repo", ".xanalyze",
+        for target in ("./src", "src", "/tmp", "~/repo", ".xaudit",
                        "some_folder", "a/b/c"):
             with self.subTest(target=target):
                 self.assertFalse(looks_like_url(target))
@@ -83,7 +83,7 @@ class GlobalFlagPlacement(unittest.TestCase):
     """`--no-update-check` belongs to the command as much as to the program.
 
     It used to be accepted only before the subcommand, so the natural
-    `xanalyze fullscan X --no-update-check` failed with "unrecognized
+    `xaudit fullscan X --no-update-check` failed with "unrecognized
     arguments".
     """
 

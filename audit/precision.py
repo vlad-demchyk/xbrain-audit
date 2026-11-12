@@ -11,7 +11,7 @@ printing a number. Nothing here changes a rule's severity: a low precision is
 a reason for a person to look, not a reason for the tool to stop reporting.
 
 Labels live in a JSON-lines file of their own, keyed by the same fingerprint
-`.xanalyze-ignore` uses, so a label survives a re-run of the audit:
+`.xaudit-ignore` uses, so a label survives a re-run of the audit:
 
     {"fingerprint": "…", "verdict": true, "reason": "…"}
 
@@ -170,7 +170,7 @@ def main(argv=None) -> int:
         prog="audit_precision",
         description="Precision of the audit rules on labelled findings.")
     parser.add_argument("audits", nargs="+", type=Path,
-                        help="JSON files written by `xanalyze audit --json`")
+                        help="JSON files written by `xaudit audit --json`")
     parser.add_argument("--labels", type=Path,
                         help="JSON lines of {fingerprint, verdict, reason}")
     parser.add_argument("--template", type=Path,

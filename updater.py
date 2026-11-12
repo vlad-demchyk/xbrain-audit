@@ -1,14 +1,20 @@
 """Self-update from GitHub Releases.
 
 Checks the configured GitHub repository for a newer release, downloads
-`XAnalyze.app.zip` and replaces the installed app. There is one artifact:
+`XBrainAudit.app.zip` and replaces the installed app. There is one artifact:
 the window, the command line and the terminal interface are one executable
-(see `app_entry`), and the `xanalyze` command is a symlink into the app, so
+(see `app_entry`), and the `xaudit` command is a symlink into the app, so
 replacing the app updates all three at once.
+
+The product was called XAnalyze until 0.74.0. Releases since then carry the
+pre-rename assets too (`XAnalyze.app.zip`, `xanalyze-update-manifest.json`),
+because that is what an installed XAnalyze looks for; this updater reads the
+new names first and the old ones as a fallback, and moves an app installed
+as `XAnalyze.app` to `XBrain Audit.app`.
 
 Designed to be called two ways:
 
-* ``xanalyze update`` — explicit, blocks until done, prints progress.
+* ``xaudit update`` — explicit, blocks until done, prints progress.
 * Any other command — a quick, non-blocking version check that prints a
   one-line hint if a newer release exists.  Cached so it fires at most
   once a day (see ``_CHECK_INTERVAL``).
@@ -35,6 +41,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+import app_identity
 import config
 from cli_impl import EXIT_ERROR, EXIT_OK
 from update_trust import UPDATE_SIGNING_PUBLIC_KEYS
@@ -42,10 +49,21 @@ from update_trust import UPDATE_SIGNING_PUBLIC_KEYS
 # ------------------------------------------------------------------ config
 
 GITHUB_OWNER = "vlad-demchyk"
-GITHUB_REPO = "xAnalyze-"
+#: Renamed from `xAnalyze-` with the product; GitHub redirects the old name.
+GITHUB_REPO = "xbrain-audit"
 API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
-MANIFEST_ASSET = "xanalyze-update-manifest.json"
+MANIFEST_ASSET = "xbrain-audit-update-manifest.json"
 SIGNATURE_ASSET = f"{MANIFEST_ASSET}.sig"
+#: The manifest an installed XAnalyze (0.73 and older) reads. Same bytes as
+#: the new one in a release (`scripts/update_manifest.py --also-output`);
+#: read only when a release has no new manifest.
+LEGACY_MANIFEST_ASSET = "xanalyze-update-manifest.json"
+#: In preference order: new name, then the old one.
+_MANIFEST_ASSETS = (MANIFEST_ASSET, LEGACY_MANIFEST_ASSET)
+
+#: The bundle, and its name before the rename.
+APP_BUNDLE = f"{app_identity.PRODUCT_NAME}.app"
+LEGACY_APP_BUNDLE = f"{app_identity.LEGACY_PRODUCT_NAME}.app"
 
 # Exact hosts used by the GitHub API and release-asset redirects. A suffix
 # check would accept attacker-controlled names such as github.com.example.
@@ -67,7 +85,7 @@ _MAX_UNPACKED_BYTES = 4 * 1024 * 1024 * 1024
 _MAX_ARCHIVE_ENTRIES = 50_000
 _MAX_COMPRESSION_RATIO = 200
 #: How long the once-a-day hint may hold up a CLI command (P-37). The
-#: explicit `xanalyze update` keeps the long timeout.
+#: explicit `xaudit update` keeps the long timeout.
 _QUIET_CHECK_TIMEOUT = 3
 EXIT_UPDATE_PARTIAL = 3
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -81,7 +99,11 @@ _CHECK_INTERVAL = 86400  # 24 hours
 #: earlier releases is gone: it was a second copy of the same program, and
 #: updating it replaced the executable inside the app with a binary that
 #: could not run without its own folder.
+#: The pre-rename names come after the new ones: a release carries both, and
+#: an older release only the old ones.
 _GUI_ASSET_PATTERNS = [
+    "XBrainAudit.app.zip",
+    "XBrainAudit-macos-{arch}.app.zip",
     "XAnalyze.app.zip",
     "XAnalyze-macos-{arch}.app.zip",
 ]
@@ -343,13 +365,21 @@ def _parse_update_manifest(payload: bytes, release: ReleaseInfo,
 
 
 def fetch_update_manifest(release: ReleaseInfo) -> UpdateManifest:
-    """Fetch, authenticate and parse the integrity manifest for a release."""
-    manifest_asset = _asset_named(release, MANIFEST_ASSET)
+    """Fetch, authenticate and parse the integrity manifest for a release.
+
+    The new manifest name first, the pre-rename one when a release has only
+    that; each is verified against its own `.sig`.
+    """
+    manifest_asset = None
+    for name in _MANIFEST_ASSETS:
+        manifest_asset = _asset_named(release, name)
+        if manifest_asset is not None:
+            break
     if manifest_asset is None:
         raise RuntimeError("release has no update manifest")
     payload = _read_remote_asset(manifest_asset, limit=_MAX_MANIFEST_BYTES)
 
-    signature_asset = _asset_named(release, SIGNATURE_ASSET)
+    signature_asset = _asset_named(release, f"{manifest_asset['name']}.sig")
     signature = (b"" if signature_asset is None else
                  _read_remote_asset(signature_asset,
                                     limit=_MAX_SIGNATURE_BYTES))
@@ -430,8 +460,9 @@ def check_for_update(*, quiet: bool = False) -> str | None:
 def print_update_hint(new_version: str) -> None:
     """One-line hint printed to stderr before the real command runs."""
     print(
-        f"# XAnalyze {new_version} is available (you have {config.APP_VERSION}). "
-        f"Run `xanalyze update` to upgrade.",
+        f"# {app_identity.PRODUCT_NAME} {new_version} is available "
+        f"(you have {config.APP_VERSION}). "
+        f"Run `{app_identity.CLI_NAME} update` to upgrade.",
         file=sys.stderr,
     )
 
@@ -454,9 +485,13 @@ def _app_containing(executable: Path) -> Path | None:
     return None
 
 
-#: Where the app is looked for when the running program is not inside one.
-_APP_LOCATIONS = (Path("/Applications/XAnalyze.app"),
-                  Path.home() / "Applications" / "XAnalyze.app")
+#: Where the app is looked for when the running program is not inside one:
+#: the new name first, then where an XAnalyze from before the rename sits.
+#: The first two are also where a first install goes (`_new_app_location`).
+_APP_LOCATIONS = (Path("/Applications") / APP_BUNDLE,
+                  Path.home() / "Applications" / APP_BUNDLE,
+                  Path("/Applications") / LEGACY_APP_BUNDLE,
+                  Path.home() / "Applications" / LEGACY_APP_BUNDLE)
 
 
 def _installed_app() -> Path | None:
@@ -623,28 +658,34 @@ def _unzip_bundle(zf, dest: Path) -> None:
 
 
 def _extract_gui_app(archive: Path, dest: Path | None = None) -> Path:
-    """Extract ``XAnalyze.app`` from a zip, links and modes kept."""
+    """Extract ``XBrain Audit.app`` from a zip, links and modes kept.
+
+    The pre-rename archive holds the same bundle under ``XAnalyze.app``;
+    either is accepted, the new name first.
+    """
     import zipfile
 
-    tmp = _work_dir(dest, "xanalyze-update-gui-")
+    tmp = _work_dir(dest, "xaudit-update-gui-")
     with zipfile.ZipFile(archive) as zf:
         _check_archive([(i.filename, i.file_size, i.compress_size)
                         for i in zf.infolist()])
         _unzip_bundle(zf, tmp)
-    app = tmp / "XAnalyze.app"
-    if not app.exists():
+    for name in (APP_BUNDLE, LEGACY_APP_BUNDLE):
+        app = tmp / name
+        if app.is_dir():
+            return app
+    for name in (APP_BUNDLE, LEGACY_APP_BUNDLE):
         # Walk to find it
-        for p in tmp.rglob("XAnalyze.app"):
+        for p in tmp.rglob(name):
             if p.is_dir():
                 return p
-        raise RuntimeError("XAnalyze.app not found in the archive")
-    return app
+    raise RuntimeError(f"{APP_BUNDLE} not found in the archive")
 
 
 def _replace_gui_app(old: Path, new: Path) -> None:
     """Stage beside the installed app, then rename with a recoverable backup."""
-    transaction = Path(tempfile.mkdtemp(prefix=".xanalyze-update-", dir=old.parent))
-    staged = transaction / "XAnalyze.app"
+    transaction = Path(tempfile.mkdtemp(prefix=".xaudit-update-", dir=old.parent))
+    staged = transaction / old.name
     backup = transaction / "previous.app"
     committed = False
     try:
@@ -690,7 +731,7 @@ def _new_app_location() -> Path:
 def _install_new_app(target: Path, extracted: Path) -> None:
     """Put a first app in place, staged beside it and renamed in one step."""
     target.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=".xanalyze-install-", dir=target.parent))
+    staging = Path(tempfile.mkdtemp(prefix=".xaudit-install-", dir=target.parent))
     try:
         staged = staging / target.name
         shutil.copytree(extracted, staged, symlinks=True)
@@ -699,24 +740,51 @@ def _install_new_app(target: Path, extracted: Path) -> None:
         shutil.rmtree(staging, ignore_errors=True)
 
 
-def _point_command_at(app: Path, legacy: Path | None) -> None:
-    """Make `xanalyze` run the app that was just installed.
+def _renamed_location(app: Path) -> Path | None:
+    """Where an app installed under its pre-rename name moves to, or None.
 
-    A symlink that already points into the app needs nothing: the app was
-    replaced underneath it. The old standalone command is moved over to the
-    app, so the next `xanalyze` is the same program as the window, and the
-    old folder is named so the person can delete it.
+    `/Applications/XAnalyze.app` -> `/Applications/XBrain Audit.app`. An app
+    already under the new name, or under a name the person chose, stays put.
+    """
+    if app.name == LEGACY_APP_BUNDLE:
+        return app.with_name(APP_BUNDLE)
+    return None
+
+
+def _remove_old_bundle(old: Path) -> None:
+    """Delete the pre-rename bundle once the renamed one is in place."""
+    try:
+        shutil.rmtree(old)
+    except OSError as exc:
+        print(f"# the previous app is still at {old} and can be deleted: {exc}",
+              file=sys.stderr)
+    else:
+        print(f"# removed the previous app at {old}", file=sys.stderr)
+
+
+def _point_command_at(app: Path, legacy: Path | None) -> None:
+    """Make `xaudit` (and the old `xanalyze`) run the app just installed.
+
+    A link that already points into the app needs nothing: the app was
+    replaced underneath it. A link into somewhere else - above all into
+    `XAnalyze.app`, which an update just moved to its new name - and the old
+    standalone command are re-pointed at the app, under both names
+    (`cli_install.install`), and the old standalone folder is named so the
+    person can delete it.
     """
     import cli_install
 
-    executable = app / "Contents" / "MacOS" / "XAnalyze"
-    current = cli_install.installed_target()
+    executable = app / "Contents" / "MacOS" / app_identity.PRODUCT_NAME
+    # The directory is read from the module each time and passed on, not
+    # left to `install`'s default, which was bound when it was defined.
+    link_dir = cli_install.USER_BIN_DIR
+    current = cli_install.installed_target(link_dir)
     if current is not None and _app_containing(current) == app and legacy is None:
         return
     if legacy is None and current is None:
         return
     try:
-        link = cli_install.install(source=executable)
+        link = cli_install.install(source=executable, link_dir=link_dir)
     except Exception as exc:  # noqa: BLE001 - the app is updated either way
         print(f"# could not link the command to the app: {exc}; run "
               f"{executable} --install-cli", file=sys.stderr)
@@ -732,14 +800,15 @@ def do_update() -> int:
 
     Replaces the installed app - the one this program runs from, or the one
     in `/Applications` or `~/Applications`. An old standalone command is
-    moved over to the app.
+    moved over to the app, and an app installed as `XAnalyze.app` is
+    installed as `XBrain Audit.app` and the old bundle removed.
 
     Returns `EXIT_OK` when all installed components succeed, 3 on partial
     update, and `EXIT_ERROR` on failure. Not 1: elsewhere 1 means "something
     was found", and an update that could not reach GitHub has found nothing.
     See `cli_impl` for the whole list.
     """
-    print(f"# XAnalyze updater — current version: {config.APP_VERSION}",
+    print(f"# {app_identity.PRODUCT_NAME} updater — current version: {config.APP_VERSION}",
           file=sys.stderr)
 
     # 1. Check for update
@@ -778,17 +847,18 @@ def do_update() -> int:
     legacy = _legacy_cli()
     asset = find_gui_asset(release)
     if asset is None:
-        print("# no XAnalyze.app.zip in this release", file=sys.stderr)
+        print("# no XBrainAudit.app.zip in this release", file=sys.stderr)
         failed.append("app (missing asset)")
     elif app is None and legacy is None:
-        print("# no installed XAnalyze.app found; nothing to replace",
+        print(f"# no installed {APP_BUNDLE} found; nothing to replace",
               file=sys.stderr)
     else:
         print(f"# asset: {asset['name']} ({asset['size'] // (1024*1024)} MB)",
               file=sys.stderr)
-        target = app or _new_app_location()
+        renamed = _renamed_location(app) if app is not None else None
+        target = renamed or app or _new_app_location()
         print(f"# app: {target}", file=sys.stderr)
-        tmp_dir = Path(tempfile.mkdtemp(prefix="xanalyze-update-"))
+        tmp_dir = Path(tempfile.mkdtemp(prefix="xaudit-update-"))
         archive_path = tmp_dir / asset["name"]
         # Everything the rest of this run needs is imported now. A frozen
         # app reads its modules lazily from an archive inside the bundle, and
@@ -801,7 +871,14 @@ def do_update() -> int:
             integrity = _asset_integrity(asset, manifest)
             _download(asset["browser_download_url"], archive_path, integrity)
             extracted = _extract_gui_app(archive_path, tmp_dir / "unpacked")
-            if app is not None:
+            if renamed is not None:
+                # Installed under the new name; the old bundle goes only
+                # after that succeeded, so a failure leaves the old app.
+                if renamed.exists():
+                    _replace_gui_app(renamed, extracted)
+                else:
+                    _install_new_app(renamed, extracted)
+            elif app is not None:
                 _replace_gui_app(app, extracted)
             else:
                 _install_new_app(target, extracted)
@@ -818,8 +895,12 @@ def do_update() -> int:
             try:
                 _point_command_at(target, legacy)
             except Exception as exc:  # noqa: BLE001
-                print(f"# could not check the `xanalyze` command: {exc}",
+                print(f"# could not check the `{app_identity.CLI_NAME}` command: {exc}",
                       file=sys.stderr)
+            # Last: the running program may be inside the old bundle, and
+            # nothing after this reads from it.
+            if renamed is not None:
+                _remove_old_bundle(app)
 
     if failed:
         print(f"Update {'partially completed' if updated else 'failed'}; "
@@ -831,7 +912,7 @@ def do_update() -> int:
               f"  {release.html_url}", file=sys.stderr)
         return EXIT_ERROR
 
-    print(f"\nUpdated XAnalyze {config.APP_VERSION} → {release.version}")
+    print(f"\nUpdated {app_identity.PRODUCT_NAME} {config.APP_VERSION} → {release.version}")
     if release.body:
         print(f"\nRelease notes:\n{release.body[:500]}")
     return EXIT_OK

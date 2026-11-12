@@ -140,7 +140,7 @@ def test_mps_checkpoints_keep_gpu_inference_and_use_cpu_float64_statistics(tiny_
 def test_real_cli_freeze_and_locked_test_with_owned_tiny_models(tiny_models, tmp_path, monkeypatch, name, device):
     from scripts.benchmark import main
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")
-    monkeypatch.setenv("XANALYZE_VALIDATION_LEDGER", str(tmp_path / "ledger"))
+    monkeypatch.setenv("XAUDIT_VALIDATION_LEDGER", str(tmp_path / "ledger"))
     data = tmp_path / "dataset.json";data.write_text(json.dumps(dataset()))
     settings = tmp_path / "config.json";settings.write_text(json.dumps({**config(name, tiny_models), "device": device}))
     frozen = tmp_path / "protocol.json"
@@ -226,7 +226,7 @@ def test_loading_hash_failure_discards_model_and_tokenizer_cache(tiny_models, mo
 @pytest.mark.parametrize("phase", ["calibration", "test"])
 def test_local_artifact_changed_during_scoring_rejects_run_and_keeps_test_consumed(tiny_models, tmp_path, monkeypatch, phase):
     from pathlib import Path
-    monkeypatch.setenv("XANALYZE_VALIDATION_LEDGER", str(tmp_path / "ledger"))
+    monkeypatch.setenv("XAUDIT_VALIDATION_LEDGER", str(tmp_path / "ledger"))
     settings = config("multilingual-encoder", tiny_models)
     original = protocol.score_samples
     frozen = protocol.freeze(dataset(), "multilingual-encoder", settings, fixed_threshold=1.) if phase == "test" else None

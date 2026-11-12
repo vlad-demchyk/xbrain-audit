@@ -26,7 +26,7 @@ different questions:
 Where the list lives:
 
 1. `Settings.ignore` — the user's own, across every project.
-2. `.xanalyze-ignore` in the scanned folder — the project's own, committed
+2. `.xaudit-ignore` in the scanned folder — the project's own, committed
    alongside the code so a team shares one decision instead of each member
    re-dismissing the same finding.
 
@@ -42,8 +42,21 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-#: The file a project keeps its own suppressions in.
-IGNORE_FILENAME = ".xanalyze-ignore"
+import app_identity
+
+#: The file a project keeps its own suppressions in. A project that still
+#: has the pre-rename `.xanalyze-ignore` keeps using it: see `ignore_file`.
+IGNORE_FILENAME = app_identity.PROJECT_IGNORE_FILE
+
+
+def ignore_file(folder) -> Path:
+    """The ignore file of `folder`, for reading and for writing alike.
+
+    `.xaudit-ignore`, or `.xanalyze-ignore` when only that one exists, so a
+    dismissal is added to the file the project already committed instead of
+    starting a second one beside it.
+    """
+    return app_identity.project_ignore_file(Path(folder))
 
 #: A bare line before any section header that is plainly a file pattern: it
 #: ends in `/` or carries a glob. The README teaches the file as "gitignore
@@ -185,7 +198,7 @@ class Suppressions:
 
     @classmethod
     def parse(cls, text: str) -> "Suppressions":
-        """Read the `.xanalyze-ignore` format.
+        """Read the `.xaudit-ignore` format.
 
         Deliberately the simplest thing that can be edited by hand and read
         in a diff — sections in brackets, one entry per line, `#` comments.
@@ -467,7 +480,7 @@ def _ignore_files(root: str | None):
     path = Path(root)
     if path.is_file():
         path = path.parent
-    candidate = path / IGNORE_FILENAME
+    candidate = ignore_file(path)
     return [candidate] if candidate.is_file() else []
 
 
@@ -607,7 +620,7 @@ def add_fingerprint_to_ignore_file(root: str, value: str, label: str = "") -> Pa
     path = Path(root)
     if path.is_file():
         path = path.parent
-    ignore_path = path / IGNORE_FILENAME
+    ignore_path = ignore_file(path)
     existing = (Suppressions.parse(ignore_path.read_text(encoding="utf-8"))
                 if ignore_path.is_file() else Suppressions())
     if value not in existing.fingerprints:
@@ -750,7 +763,7 @@ def account_for_suppressed(issues, suppressions: Suppressions) -> dict:
     A hidden finding is a decision somebody made, and a report that drops it
     without a word reads exactly like a clean one. So the count is kept, by
     level and by rule, and each dismissed finding is named with the reason
-    written next to it - the note in `.xanalyze-ignore`, which for a
+    written next to it - the note in `.xaudit-ignore`, which for a
     fingerprint is the only human-readable trace of what was hidden.
     """
     account = {"hidden": 0, "by_level": {}, "by_rule": {}, "dismissed": []}

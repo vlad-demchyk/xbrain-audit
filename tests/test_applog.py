@@ -17,16 +17,16 @@ import applog
 
 class LogDirectory(unittest.TestCase):
     def setUp(self):
-        self._previous = os.environ.get("XANALYZE_LOG_DIR")
+        self._previous = os.environ.get("XAUDIT_LOG_DIR")
         self.directory = Path(tempfile.mkdtemp())
-        os.environ["XANALYZE_LOG_DIR"] = str(self.directory)
+        os.environ["XAUDIT_LOG_DIR"] = str(self.directory)
         applog._reset_for_tests()
 
     def tearDown(self):
         if self._previous is None:
-            os.environ.pop("XANALYZE_LOG_DIR", None)
+            os.environ.pop("XAUDIT_LOG_DIR", None)
         else:
-            os.environ["XANALYZE_LOG_DIR"] = self._previous
+            os.environ["XAUDIT_LOG_DIR"] = self._previous
         applog._reset_for_tests()
 
 
@@ -67,7 +67,7 @@ class Writing(LogDirectory):
     def test_logging_never_raises(self):
         # The one thing this module must not do is become the reason a scan
         # fails, so an unwritable directory is silence, not an exception.
-        os.environ["XANALYZE_LOG_DIR"] = "/proc/nonexistent/xanalyze"
+        os.environ["XAUDIT_LOG_DIR"] = "/proc/nonexistent/xaudit"
         applog._reset_for_tests()
         applog.info("into the void")
 

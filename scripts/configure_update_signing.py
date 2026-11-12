@@ -38,7 +38,7 @@ def install_public_key(path: Path, public_text: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Create the update key, store its secret in GitHub, and pin its public half.")
-    parser.add_argument("--repo", default="vlad-demchyk/xAnalyze-")
+    parser.add_argument("--repo", default="vlad-demchyk/xbrain-audit")
     parser.add_argument("--trust-file", type=Path, default=DEFAULT_TRUST_FILE)
     args = parser.parse_args()
 

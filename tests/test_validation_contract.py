@@ -32,7 +32,7 @@ def prediction(key, label, score, **changes):
 
 @pytest.fixture
 def experiment(tmp_path, monkeypatch):
-    monkeypatch.setenv("XANALYZE_VALIDATION_LEDGER", str(tmp_path / "ledger"))
+    monkeypatch.setenv("XAUDIT_VALIDATION_LEDGER", str(tmp_path / "ledger"))
     calls = []
     def score(rows, *args, **kwargs):
         calls.append([r["id"] for r in rows])

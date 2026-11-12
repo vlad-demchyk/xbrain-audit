@@ -111,8 +111,8 @@ while fitting. The source-group guard and each original sample are rechecked
 when consuming a saved report; its `passed` flag is not trusted.
 
 Test text access is claimed atomically before inference in
-`~/.xanalyze/validation/test-access`. A failed run still consumes the test;
-refitting or a second run is refused. `XANALYZE_VALIDATION_LEDGER` points to
+`~/.xbrain-audit/validation/test-access`. A failed run still consumes the test;
+refitting or a second run is refused. `XAUDIT_VALIDATION_LEDGER` points to
 an isolated ledger for synthetic tests. Copying/renaming a protocol does not
 reset exposure because keys identify canonical text, not filenames. This is
 process protection on the current machine, not cryptographic attestation or
@@ -237,8 +237,8 @@ reports. Copyleaks uses its synchronous writer detector and enforces its
 `GET /task/{id}`, with `public_dashboard_link: false`. Task IDs are persisted;
 pending tasks are polled again without another submission. An ambiguous POST
 outcome leaves a submission marker requiring resolution, preventing an automatic
-paid retry. Job cache defaults to `~/.xanalyze/validation/api-jobs`; override
-with `XANALYZE_API_JOB_CACHE`. Request/poll timeouts are finite; polling is not a
+paid retry. Job cache defaults to `~/.xbrain-audit/validation/api-jobs`; override
+with `XAUDIT_API_JOB_CACHE`. Request/poll timeouts are finite; polling is not a
 strict whole-request wall-clock deadline. GPTZero uses `POST /v2/predict/text`.
 
 Observed response versions/hashes are recorded separately from requested
@@ -285,7 +285,7 @@ a sampling-model argument typo. A learned B-spline witness requires separate
 training data; published pretrained coefficients belong to the author's setup.
 No CUDA is available on the development host, and no frozen scoring/reference
 pair and witness have been supplied. This is an assessed experimental method,
-without an XAnalyze inference adapter or measured target-language performance.
+without an XBrain Audit inference adapter or measured target-language performance.
 
 [ProSSD's paper](https://aclanthology.org/2026.acl-long.638/) links to its
 [implementation](https://github.com/RuoChoXio/ProSSD/tree/988125b1bc11213314a5f10dd21cb4db75729625).

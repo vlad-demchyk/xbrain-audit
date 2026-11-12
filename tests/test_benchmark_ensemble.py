@@ -62,7 +62,7 @@ def test_remote_member_requires_permission_and_public_text_before_any_inference(
 
 
 def test_real_offline_ensemble_calibration_and_test_with_frozen_components(tmp_path, monkeypatch):
-    monkeypatch.setenv("XANALYZE_VALIDATION_LEDGER", str(tmp_path / "ledger"))
+    monkeypatch.setenv("XAUDIT_VALIDATION_LEDGER", str(tmp_path / "ledger"))
     frozen = protocol.freeze(dataset(), "ensemble", SETTINGS, fixed_threshold=1.)
     assert frozen["detector"]["snapshot_verified"]
     assert len(frozen["detector"]["component_identities"]) == 2

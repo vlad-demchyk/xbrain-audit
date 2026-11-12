@@ -124,7 +124,7 @@ def test_private_text_and_disabled_remote_never_construct_http_session(monkeypat
 
 def test_pangram_submits_once_polls_same_job_and_does_not_publish_dashboard(monkeypatch,tmp_path):
     monkeypatch.setenv("PANGRAM_API_KEY","fixture-key")
-    monkeypatch.setenv("XANALYZE_API_JOB_CACHE",str(tmp_path))
+    monkeypatch.setenv("XAUDIT_API_JOB_CACHE",str(tmp_path))
     monkeypatch.setattr(api,"sleep",lambda _:None)
     transport=Transport([{"task_id":"job-1"},{"task_id":"job-1","stage":"STAGE_PROCESSING"},pangram()])
     config={"model":"pangram-4","expected_model_version":"4.0"}
@@ -142,7 +142,7 @@ def test_pangram_submits_once_polls_same_job_and_does_not_publish_dashboard(monk
 
 def test_unknown_submission_outcome_is_not_automatically_retried(monkeypatch,tmp_path):
     monkeypatch.setenv("PANGRAM_API_KEY","fixture-key")
-    monkeypatch.setenv("XANALYZE_API_JOB_CACHE",str(tmp_path))
+    monkeypatch.setenv("XAUDIT_API_JOB_CACHE",str(tmp_path))
     config={"model":"pangram-4","expected_model_version":"4.0"}
     first=Transport([requests.Timeout("secret fixture-key")])
     result=api.score_api_samples([public_sample()],"pangram",config,allow_remote=True,session=first)[0]
@@ -201,7 +201,7 @@ def test_real_requests_transport_against_local_http_server(monkeypatch, tmp_path
     thread.start()
     monkeypatch.setitem(api.ENDPOINTS, name, f"http://127.0.0.1:{server.server_port}/fixture")
     monkeypatch.setenv(api.KEY_ENV[name], "local-fixture-key")
-    monkeypatch.setenv("XANALYZE_API_JOB_CACHE", str(tmp_path))
+    monkeypatch.setenv("XAUDIT_API_JOB_CACHE", str(tmp_path))
     try:
         row = public_sample("a " * 200) if name == "copyleaks" else public_sample()
         result = api.score_api_samples([row], name, settings, allow_remote=True)[0]
@@ -226,7 +226,7 @@ def test_real_requests_transport_against_local_http_server(monkeypatch, tmp_path
 
 def test_pending_pangram_job_is_reused_and_poll_socket_timeout_respects_remaining_budget(monkeypatch, tmp_path):
     monkeypatch.setenv("PANGRAM_API_KEY", "fixture-key")
-    monkeypatch.setenv("XANALYZE_API_JOB_CACHE", str(tmp_path))
+    monkeypatch.setenv("XAUDIT_API_JOB_CACHE", str(tmp_path))
     ticks = iter([0., 0., .2, 1.1, 1.2])
     monkeypatch.setattr(api, "monotonic", lambda: next(ticks))
     monkeypatch.setattr(api, "sleep", lambda _: None)

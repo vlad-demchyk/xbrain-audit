@@ -131,7 +131,7 @@ def default_user_agent() -> str:
         from config import APP_VERSION  # noqa: PLC0415 - optional dependency
     except Exception:  # noqa: BLE001 - a version is nice, not required
         APP_VERSION = "0"
-    return f"ISV|Crowdm|XAnalyze/{APP_VERSION}"
+    return f"ISV|Crowdm|XBrainAudit/{APP_VERSION}"
 
 
 # --------------------------------------------------------------------------
@@ -356,7 +356,7 @@ class _Client:
                 # A browser transport cannot see where a redirect went when
                 # it left the site; for a signed-in request that is the
                 # identity provider (see `audit.browser_fetch`).
-                if _header(headers, "X-XAnalyze-Redirect") == "off-site":
+                if _header(headers, "X-XBrainAudit-Redirect") == "off-site":
                     raise AuthRequired(AUTH_LOGIN_REDIRECT, _redact(url))
                 location = urljoin(url, _header(headers, "Location") or "")
                 if authwall.is_definite_login_url(location):

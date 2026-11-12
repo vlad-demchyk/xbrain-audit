@@ -131,7 +131,7 @@ def cmd_runs(args) -> int:
     if unfinished:
         print()
         print(f"{len(unfinished)} run(s) can be continued, e.g. "
-              f"xanalyze resume {unfinished[0]['name']}")
+              f"xaudit resume {unfinished[0]['name']}")
     return EXIT_OK
 
 
@@ -156,7 +156,7 @@ def cmd_pause(args) -> int:
     state.request_pause()
     print(f"pause requested for {state.run_dir}")
     print("the run stops at its next phase boundary; continue it with "
-          f"xanalyze resume {state.run_dir.name}")
+          f"xaudit resume {state.run_dir.name}")
     return EXIT_OK
 
 
@@ -210,19 +210,19 @@ def add_run_parsers(sub) -> None:
     p_runs.add_argument("--json", action="store_true",
                         help="machine-readable output")
     p_runs.add_argument("--root", default=argparse.SUPPRESS,
-                        help="where run folders live (default: ~/Documents/XAnalyze)")
+                        help="where run folders live (default: ~/Documents/XBrain Audit)")
     p_runs.set_defaults(func=cmd_runs)
 
     p_resume = sub.add_parser(
         "resume", help="continue a run that was paused or stopped")
     p_resume.add_argument("run", help="run folder, or the timestamp shown by "
-                                      "`xanalyze runs`")
+                                      "`xaudit runs`")
     p_resume.add_argument("--root", default=argparse.SUPPRESS)
     p_resume.set_defaults(func=cmd_resume)
 
     p_pause = sub.add_parser(
         "pause", help="ask a running scan to stop at its next phase boundary")
     p_pause.add_argument("run", help="run folder, or the timestamp shown by "
-                                     "`xanalyze runs`")
+                                     "`xaudit runs`")
     p_pause.add_argument("--root", default=argparse.SUPPRESS)
     p_pause.set_defaults(func=cmd_pause)

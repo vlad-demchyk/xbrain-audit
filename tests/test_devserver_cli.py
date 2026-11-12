@@ -177,7 +177,7 @@ class DevserverIsOffByDefault(unittest.TestCase):
         (self.repo / "package.json").write_text(
             '{"scripts": {"dev": "node server.js"}}', encoding="utf-8")
         self._env_patch = patch.dict(
-            "os.environ", {"XANALYZE_REPORT_ROOT": self.report_root.name})
+            "os.environ", {"XAUDIT_REPORT_ROOT": self.report_root.name})
         self._env_patch.start()
 
     def tearDown(self):

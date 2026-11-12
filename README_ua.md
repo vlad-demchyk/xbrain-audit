@@ -1,4 +1,4 @@
-# XAnalyze
+# XBrain Audit
 
 Знаходить текст, написаний моделлю, невидимі символи і дефекти доступності, SEO,
 швидкодії та безпеки на сайті, в HTML-файлі або в репозиторії - і називає точний
@@ -6,11 +6,35 @@
 
 [English](README.md) | [Italiano](README_it.md)
 
+## Перейменовано з XAnalyze
+
+До версії 0.74.0 XBrain Audit називався XAnalyze. Тепер команда - `xaudit`, а
+застосунок - `XBrain Audit.app`. Що працює, як і раніше:
+
+- **Команда `xanalyze`.** `--install-cli` і оновлення ставлять її поруч з
+  `xaudit`, на ту саму програму; видалення прибирає обидві.
+- **Змінні `XANALYZE_*`.** Кожна читається, якщо не задано відповідну
+  `XAUDIT_*` (`XAUDIT_REPORT_ROOT` важить більше за `XANALYZE_REPORT_ROOT`).
+- **Ваші дані, перенесені один раз під час першого запуску.** `~/.xanalyze`
+  стає `~/.xbrain-audit`, `~/.config/xanalyze` (`%APPDATA%\xanalyze` у
+  Windows) стає `~/.config/xbrain-audit`, а `~/Documents/XAnalyze` стає
+  `~/Documents/XBrain Audit`. Теку перейменовують, а не зливають і не
+  видаляють; якщо перейменувати не вдалося, стара тека лишається в роботі,
+  а лог застосунку пояснює чому.
+- **`.xanalyze-ignore` і `.xanalyze/` у проєкті.** Їх і далі читають, і
+  правки йдуть у файл, який у проєкті вже є; проєкт без нього отримує
+  `.xaudit-ignore`.
+- **Акаунти, в які ви входили.** Їх знаходить у сховищі ключів під старою
+  службою `xanalyze` і копіює в `xbrain-audit`.
+- **Оновлення.** Встановлений XAnalyze оновлюється до цього випуску, як
+  раніше; потім `xaudit update` переносить застосунок з `XAnalyze.app` у
+  `XBrain Audit.app` і спрямовує на нього обидві команди.
+
 ## Для чого це
 
 Вам дали сторінку, тему, веб-парт або репозиторій, і треба відповісти на три
 питання: чи цей текст написала модель, чи є в розмітці символи, яких не дає
-жодна клавіатура, і чи ця річ доступна й коректна. XAnalyze відповідає на всі
+жодна клавіатура, і чи ця річ доступна й коректна. XBrain Audit відповідає на всі
 три за один прогін і називає файл і рядок за кожною відповіддю.
 
 Зокрема **сайт SharePoint Online за входом Microsoft 365**: ви входите самі,
@@ -27,28 +51,28 @@
 **Застосунок для macOS**
 
 ```bash
-curl -L -o XAnalyze.app.zip https://github.com/vlad-demchyk/xAnalyze-/releases/latest/download/XAnalyze.app.zip
-ditto -x -k XAnalyze.app.zip /Applications/
+curl -L -o XBrainAudit.app.zip https://github.com/vlad-demchyk/xbrain-audit/releases/latest/download/XBrainAudit.app.zip
+ditto -x -k XBrainAudit.app.zip /Applications/
 ```
 
-При першому запуску застосунок один раз пропонує покласти себе як `xanalyze` у
+При першому запуску застосунок один раз пропонує покласти себе як `xaudit` у
 `~/.local/bin`, тож CLI і TUI не потребують другого завантаження, а
-`xanalyze update` оновлює все три разом. Бандл ще не
+`xaudit update` оновлює все три разом. Бандл ще не
 підписаний: перший запуск - Control-click -> Open.
 
 **Лише командний рядок**
 
 Завантаження одне, застосунок: вікно, CLI і TUI - одна програма. Щоб отримати
-команду `xanalyze`, не відкриваючи вікна:
+команду `xaudit`, не відкриваючи вікна:
 
 ```bash
-/Applications/XAnalyze.app/Contents/MacOS/XAnalyze --install-cli
+"/Applications/XBrain Audit.app/Contents/MacOS/XBrain Audit" --install-cli
 ```
 
 **З вихідників**
 
 ```bash
-git clone https://github.com/vlad-demchyk/xAnalyze-.git && cd xAnalyze-
+git clone https://github.com/vlad-demchyk/xbrain-audit.git && cd xbrain-audit
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python main.py                                  # вікно
@@ -62,7 +86,7 @@ python cli.py                                   # термінальний ін�
 Python 3.13 або новіший з python.org (лаунчер `py` іде з ним), у PowerShell:
 
 ```powershell
-git clone https://github.com/vlad-demchyk/xAnalyze-.git; cd xAnalyze-
+git clone https://github.com/vlad-demchyk/xbrain-audit.git; cd xbrain-audit
 py -3.13 -m venv venv
 venv\Scripts\pip install -r requirements.txt
 venv\Scripts\python main.py                              # вікно
@@ -72,25 +96,25 @@ venv\Scripts\python cli.py                               # термінальн�
 
 Вивід завжди в UTF-8, хоч яка кодова сторінка консолі, тож його можна
 перенаправити у файл чи передати агенту. Налаштування, резервний файл
-облікових даних і сесії сайтів із входом лежать у `%APPDATA%\xanalyze`,
-власний лог застосунку в `%LOCALAPPDATA%\xanalyze\logs`, ключі йдуть у
-Windows Credential Manager. `xanalyze update` оновлює лише застосунок для
+облікових даних і сесії сайтів із входом лежать у `%APPDATA%\xbrain-audit`,
+власний лог застосунку в `%LOCALAPPDATA%\xbrain-audit\logs`, ключі йдуть у
+Windows Credential Manager. `xaudit update` оновлює лише застосунок для
 macOS; на Windows чекаут оновлюється через `git pull`.
 
-Збірка для Windows (`dist\XAnalyze\XAnalyze.exe` для вікна і
-`xanalyze-cli.exe` для командного рядка і TUI): `pip install pyinstaller`,
+Збірка для Windows (`dist\XBrain Audit\XBrain Audit.exe` для вікна і
+`xaudit.exe` для командного рядка і TUI): `pip install pyinstaller`,
 потім `powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1`.
 
 ## Як користуватись
 
 ```bash
-xanalyze                                      # термінальний інтерфейс
-xanalyze fullscan https://example.com         # усе за один прогін
-xanalyze fullscan ./my-project                # те саме по репозиторію
-xanalyze scan ./src                           # лише AI-патерни і символи
-xanalyze audit ./page.html                    # лише правила сайту
-xanalyze fix ./src                            # виправити символи (лишає .bak)
-xanalyze runs                                 # список, продовження, порівняння
+xaudit                                      # термінальний інтерфейс
+xaudit fullscan https://example.com         # усе за один прогін
+xaudit fullscan ./my-project                # те саме по репозиторію
+xaudit scan ./src                           # лише AI-патерни і символи
+xaudit audit ./page.html                    # лише правила сайту
+xaudit fix ./src                            # виправити символи (лишає .bak)
+xaudit runs                                 # список, продовження, порівняння
 ```
 
 `fullscan` - це відповідь на «перевір оце». URL обходиться і рендериться; тека
@@ -106,7 +130,7 @@ xanalyze runs                                 # список, продовжен
 | `audit ЦІЛЬ` | лише правила сайту: URL, HTML-файл або тека |
 | `fix` / `undo` | застосувати точні виправлення символів; повернути копії `.bak` |
 | `runs` / `resume` / `compare` | прогін є обʼєктом: перелічити, продовжити, звірити з попереднім |
-| `ignore FINGERPRINT --reason TEXT` | позначити одну знахідку як хибну в `.xanalyze-ignore` разом із причиною; відбиток є в `audit --json`, а кожен наступний прогін каже, скільки приховано і чому |
+| `ignore FINGERPRINT --reason TEXT` | позначити одну знахідку як хибну в `.xaudit-ignore` разом із причиною; відбиток є в `audit --json`, а кожен наступний прогін каже, скільки приховано і чому |
 | `login URL` | увійти на сайт власноруч, у справжньому браузері, щоб прогін бачив те, що за дверима; зберігається лише після «Готово» |
 | `logs` | що прогін насправді робив, у форматі JSON Lines |
 | `ai` | акаунт для проходів із моделлю: `status`, `login`, `rewrite` |
@@ -126,7 +150,7 @@ xanalyze runs                                 # список, продовжен
 застосунку. AI-висновки використовують окремий кеш суджень. Одночасні записи кешів
 сканування, браузера й суджень зливають зміни під блокуванням та атомарно замінюють файл.
 
-`xanalyze КОМАНДА --help` друкує всі параметри. Ті, які варто знати:
+`xaudit КОМАНДА --help` друкує всі параметри. Ті, які варто знати:
 
 | Параметр | Навіщо |
 |---|---|
@@ -297,8 +321,8 @@ PHP-файлі, - а її шаблони читаються як фрагмен�
 
 ## Сайти за логіном
 
-`xanalyze login https://example.com/admin` відкриває справжній браузер на
-власній формі сайту. 2FA, SSO і капча працюють, бо це браузер. XAnalyze ніколи
+`xaudit login https://example.com/admin` відкриває справжній браузер на
+власній формі сайту. 2FA, SSO і капча працюють, бо це браузер. XBrain Audit ніколи
 не бачить ні логіна, ні пароля: зберігається те, що сайт віддав тому браузеру,
 окремо на кожен хост і читаним лише для вас. `--no-session` читає сайт так, як
 його бачить стороння людина; `login --list` і `login --forget ХОСТ` керують
@@ -316,7 +340,7 @@ PHP-файлі, - а її шаблони читаються як фрагмен�
 задали самі, має перевагу**:
 
 - **Спершу вхід.** Без збереженої сесії SharePoint на кожну адресу відповідає
-  сторінкою входу Microsoft. `xanalyze login https://contoso.sharepoint.com/sites/ExampleSite`
+  сторінкою входу Microsoft. `xaudit login https://contoso.sharepoint.com/sites/ExampleSite`
   відкриває справжнє вікно браузера; завершіть там вхід у Microsoft 365, разом
   з MFA, і натисніть «Готово», коли повернетесь на сайт. Вікно підсвічує
   «Увійти на сайт», термінальна форма друкує цю команду, а CLI відмовляє в
@@ -359,13 +383,13 @@ PHP-файлі, - а її шаблони читаються як фрагмен�
 
 ## Звіти
 
-Кожна команда пише теку прогону за датою, типово в `~/Documents/XAnalyze/`
-(`XANALYZE_REPORT_ROOT` змінює місце). Архів, що лишився в `~/Desktop/XAnalyze/`
+Кожна команда пише теку прогону за датою, типово в `~/Documents/XBrain Audit/`
+(`XAUDIT_REPORT_ROOT` змінює місце). Архів, що лишився в `~/Desktop/XBrain Audit/`
 від попередньої версії, переїжджає при першому прогоні: історія прогонів, яка
 потрібна для порівняння, лишається там, де інструмент її шукає.
 
 ```text
-XAnalyze/example.com/2026-09-02-0930/
+XBrain Audit/example.com/2026-09-02-0930/
   report.md     згрупований брифінг для агента
   report.pdf    звіт для людини
   timings.md    час етапів
@@ -391,7 +415,7 @@ XAnalyze/example.com/2026-09-02-0930/
 під час прогону, а stdout лишається таким, як був:
 
 ```bash
-xanalyze fullscan https://example.com --progress jsonl
+xaudit fullscan https://example.com --progress jsonl
 ```
 
 ```json
@@ -420,9 +444,9 @@ xanalyze fullscan https://example.com --progress jsonl
 Це не дефолт, і свідомо: людина за терміналом хоче речень, а прогрес і так
 увімкнений - `jsonl` міняє **формат**, а не те, чи прогін про себе звітує. Хто
 саме читає - властивість середовища, а не команди, тож постав
-`XANALYZE_PROGRESS=jsonl` один раз, і кожен прогін у тій оболонці говорить
+`XAUDIT_PROGRESS=jsonl` один раз, і кожен прогін у тій оболонці говорить
 ним; `--progress human` на окремій команді все одно перемагає, тож будь-який
-один прогін можна прочитати очима. Рядок, який не парситься як JSON, XAnalyze не писав - Qt пише
+один прогін можна прочитати очима. Рядок, який не парситься як JSON, XBrain Audit не писав - Qt пише
 власну діагностику в той самий потік, - тож його треба пропустити, а не
 падати на ньому.
 
@@ -433,7 +457,7 @@ xanalyze fullscan https://example.com --progress jsonl
 | `0` | чисто - команда відпрацювала і не має про що звітувати |
 | `1` | є знахідки, і лише з `--check`. `scan`/`fix`/`clean`: будь-яка знахідка. `audit`/`fullscan`: критична або серйозна |
 | `2` | помилка - команда не могла виконатись: шлях не існує, прапорець не застосовний, детектор не зміг прочитати текст |
-| `3` | незавершено - прогін спинився на пів дорозі, його робота на диску; `xanalyze resume` продовжує |
+| `3` | незавершено - прогін спинився на пів дорозі, його робота на диску; `xaudit resume` продовжує |
 
 ## Інтерфейси
 
@@ -442,7 +466,7 @@ xanalyze fullscan https://example.com --progress jsonl
 з виправленнями, оглядом замін і експортом звіту. Дві ширини можна вивести
 одночасно, щоб закрити питання «це ламається лише на мобільному».
 
-**Термінал** (`xanalyze` без аргументів). Scan, Audit, Full Scan, Reports,
+**Термінал** (`xaudit` без аргументів). Scan, Audit, Full Scan, Reports,
 Settings, Account, Update, Logs. Стрілки, цифрові скорочення, `Tab`, `Esc` і
 `Ctrl+R` для запуску.
 
@@ -452,10 +476,10 @@ Settings, Account, Update, Logs. Стрілки, цифрові скорочен
 
 ## Конфігурація
 
-Налаштування живуть у `~/.config/xanalyze/settings.json` (на Windows
-`%APPDATA%\xanalyze\settings.json`) - мова, провайдер, `max_pages`, категорії символів.
+Налаштування живуть у `~/.config/xbrain-audit/settings.json` (на Windows
+`%APPDATA%\xbrain-audit\settings.json`) - мова, провайдер, `max_pages`, категорії символів.
 
-`.xanalyze-ignore` у корені проєкту використовує синтаксис gitignore і вміє
+`.xaudit-ignore` у корені проєкту використовує синтаксис gitignore і вміє
 глушити за правилом, селектором або відбитком:
 
 ```text
@@ -469,7 +493,7 @@ meta-viewport
 083bea550659aadb  # текст логотипа вже є в посиланні
 ```
 
-Відхилити знахідку з причиною можна однією командою: `xanalyze ignore
+Відхилити знахідку з причиною можна однією командою: `xaudit ignore
 FINGERPRINT --reason "…"`, відбиток береться з `audit --json`. Кожен наступний
 прогін каже, скільки знахідок приховано, і наводить причини, тож прихована
 знахідка ніколи не виглядає як чиста сторінка.
@@ -545,9 +569,12 @@ WordPress, файл `.twig`, `.erb`, `.ejs`, `.phtml` чи `.liquid` - це ро
 ```bash
 make version        # що каже config.py
 make rebuild        # один бандл: вікно, CLI і TUI на цій версії
-make package        # XAnalyze.app.zip і маніфест, те, що шукає `xanalyze update`
+make package        # XBrainAudit.app.zip і маніфест, те, що шукає `xaudit update`
 ```
 
+Він також пише `XAnalyze.app.zip` і `xanalyze-update-manifest.json`: той
+самий застосунок і той самий маніфест під іменами, які шукає встановлений
+XAnalyze (`scripts/package_release.sh`, спільний із workflow релізу).
 `make package` відмовляється працювати над застарілим бандлом. Архів поки не
 підписаний і не нотаризований.
 

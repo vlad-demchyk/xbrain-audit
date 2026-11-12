@@ -1,7 +1,7 @@
 """Where run folders land, and what happened to the ones already written.
 
-Changed 2026-09-02 at the owner's request: `~/Documents/XAnalyze` rather
-than `~/Desktop/XAnalyze`. A run leaves a folder per target and a sub-folder
+Changed 2026-09-02 at the owner's request: `~/Documents/XBrain Audit` rather
+than `~/Desktop/XBrain Audit`. A run leaves a folder per target and a sub-folder
 per run inside it, so what accumulates is an archive - and an archive on the
 Desktop is in front of everything else all day.
 
@@ -50,7 +50,8 @@ class _FakeHome(unittest.TestCase):
         os.environ.pop(runfolder.ROOT_ENV, None)
 
     def desktop_root(self, *runs: str) -> Path:
-        old = self.home / "Desktop" / runfolder.REPORTS_FOLDER
+        # Only ever written under the pre-rename name.
+        old = self.home / "Desktop" / runfolder._OLD_DESKTOP_FOLDER
         for name in runs:
             (old / name).mkdir(parents=True)
             (old / name / "report.md").write_text(name, encoding="utf-8")
@@ -62,12 +63,12 @@ class TheDefaultRoot(_FakeHome):
     def test_it_is_under_documents(self):
         (self.home / "Documents").mkdir()
         self.assertEqual(runfolder.default_root(),
-                         self.home / "Documents" / "XAnalyze")
+                         self.home / "Documents" / "XBrain Audit")
 
     def test_a_machine_with_no_documents_still_gets_somewhere(self):
         """A container or a server has no `~/Documents`, and an error is not
         an acceptable answer for "where does the report go"."""
-        self.assertEqual(runfolder.default_root(), self.home / "XAnalyze")
+        self.assertEqual(runfolder.default_root(), self.home / "XBrain Audit")
 
     def test_the_environment_still_wins(self):
         import os
@@ -115,7 +116,7 @@ class WhatHappensToReportsAlreadyWritten(_FakeHome):
         somebody. So the check is that nothing was said at all.
         """
         (self.home / "Documents").mkdir()
-        new = self.home / "Documents" / "XAnalyze"
+        new = self.home / "Documents" / "XBrain Audit"
         (new / "already-here").mkdir(parents=True)
         old = self.desktop_root("example.com")
         with mock.patch.object(runfolder.progress, "notice") as said:
@@ -127,7 +128,7 @@ class WhatHappensToReportsAlreadyWritten(_FakeHome):
     def test_no_desktop_archive_is_not_an_error(self):
         (self.home / "Documents").mkdir()
         self.assertEqual(runfolder.default_root(),
-                         self.home / "Documents" / "XAnalyze")
+                         self.home / "Documents" / "XBrain Audit")
 
     def test_a_move_that_cannot_happen_says_so_and_does_not_raise(self):
         """A sync client holding the folder, a cross-device home: the run
@@ -137,7 +138,7 @@ class WhatHappensToReportsAlreadyWritten(_FakeHome):
         with mock.patch.object(runfolder.Path, "rename",
                                side_effect=OSError("busy")):
             root = runfolder.default_root()
-        self.assertEqual(root, self.home / "Documents" / "XAnalyze")
+        self.assertEqual(root, self.home / "Documents" / "XBrain Audit")
         self.assertTrue(old.is_dir())
 
 

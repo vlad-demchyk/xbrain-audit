@@ -1,7 +1,7 @@
 """A sign-in kept in localStorage survives into a later run (T-2337).
 
 Coach keeps its Supabase session in localStorage, not in a cookie. If
-`xanalyze login` kept only cookies, every audit behind the sign-in would see
+`xaudit login` kept only cookies, every audit behind the sign-in would see
 the sign-in wall. Run as two processes, as `login` and `audit` are, so the
 storage has to reach the disk.
 """

@@ -40,7 +40,7 @@ ARTICLES = {
 BEFORE = "2018-06-01T00:00:00Z"
 
 #: Wikipedia rejects a request with no identifying agent.
-USER_AGENT = "XAnalyze corpus builder (https://github.com/vladyslav/ai-content-scanner)"
+USER_AGENT = "XBrain Audit corpus builder (https://github.com/vladyslav/ai-content-scanner)"
 
 #: Below this a paragraph is a caption or a stub heading, not prose, and the
 #: language reading of it would be a reading of three words.

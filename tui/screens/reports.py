@@ -2,10 +2,10 @@
 
 Clicking a row used to do nothing at all: the table had no selection
 handler, the list was built once and never refreshed, and the history it
-read from lived in `.xanalyze/` in the working directory - so starting
-`xanalyze` from anywhere else showed "No reports found" even when there were
+read from lived in `.xaudit/` in the working directory - so starting
+`xaudit` from anywhere else showed "No reports found" even when there were
 dozens. All three are fixed here; the history itself moved to
-`~/.xanalyze/history/` (see `cli_impl.reports._history_dir`).
+`~/.xbrain-audit/history/` (see `cli_impl.reports._history_dir`).
 """
 from __future__ import annotations
 
@@ -30,10 +30,12 @@ def _history_files() -> list:
     The legacy per-working-directory store is still read so a history
     recorded before the move is not invisible.
     """
+    import app_identity
     from cli_impl.reports import _history_dir
 
     paths = []
-    for directory in (_history_dir(), Path.cwd() / ".xanalyze"):
+    for directory in (_history_dir(),
+                      app_identity.project_history_dir(Path.cwd())):
         if directory.is_dir():
             paths.extend(sorted(directory.glob("*.json")))
     return paths

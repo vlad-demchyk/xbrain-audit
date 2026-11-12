@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
 
 class TheFileIsADocument(unittest.TestCase):
-    """`.xanalyze-ignore` is committed and reviewed like any other file.
+    """`.xaudit-ignore` is committed and reviewed like any other file.
 
     Every case here failed before: the writer rebuilt the file from the
     dataclass, so one dismissal in the window deleted every comment somebody

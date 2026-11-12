@@ -27,13 +27,13 @@ class TheWindowsSpecShipsWhatTheMacOSSpecShips(unittest.TestCase):
     that runs from source and breaks frozen, on one platform only."""
 
     def test_same_data_files(self):
-        mac = _data_files("XAnalyze.spec")
-        windows = _data_files("XAnalyze-windows.spec")
-        self.assertTrue(mac, "no data entries parsed from XAnalyze.spec")
+        mac = _data_files("XBrainAudit.spec")
+        windows = _data_files("XBrainAudit-windows.spec")
+        self.assertTrue(mac, "no data entries parsed from XBrainAudit.spec")
         self.assertEqual(mac, windows)
 
     def test_windows_keychain_backend_is_named(self):
-        text = (ROOT / "packaging" / "XAnalyze-windows.spec").read_text(encoding="utf-8")
+        text = (ROOT / "packaging" / "XBrainAudit-windows.spec").read_text(encoding="utf-8")
         self.assertIn('"keyring.backends.Windows"', text)
 
 
@@ -42,15 +42,15 @@ class TheCliExecutableIsRecognisedOnWindows(unittest.TestCase):
         import app_entry
 
         with mock.patch.object(sys, "platform", "win32"), \
-                mock.patch.object(sys, "executable", r"C:\XAnalyze\xanalyze-cli.exe"):
+                mock.patch.object(sys, "executable", r"C:\XBrain Audit\xaudit.exe"):
             self.assertTrue(app_entry._invoked_as_cli())
 
     def test_window_executable_typed_in_lower_case_is_still_the_window(self):
         import app_entry
 
         with mock.patch.object(sys, "platform", "win32"), \
-                mock.patch.object(sys, "executable", r"C:\XAnalyze\XAnalyze.exe"), \
-                mock.patch.object(sys, "argv", ["xanalyze"]):
+                mock.patch.object(sys, "executable", r"C:\XBrain Audit\XBrain Audit.exe"), \
+                mock.patch.object(sys, "argv", ["xaudit"]):
             self.assertFalse(app_entry._invoked_as_cli())
 
 

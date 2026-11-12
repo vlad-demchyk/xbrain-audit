@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 
 import requests
 
+import app_identity
+
 from .vitals import METRICS, repeat_summary
 
 CRUX_ENDPOINT = "https://chromeuxreport.googleapis.com/v1/records:queryRecord"
@@ -87,11 +89,11 @@ def lighthouse(url: str, *, profile="mobile", repeats=1, run=None) -> dict:
     base = {"source": "Lighthouse", "kind": "lab", "profile": profile, "requested_url": url}
     if urlsplit(url).scheme not in ("http", "https"):
         return {**base, "status": "unknown", "reason": "Lighthouse needs an HTTP(S) page"}
-    binary = os.environ.get("XANALYZE_LIGHTHOUSE") or shutil.which("lighthouse")
+    binary = app_identity.env("LIGHTHOUSE") or shutil.which("lighthouse")
     if not binary:
         return {**base, "status": "unknown", "reason": "Lighthouse CLI is not installed"}
     samples, runs = [], []
-    with tempfile.TemporaryDirectory(prefix="xanalyze-lighthouse-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="xaudit-lighthouse-") as temporary:
         for index in range(repeats):
             output = Path(temporary) / f"run-{index}.json"
             command = [binary, url, "--only-categories=performance", "--output=json",
@@ -133,7 +135,7 @@ def lighthouse(url: str, *, profile="mobile", repeats=1, run=None) -> dict:
                 samples.append({})
     status = "checked" if all(r["status"] == "checked" for r in runs) else "error"
     return {**base, "status": status, "runs": runs, "dispersion": repeat_summary(samples),
-            "session": "separate Chrome profile; stored XAnalyze sign-in is not used"}
+            "session": "separate Chrome profile; stored XBrain Audit sign-in is not used"}
 
 
 def optional_sources(urls, args, *, scoped=False) -> list:

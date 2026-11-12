@@ -8,7 +8,6 @@ what a coding agent reads best; `.json` if the suffix asks for it.
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -1219,9 +1218,10 @@ _PAGES_LISTED = 40
 
 
 def _history_dir() -> Path:
-    """Where run history lives: `~/.xanalyze/history/`.
+    """Where run history lives: `~/.xbrain-audit/history/`.
 
-    Not `.xanalyze/` in the working directory, which is where this used to
+    Not `.xaudit/` (before the rename `.xanalyze/`) in the working
+    directory, which is where this used to
     live. Two reasons, both found by running the tool:
 
     * A run started from a different folder saw no history at all, so the
@@ -1232,13 +1232,16 @@ def _history_dir() -> Path:
     The legacy location is still read - see `_legacy_history` - so runs
     recorded before this change keep counting.
 
-    `XANALYZE_HISTORY_DIR` moves it, the way `XANALYZE_REPORT_ROOT` moves
+    `XAUDIT_HISTORY_DIR` moves it, the way `XAUDIT_REPORT_ROOT` moves
     the run folders: the test suite points it at a temporary directory,
     because every CLI run a test made was otherwise recorded in the
     developer's real history - and compared against it on the next run.
+    The `XANALYZE_` spellings of both are still read.
     """
-    override = os.environ.get("XANALYZE_HISTORY_DIR")
-    d = Path(override) if override else Path.home() / ".xanalyze" / "history"
+    import app_identity
+
+    override = app_identity.env("HISTORY_DIR")
+    d = Path(override) if override else app_identity.data_home() / "history"
     try:
         d.mkdir(parents=True, exist_ok=True)
     except OSError:
@@ -1261,13 +1264,16 @@ def _history_key(root: str, mode: str) -> str:
 
 
 def _legacy_history(root: str, mode: str) -> list:
-    """Entries for this target recorded under the old `.xanalyze/` scheme.
+    """Entries for this target recorded under the old per-folder scheme.
 
     Read once per run and merged in, so the runs already on disk - keyed by
     report path, one file per run - are not lost. Each file is filtered by
-    root and mode because the old key said nothing about either.
+    root and mode because the old key said nothing about either. The folder
+    is `.xaudit/`, or `.xanalyze/` where only that one exists.
     """
-    legacy_dir = Path.cwd() / ".xanalyze"
+    import app_identity
+
+    legacy_dir = app_identity.project_history_dir(Path.cwd())
     if not legacy_dir.is_dir():
         return []
     found: list = []

@@ -17,7 +17,7 @@ bundles and using them:
    reached an Italian reader either.
 
 3. **`--version` opened the window.** The Makefile tells whoever builds the
-   bundle to verify it with `XAnalyze.app/Contents/MacOS/XAnalyze
+   bundle to verify it with `XBrain Audit.app/Contents/MacOS/XBrain Audit
    --version`; that sat there with a window open instead of printing, on the
    surface where a stale binary is hardest to notice.
 

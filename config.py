@@ -12,10 +12,13 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import app_identity
 import platform_dirs
 
-APP_NAME = "xanalyze"
-APP_VERSION = "0.73.0"
+#: The config folder's name. Owned by `app_identity`, like every other name
+#: the rename touched; `_config_dir` keeps reading `xanalyze` until it moves.
+APP_NAME = app_identity.APP_SLUG
+APP_VERSION = "0.74.0"
 # Pre-rename config dir name. Only used to migrate an existing install's
 # settings into the new location the first time this runs after upgrading;
 # see `migrate_legacy_file`.
@@ -50,7 +53,7 @@ def migrate_legacy_file(old_dir: Path, new_dir: Path, filename: str) -> None:
 
 def _config_dir() -> Path:
     base = str(platform_dirs.config_home())
-    path = Path(base) / APP_NAME
+    path = app_identity.app_dir(Path(base))
     path.mkdir(parents=True, exist_ok=True)
     migrate_legacy_file(Path(base) / OLD_APP_NAME, path, "settings.json")
     return path
@@ -155,10 +158,10 @@ class Settings:
     # Findings the user has already decided about — phrases that are house
     # style, checks they don't want, paths and page regions to skip, and
     # individual dismissed findings. See suppression.py; a scanned project
-    # can add its own list in a committed `.xanalyze-ignore` file.
+    # can add its own list in a committed `.xaudit-ignore` file.
     ignore: dict = field(default_factory=dict)
 
-    # Whether the packaged app has already offered to put the `xanalyze`
+    # Whether the packaged app has already offered to put the `xaudit`
     # command on PATH (`cli_install.offer_is_due`). Set once the question has
     # been *asked*, not once it has been answered yes: "no" is an answer, and
     # re-asking on every launch would turn a convenience into a nag. Someone

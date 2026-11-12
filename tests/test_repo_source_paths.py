@@ -55,7 +55,7 @@ class MatchingAPassageToItsFile(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        os.environ["XANALYZE_JUDGMENT_CACHE"] = self.tmp.name
+        os.environ["XAUDIT_JUDGMENT_CACHE"] = self.tmp.name
         self.repo = Path(self.tmp.name).resolve() / "repo"
         self.repo.mkdir()
         (self.repo / "hero.php").write_text(
@@ -63,7 +63,7 @@ class MatchingAPassageToItsFile(unittest.TestCase):
             encoding="utf-8")
 
     def tearDown(self):
-        os.environ.pop("XANALYZE_JUDGMENT_CACHE", None)
+        os.environ.pop("XAUDIT_JUDGMENT_CACHE", None)
         self.tmp.cleanup()
 
     def _run(self, pages, args):
@@ -137,7 +137,7 @@ class RepoCoverageStats(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        os.environ["XANALYZE_JUDGMENT_CACHE"] = self.tmp.name
+        os.environ["XAUDIT_JUDGMENT_CACHE"] = self.tmp.name
         self.repo = Path(self.tmp.name).resolve() / "repo"
         self.repo.mkdir()
         (self.repo / "hero.php").write_text(
@@ -145,7 +145,7 @@ class RepoCoverageStats(unittest.TestCase):
             encoding="utf-8")
 
     def tearDown(self):
-        os.environ.pop("XANALYZE_JUDGMENT_CACHE", None)
+        os.environ.pop("XAUDIT_JUDGMENT_CACHE", None)
         self.tmp.cleanup()
 
     def _run(self, pages, args, stats_out):

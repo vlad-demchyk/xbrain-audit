@@ -24,7 +24,7 @@ only works while red and green mean *before* and *after* and never also mean
 "a media tag". So the role inks below are chosen from the rest of the
 palette: the reserved two are not among them.
 
-Every value comes from `ui.tokens.Palette` - the XAnalyze desktop palette,
+Every value comes from `ui.tokens.Palette` - the XBrain Audit desktop palette,
 which is the design bundle read as tokens - and never from a hex typed here.
 """
 from __future__ import annotations

@@ -134,7 +134,7 @@ class ClaudeCodeProvider(LLMProvider):
     def _neutral_workdir(self) -> str:
         """An empty directory, so no project's CLAUDE.md joins the prompt."""
         if self._workdir is None:
-            self._workdir = tempfile.mkdtemp(prefix="xanalyze-claude-")
+            self._workdir = tempfile.mkdtemp(prefix="xaudit-claude-")
         return self._workdir
 
     def _argv(self, system: str) -> list:

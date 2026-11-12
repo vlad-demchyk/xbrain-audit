@@ -223,7 +223,10 @@ def _request(session, method, url, headers, *, timeout=(5, 30), **kwargs):
 
 
 def _pangram(session, headers, text, config, credential):
-    directory = Path(os.environ.get("XANALYZE_API_JOB_CACHE", str(Path.home() / ".xanalyze" / "validation" / "api-jobs")))
+    import app_identity
+
+    directory = Path(app_identity.env("API_JOB_CACHE")
+                     or app_identity.data_home() / "validation" / "api-jobs")
     # Partition handles by credential without persisting the credential.
     key = digest(["pangram", config["model"], hashlib.sha256(text.encode()).hexdigest(), credential])
     path = directory / (key + ".json")

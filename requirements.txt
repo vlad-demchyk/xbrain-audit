@@ -26,7 +26,7 @@ cryptography>=44
 Pillow>=10
 
 # Optional, and deliberately not pinned here: reading a signed C2PA manifest
-# needs `c2pa-python`. Without it XAnalyze still reports that a file carries
+# needs `c2pa-python`. Without it XBrain Audit still reports that a file carries
 # Content Credentials and says it could not read them - which is true and
 # useful - so this stays a choice rather than a cost every install pays.
 #   pip install c2pa-python

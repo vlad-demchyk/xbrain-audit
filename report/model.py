@@ -205,7 +205,7 @@ class ReportMeta:
     run: list = field(default_factory=list)
     generated_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
-    generator: str = "XAnalyze"
+    generator: str = "XBrain Audit"
     #: The checkout behind the target, when the run knew of one (`--repo`, or
     #: the folder whose dev server is being read). It is what names a run
     #: against `http://127.0.0.1:5173/`: an address like that identifies a

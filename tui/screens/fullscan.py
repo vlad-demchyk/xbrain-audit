@@ -168,7 +168,7 @@ class FullscanScreen(RunScreen):
             # Four of the nine flags this screen was missing. `--repo` is
             # not among them on purpose: a full scan of a URL takes a
             # checkout, and that is a path field the window has room for and
-            # a terminal form does not - `xanalyze fullscan --repo` remains
+            # a terminal form does not - `xaudit fullscan --repo` remains
             # the way to ask for it. `--web-parts` follows it out for the
             # same reason: it reads part manifests from that checkout.
             yield Label(self.tr("within_placeholder"))

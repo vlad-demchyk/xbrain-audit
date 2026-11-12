@@ -267,15 +267,15 @@ class _Slot:
         # (axe, HTMLCS); the Python side parses either the same way.
         wrapped = f"""
 (function() {{
-  window.__xanalyze = window.__xanalyze || {{}};
-  window.__xanalyze[{_js(self.name)}] = null;
+  window.__xaudit = window.__xaudit || {{}};
+  window.__xaudit[{_js(self.name)}] = null;
   try {{
     Promise.resolve({self.script}).then(
-      function(value) {{ window.__xanalyze[{_js(self.name)}] = String(value); }},
-      function(err) {{ window.__xanalyze[{_js(self.name)}] = JSON.stringify({{error: String(err)}}); }}
+      function(value) {{ window.__xaudit[{_js(self.name)}] = String(value); }},
+      function(err) {{ window.__xaudit[{_js(self.name)}] = JSON.stringify({{error: String(err)}}); }}
     );
   }} catch (err) {{
-    window.__xanalyze[{_js(self.name)}] = JSON.stringify({{error: String(err)}});
+    window.__xaudit[{_js(self.name)}] = JSON.stringify({{error: String(err)}});
   }}
   return true;
 }})()
@@ -295,7 +295,7 @@ class _Slot:
                 return
             QTimer.singleShot(POLL_INTERVAL_MS, self._poll)
 
-        self.page.runJavaScript(f"window.__xanalyze && window.__xanalyze[{_js(self.name)}]", self.world_id, read)
+        self.page.runJavaScript(f"window.__xaudit && window.__xaudit[{_js(self.name)}]", self.world_id, read)
 
 
 class BrowserAuditRunner:
@@ -354,7 +354,7 @@ class BrowserAuditRunner:
         if self.options.run_measurements:
             from .vitals import bootstrap_script
             script = QWebEngineScript()
-            script.setName("xanalyze-web-vitals")
+            script.setName("xaudit-web-vitals")
             script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
             script.setWorldId(QWebEngineScript.ScriptWorldId.ApplicationWorld)
             script.setRunsOnSubFrames(False)
@@ -729,7 +729,7 @@ class BrowserAuditRunner:
                 "states": states.state_script,
                 "html": lambda: browser.HTML_SCRIPT,
                 "text": lambda: TEXT_SNAPSHOT_SCRIPT.replace(
-                    'const scope = ""; // XANALYZE_SCOPE',
+                    'const scope = ""; // XAUDIT_SCOPE',
                     'const scope = ' + _js(options.text_within) + ';'),
             }
             # Sequentially, not in parallel: axe and the state pass both walk
@@ -928,7 +928,7 @@ def open_session_profile(host: str, parent=None):
     if existing is not None:
         return existing
     path = site_session.profile_dir(host, create=True)
-    profile = QWebEngineProfile(f"xanalyze-{host}")
+    profile = QWebEngineProfile(f"xaudit-{host}")
     profile.setPersistentStoragePath(str(path))
     profile.setCachePath(str(path / "cache"))
     profile.setPersistentCookiesPolicy(

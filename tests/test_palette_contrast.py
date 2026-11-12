@@ -1,6 +1,6 @@
 """The app's own palette, held to the rule the app enforces on other people.
 
-XAnalyze reports insufficient contrast as an accessibility finding on the
+XBrain Audit reports insufficient contrast as an accessibility finding on the
 pages it audits (`audit.rules.accessibility.InlineContrast`). Its own window
 was never measured against the same threshold, and "the dark theme has uneven
 spots" is not a defect anyone can act on - so this file turns that sentence

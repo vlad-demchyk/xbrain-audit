@@ -1,7 +1,7 @@
 """One temporary config directory for the whole test run.
 
 A test that touches `Settings` used to write the developer's real
-`~/.config/xanalyze/settings.json`, because `config.CONFIG_FILE` was a module
+`~/.config/xbrain-audit/settings.json`, because `config.CONFIG_FILE` was a module
 constant computed during import: by the time a test could set
 `XDG_CONFIG_HOME`, the path was already decided. That is not a theoretical
 hazard. `tests/test_devserver_gui.py` flipped the real auto-start toggle on
@@ -36,20 +36,20 @@ import pytest
 #: Kept alive for the process, not cleaned per test. The directory is the
 #: shared "user config" the whole run sees, and removing it between tests
 #: would make settings vanish mid-suite for no reason a test could explain.
-_CONFIG_HOME = tempfile.TemporaryDirectory(prefix="xanalyze-tests-config-")
+_CONFIG_HOME = tempfile.TemporaryDirectory(prefix="xaudit-tests-config-")
 os.environ["XDG_CONFIG_HOME"] = _CONFIG_HOME.name
 
 #: The same leak, for reports. Every test that ran a scan through the CLI or
-#: the window saved its run under the developer's real `~/Documents/XAnalyze`
+#: the window saved its run under the developer's real `~/Documents/XBrain Audit`
 #: - one full run left a few dozen folders there, and `mixed-problems` had
-#: grown to 366 of them. `XANALYZE_REPORT_ROOT` is the override the run folder
+#: grown to 366 of them. `XAUDIT_REPORT_ROOT` is the override the run folder
 #: already honours; the tests of the root itself set and restore it per test.
-_REPORT_ROOT = tempfile.TemporaryDirectory(prefix="xanalyze-tests-reports-")
-os.environ["XANALYZE_REPORT_ROOT"] = _REPORT_ROOT.name
+_REPORT_ROOT = tempfile.TemporaryDirectory(prefix="xaudit-tests-reports-")
+os.environ["XAUDIT_REPORT_ROOT"] = _REPORT_ROOT.name
 
 #: The rest of the application's own state, which lives outside both of the
-#: above: run history (`~/.xanalyze/history`, compared against on the next
-#: run), the browser-pass and judgment caches (`~/.xanalyze/...`), the log
+#: above: run history (`~/.xbrain-audit/history`, compared against on the next
+#: run), the browser-pass and judgment caches (`~/.xbrain-audit/...`), the log
 #: (`%LOCALAPPDATA%` / `~/.local/state`) and the validation ledgers. Measured
 #: 2026-11-11 on Windows: one full run added about 40 files to the real
 #: history. Each has an environment override the code already reads, so the
@@ -58,16 +58,24 @@ os.environ["XANALYZE_REPORT_ROOT"] = _REPORT_ROOT.name
 #: sentence-transformers model cache lives under it, and a moved HOME means
 #: downloading the model again for every run.
 _STATE_ENV = {
-    "XANALYZE_HISTORY_DIR": "history",
-    "XANALYZE_BROWSER_CACHE": "browser",
-    "XANALYZE_JUDGMENT_CACHE": "judgments",
-    "XANALYZE_LOG_DIR": "logs",
-    "XANALYZE_VALIDATION_LEDGER": "validation-ledger",
-    "XANALYZE_API_JOB_CACHE": "api-jobs",
+    "XAUDIT_HISTORY_DIR": "history",
+    "XAUDIT_BROWSER_CACHE": "browser",
+    "XAUDIT_JUDGMENT_CACHE": "judgments",
+    "XAUDIT_LOG_DIR": "logs",
+    "XAUDIT_VALIDATION_LEDGER": "validation-ledger",
+    "XAUDIT_API_JOB_CACHE": "api-jobs",
 }
-_STATE_ROOT = tempfile.TemporaryDirectory(prefix="xanalyze-tests-state-")
+_STATE_ROOT = tempfile.TemporaryDirectory(prefix="xaudit-tests-state-")
 for _name, _folder in _STATE_ENV.items():
     os.environ[_name] = os.path.join(_STATE_ROOT.name, _folder)
+
+#: The rename to XBrain Audit moves `~/.xanalyze`, `~/.config/xanalyze` and
+#: `~/Documents/XAnalyze` the first time any entry point starts. HOME is the
+#: developer's real one here (see above), so a test that runs `cli.main` or a
+#: `cli.py` subprocess would move the developer's real folders. Off for the
+#: whole run, children included; `tests/test_rename_xbrain_audit.py` tests
+#: the move against a temporary home, which the variable does not stop.
+os.environ["XAUDIT_NO_DATA_MIGRATION"] = "1"
 
 
 @pytest.fixture(autouse=True)
@@ -84,7 +92,8 @@ def _isolated_app_state(tmp_path_factory, monkeypatch):
     for name, folder in _STATE_ENV.items():
         monkeypatch.setenv(name, str(root / folder))
     monkeypatch.setenv("XDG_CONFIG_HOME", _CONFIG_HOME.name)
-    monkeypatch.setenv("XANALYZE_REPORT_ROOT", _REPORT_ROOT.name)
+    monkeypatch.setenv("XAUDIT_NO_DATA_MIGRATION", "1")
+    monkeypatch.setenv("XAUDIT_REPORT_ROOT", _REPORT_ROOT.name)
     try:
         import scan_cache
     except ImportError:  # pragma: no cover - the module is part of the repo

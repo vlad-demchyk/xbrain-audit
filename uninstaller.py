@@ -1,4 +1,4 @@
-"""Removing XAnalyze from this machine.
+"""Removing XBrain Audit from this machine.
 
 The counterpart of `updater.py`: where update replaces the binary with a
 newer one, uninstall removes everything the app ever put outside its own
@@ -6,18 +6,21 @@ directory. One implementation here; the CLI command and the TUI screen are
 thin frontends over `enumerate_items` / `remove_item`.
 
 What counts as "the app":
-  * the PATH symlink(s) (`~/.local/bin/xanalyze`, `/usr/local/bin/xanalyze`)
-  * the GUI bundle (/Applications/XAnalyze.app), when present
-  * the config dir (~/.config/xanalyze) — settings and the scan cache
-  * the pre-rename config dir (~/.config/ai-content-scanner)
-  * keychain entries under both service names, for every account key the
+  * the PATH symlinks, `xaudit` and the pre-rename alias `xanalyze`, in
+    `~/.local/bin` and `/usr/local/bin`
+  * the GUI bundle (/Applications/XBrain Audit.app, or the pre-rename
+    /Applications/XAnalyze.app), when present
+  * the config dir (~/.config/xbrain-audit) — settings and the scan cache
+  * the pre-rename config dirs (~/.config/xanalyze, ~/.config/ai-content-scanner)
+  * keychain entries under every service name, for every account key the
     app has ever used
 
 What deliberately stays:
-  * `.xanalyze/` run-history folders inside scanned projects — they live in
-    the user's repositories, next to their files
-  * reports already written to ~/Documents/XAnalyze — user data, not app state
-  * `.xanalyze-ignore` files and `.bak` backups inside repositories
+  * `.xaudit/` (or `.xanalyze/`) run-history folders inside scanned
+    projects — they live in the user's repositories, next to their files
+  * reports already written to ~/Documents/XBrain Audit — user data, not app state
+  * `.xaudit-ignore` (or `.xanalyze-ignore`) files and `.bak` backups
+    inside repositories
 
 Both lists are shown to the user before anything is removed.
 """
@@ -27,6 +30,8 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import app_identity
+
 #: Every secret key the app has ever saved, under either service name.
 _KNOWN_SECRET_KEYS = (
     "xformat_access_token",
@@ -35,8 +40,11 @@ _KNOWN_SECRET_KEYS = (
     "anthropic_api_key",
 )
 
-_SERVICE_NAME = "xanalyze"
+_SERVICE_NAME = app_identity.APP_SLUG
+#: The XAnalyze releases' service and config dir name.
+_LEGACY_SERVICE_NAME = app_identity.LEGACY_APP_SLUG
 _OLD_SERVICE_NAME = "ai-content-scanner"
+_SERVICES = (_SERVICE_NAME, _LEGACY_SERVICE_NAME, _OLD_SERVICE_NAME)
 
 
 @dataclass
@@ -72,19 +80,26 @@ def enumerate_items() -> list[UninstallItem]:
     """Everything uninstall would touch, in removal order."""
     items: list[UninstallItem] = []
 
-    for link_dir in (Path.home() / ".local" / "bin", Path("/usr/local/bin")):
-        target = link_dir / "xanalyze"
-        items.append(UninstallItem(
-            key=f"symlink:{link_dir}", kind="symlink", path=target,
-            label=f"{target} (command on PATH)",
-            exists=target.is_symlink() or target.exists(),
-        ))
+    import cli_install
 
-    app = Path("/Applications/XAnalyze.app")
-    items.append(UninstallItem(
-        key="app", kind="bundle", path=app,
-        label=f"{app} (application)", exists=app.exists(),
-    ))
+    for link_dir in (Path.home() / ".local" / "bin", Path("/usr/local/bin")):
+        for name in cli_install.LINK_NAMES:
+            target = link_dir / name
+            key = (f"symlink:{link_dir}" if name == cli_install.CLI_NAME
+                   else f"symlink:{link_dir}:{name}")
+            items.append(UninstallItem(
+                key=key, kind="symlink", path=target,
+                label=f"{target} (command on PATH)",
+                exists=target.is_symlink() or target.exists(),
+            ))
+
+    for key, name in (("app", app_identity.PRODUCT_NAME),
+                      ("legacy-app", app_identity.LEGACY_PRODUCT_NAME)):
+        app = Path("/Applications") / f"{name}.app"
+        items.append(UninstallItem(
+            key=key, kind="bundle", path=app,
+            label=f"{app} (application)", exists=app.exists(),
+        ))
 
     config_dir = _config_base() / _SERVICE_NAME
     items.append(UninstallItem(
@@ -93,13 +108,15 @@ def enumerate_items() -> list[UninstallItem]:
         exists=config_dir.exists(),
     ))
 
-    legacy_dir = _config_base() / _OLD_SERVICE_NAME
-    items.append(UninstallItem(
-        key="legacy-config", kind="dir", path=legacy_dir,
-        label=f"{legacy_dir} (pre-rename settings)", exists=legacy_dir.exists(),
-    ))
+    for key, name in (("legacy-config-xanalyze", _LEGACY_SERVICE_NAME),
+                      ("legacy-config", _OLD_SERVICE_NAME)):
+        legacy_dir = _config_base() / name
+        items.append(UninstallItem(
+            key=key, kind="dir", path=legacy_dir,
+            label=f"{legacy_dir} (pre-rename settings)", exists=legacy_dir.exists(),
+        ))
 
-    for service in (_SERVICE_NAME, _OLD_SERVICE_NAME):
+    for service in _SERVICES:
         for account in _KNOWN_SECRET_KEYS:
             if _keychain_has(service, account):
                 items.append(UninstallItem(
@@ -121,7 +138,7 @@ def display_item(item: UninstallItem, lang: str = "en") -> str:
         return t("tui_uninstall_item_app", lang, path=path)
     if item.key == "config":
         return t("tui_uninstall_item_config", lang, path=path)
-    if item.key == "legacy-config":
+    if item.key.startswith("legacy-config"):
         return t("tui_uninstall_item_legacy_config", lang, path=path)
     if item.kind == "keychain":
         return t("tui_uninstall_item_keychain", lang, service=item.service,
@@ -150,6 +167,7 @@ def remaining_notes(lang: str | None = None) -> list[str]:
     # Loose files from before run folders existed. Still named, because they
     # are still on people's Desktops.
     desktop = Path.home() / "Desktop"
+    # Only ever written under the pre-rename name.
     desktop_reports = [p for pattern in ("xanalyze-*.pdf", "xanalyze-*.html",
                                          "xanalyze-*.md")
                        for p in desktop.glob(pattern)]
@@ -162,8 +180,9 @@ def remaining_notes(lang: str | None = None) -> list[str]:
             notes.append(t("tui_uninstall_old_reports_left", lang,
                            n=len(desktop_reports)))
     if lang is None:
-        notes.append(".xanalyze/ history folders and .xanalyze-ignore files "
-                     "inside your repositories are left untouched")
+        notes.append(".xaudit/ history folders and .xaudit-ignore files "
+                     "(or their .xanalyze names) inside your repositories "
+                     "are left untouched")
     else:
         from i18n.translations import t
 

@@ -957,7 +957,7 @@ def build_textual_theme(p: Palette) -> Theme:
     both and names them so the TUI can pick the one that matches Qt's.
     """
     return Theme(
-        name=f"xanalyze-{p.name}",
+        name=f"xaudit-{p.name}",
         dark=p.is_dark,
         primary=p.primary,
         secondary=p.accent,

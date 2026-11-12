@@ -174,7 +174,7 @@ class TheAuditReadsTheSameFile(unittest.TestCase):
         """`<?php echo esc_html(...) ?>` is a name, not an empty element.
 
         Measured 2026-09-02: `analyze_files` masked the server tags and
-        `analyze_page_file` did not, so `xanalyze audit header.php` and the
+        `analyze_page_file` did not, so `xaudit audit header.php` and the
         same file inside a folder scan disagreed about this link. Both call
         `_mask_for_audit` now.
         """

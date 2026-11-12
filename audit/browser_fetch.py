@@ -50,7 +50,7 @@ _REQUEST_HEADERS = ("accept", "accept-language")
 #: opaque answer): `same-site` when following it stayed on the page's origin
 #: (and `Location` says where it ended), `off-site` when following it left
 #: the origin - which, for a signed-in request, is the identity provider.
-REDIRECT_HEADER = "X-XAnalyze-Redirect"
+REDIRECT_HEADER = "X-XBrainAudit-Redirect"
 REDIRECT_OFF_SITE = "off-site"
 REDIRECT_SAME_SITE = "same-site"
 
@@ -94,7 +94,7 @@ def _fetch_script(slot: int, url: str, headers: dict, timeout_ms: int,
     wanted = json.dumps(list(RESPONSE_HEADERS))
     return f"""
 (function() {{
-  var box = (window.__xanalyzeFetch = window.__xanalyzeFetch || {{}});
+  var box = (window.__xauditFetch = window.__xauditFetch || {{}});
   var key = {json.dumps(str(slot))};
   box[key] = null;
   var park = function(value) {{ box[key] = JSON.stringify(value); }};
@@ -128,7 +128,7 @@ def _fetch_script(slot: int, url: str, headers: dict, timeout_ms: int,
 
 def _take_script(slot: int) -> str:
     key = json.dumps(str(slot))
-    return (f"(function() {{ var box = window.__xanalyzeFetch || {{}};"
+    return (f"(function() {{ var box = window.__xauditFetch || {{}};"
             f" var value = box[{key}];"
             f" if (value) {{ delete box[{key}]; }}"
             f" return value || null; }})()")

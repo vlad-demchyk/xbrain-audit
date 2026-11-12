@@ -1,4 +1,4 @@
-"""Uninstall screen — remove XAnalyze from this machine."""
+"""Uninstall screen — remove XBrain Audit from this machine."""
 from __future__ import annotations
 
 from textual.app import ComposeResult

@@ -274,13 +274,13 @@ class TheSlowStageSaysSomething(unittest.TestCase):
         # An isolated cache. Without it the previous test run's answers come
         # back as this run's, and the detector is never called at all.
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["XANALYZE_JUDGMENT_CACHE"] = tmp
+            os.environ["XAUDIT_JUDGMENT_CACHE"] = tmp
             try:
                 with contextlib.redirect_stderr(captured):
                     _content_findings_from_pages(pages, args)
             finally:
                 fullscan._content_passes = real
-                os.environ.pop("XANALYZE_JUDGMENT_CACHE", None)
+                os.environ.pop("XAUDIT_JUDGMENT_CACHE", None)
         return captured.getvalue()
 
     def test_a_judged_run_counts_its_batches(self):
@@ -344,12 +344,12 @@ class BatchingIsNotDefeated(unittest.TestCase):
         real = fullscan._content_passes
         fullscan._content_passes = lambda args: [detector]
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["XANALYZE_JUDGMENT_CACHE"] = tmp
+            os.environ["XAUDIT_JUDGMENT_CACHE"] = tmp
             try:
                 fullscan._content_findings_from_pages([page], None)
             finally:
                 fullscan._content_passes = real
-                os.environ.pop("XANALYZE_JUDGMENT_CACHE", None)
+                os.environ.pop("XAUDIT_JUDGMENT_CACHE", None)
 
         self.assertEqual(detector.batch_calls, 1)
         self.assertEqual(detector.block_calls, 0)
@@ -398,12 +398,12 @@ class TheRowShowsWhatWasJudged(unittest.TestCase):
         real = fullscan._content_passes
         fullscan._content_passes = lambda args: [self._Judge(ranges)]
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["XANALYZE_JUDGMENT_CACHE"] = tmp
+            os.environ["XAUDIT_JUDGMENT_CACHE"] = tmp
             try:
                 return fullscan._content_findings_from_pages([page], None)
             finally:
                 fullscan._content_passes = real
-                os.environ.pop("XANALYZE_JUDGMENT_CACHE", None)
+                os.environ.pop("XAUDIT_JUDGMENT_CACHE", None)
 
     def test_each_row_carries_its_own_passage(self):
         text = "First sentence here. Second sentence here. Third one here."

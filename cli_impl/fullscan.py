@@ -719,7 +719,7 @@ def _audit_fullscan_target(is_url: bool, is_page_file: bool, target: str,
     without a word. The run then exited 0, printed `total_findings: 0`, and
     wrote neither of the files it had been asked for.
 
-    Reproduced on `~/Desktop/XAnalyze/contrast.html`, which is a directory of
+    Reproduced on `~/Desktop/XBrain Audit/contrast.html`, which is a directory of
     old run folders rather than the page its name suggests: `fullscan ...
     --report r.json` reported a clean target and left no `r.json` behind. An
     over-broad `--exclude`, an `--ext` that matches nothing, or a path with
@@ -949,7 +949,7 @@ def _attach_agent_payload(combined: dict, agent_candidates: list,
         "Do NOT dismiss dash density as 'typography' — it IS an AI signal. "
         "For each candidate return block_id, score (0.0=human, 1.0=AI), "
         "and a one-sentence reason. Then pipe judgments to: "
-        "xanalyze agent-judge " + target + " --judgments -"
+        "xaudit agent-judge " + target + " --judgments -"
     )
 
 
@@ -1344,11 +1344,11 @@ def cmd_fullscan(args) -> int:
     the candidates, judges them, and pipes judgments to `agent-judge`.
 
     Usage:
-      xanalyze fullscan https://example.com           # full scan with browser
-      xanalyze fullscan ./repo                        # repo scan (no browser)
-      xanalyze fullscan ./repo --devserver             # start its dev server, scan the render
-      xanalyze fullscan https://example.com --breakpoints desktop  # desktop only
-      xanalyze fullscan ./repo --agent                # agent judges AI patterns
+      xaudit fullscan https://example.com           # full scan with browser
+      xaudit fullscan ./repo                        # repo scan (no browser)
+      xaudit fullscan ./repo --devserver             # start its dev server, scan the render
+      xaudit fullscan https://example.com --breakpoints desktop  # desktop only
+      xaudit fullscan ./repo --agent                # agent judges AI patterns
     """
     lang = args.language  # None if not specified, will auto-detect after crawl
     from cli_impl.auditpass import unquote_target

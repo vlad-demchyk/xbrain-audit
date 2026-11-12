@@ -1,6 +1,6 @@
 # Simulations
 
-Test fixtures for XAnalyze. Each folder contains HTML files with specific issues.
+Test fixtures for XBrain Audit. Each folder contains HTML files with specific issues.
 
 ## Folders
 
@@ -18,16 +18,16 @@ Test fixtures for XAnalyze. Each folder contains HTML files with specific issues
 
 ```bash
 # Test all simulations
-xanalyze fullscan simulations/ --json
+xaudit fullscan simulations/ --json
 
 # Test specific folder
-xanalyze scan simulations/ai-text/ --detector offline --json
+xaudit scan simulations/ai-text/ --detector offline --json
 
 # Test with browser
-xanalyze audit simulations/ --browser --breakpoints all --json
+xaudit audit simulations/ --browser --breakpoints all --json
 
 # Generate reports
-xanalyze fullscan simulations/ --styled-report report.html --report agent.md --json
+xaudit fullscan simulations/ --styled-report report.html --report agent.md --json
 ```
 
 ## Expected Results

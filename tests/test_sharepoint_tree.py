@@ -483,15 +483,15 @@ def test_empty_site_is_not_an_error():
 
 def test_headers_are_decorated_and_no_cookie_is_added():
     session = FakeSession(minimal_routes(fx("web.json")))
-    run(session, user_agent="ISV|Test|XAnalyze/1.0")
+    run(session, user_agent="ISV|Test|XBrainAudit/1.0")
     for _url, headers in session.calls:
         assert headers["Accept"] == "application/json;odata=nometadata"
-        assert headers["User-Agent"] == "ISV|Test|XAnalyze/1.0"
+        assert headers["User-Agent"] == "ISV|Test|XBrainAudit/1.0"
         assert "Cookie" not in headers and "Authorization" not in headers
 
 
 def test_default_user_agent_has_the_microsoft_shape():
-    assert re.fullmatch(r"ISV\|[^|]+\|XAnalyze/[\w.]+",
+    assert re.fullmatch(r"ISV\|[^|]+\|XBrainAudit/[\w.]+",
                         spt.default_user_agent())
 
 

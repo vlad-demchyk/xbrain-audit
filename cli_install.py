@@ -1,16 +1,17 @@
-"""Putting the frozen `xanalyze` command on the user's `PATH`.
+"""Putting the frozen `xaudit` command on the user's `PATH`.
 
 Only meaningful for a packaged macOS build — running from source, `python
 cli.py` already *is* the command. Modeled on VS Code's "Shell Command:
 Install 'code' command in PATH": one button, one symlink, no installer
 package.
 
-There is only one frozen executable (`packaging/XAnalyze.spec` builds it
+There is only one frozen executable (`packaging/XBrainAudit.spec` builds it
 from `app_entry.py`, not `main.py`/`cli.py` directly) — the GUI and the CLI
 are the same binary, told apart at runtime by the name it was invoked as
 (see `app_entry.py`). So "installing the CLI" is just symlinking that one
-executable under the name `app_entry.py` looks for, `xanalyze` — no second
-copy, no separate build artifact.
+executable under the name `app_entry.py` looks for, `xaudit` — no second
+copy, no separate build artifact. The pre-rename name, `xanalyze`, is linked
+beside it, so scripts and habits from before XBrain Audit keep working.
 
 Two things make macOS special here, both because the app ships unsigned (no
 Developer ID yet — see `manual-todo.md`):
@@ -33,9 +34,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+import app_identity
+
 #: The name the symlink is installed under, and what `app_entry.py` checks
 #: `sys.argv[0]` against to decide it should run the CLI, not the GUI.
-CLI_NAME = "xanalyze"
+CLI_NAME = app_identity.CLI_NAME
+
+#: Linked next to `CLI_NAME`, to the same executable: the command's name
+#: before the rename. Removed with it.
+ALIAS_NAMES = (app_identity.LEGACY_CLI_NAME,)
+
+#: Every name this module puts on PATH, the main one first.
+LINK_NAMES = (CLI_NAME, *ALIAS_NAMES)
 
 #: Default install location: writable without a password prompt, and on
 #: `PATH` for most modern shell setups (though not universally — see
@@ -118,8 +128,9 @@ def _run_admin(shell_command: str) -> None:
 
 def install(source: Path | None = None, link_dir: Path = USER_BIN_DIR,
            use_admin: bool = False) -> Path:
-    """Symlink `link_dir/xanalyze` -> `source` (default: the bundled CLI
-    next to this executable), clearing quarantine on `source` first.
+    """Symlink `link_dir/xaudit` -> `source` (default: the bundled CLI
+    next to this executable), clearing quarantine on `source` first, and
+    `link_dir/xanalyze` beside it. Returns the `xaudit` link.
 
     Raises `CliInstallError` (never silently leaves a half-done state) when
     there is no bundled CLI to link (dev run), the source is missing, or the
@@ -128,9 +139,9 @@ def install(source: Path | None = None, link_dir: Path = USER_BIN_DIR,
     if sys.platform == "win32":
         # A symlink on Windows needs Developer Mode or an administrator, and
         # the Windows build does not need one: it ships the command as its
-        # own console executable (`packaging/XAnalyze-windows.spec`).
+        # own console executable (`packaging/XBrainAudit-windows.spec`).
         raise CliInstallError(
-            "on Windows the command is xanalyze-cli.exe in the XAnalyze "
+            "on Windows the command is xaudit.exe in the XBrain Audit "
             "folder: add that folder to PATH to run it from any terminal")
     if source is None:
         source = bundled_cli_path()
@@ -146,48 +157,57 @@ def install(source: Path | None = None, link_dir: Path = USER_BIN_DIR,
         raise CliInstallError("control characters are not allowed in installation paths")
 
     _clear_quarantine(source)
-    target = link_dir / CLI_NAME
+    targets = [link_dir / name for name in LINK_NAMES]
 
     if use_admin:
-        _run_admin(f"/bin/mkdir -p {shlex.quote(str(link_dir))} && "
-                   f"/bin/ln -sfh {shlex.quote(str(source))} {shlex.quote(str(target))}")
+        links = " && ".join(
+            f"/bin/ln -sfh {shlex.quote(str(source))} {shlex.quote(str(target))}"
+            for target in targets)
+        _run_admin(f"/bin/mkdir -p {shlex.quote(str(link_dir))} && {links}")
     else:
-        try:
-            link_dir.mkdir(parents=True, exist_ok=True)
-            if target.is_symlink() or target.exists():
-                target.unlink()
-            os.symlink(source, target)
-        except OSError as exc:
-            raise CliInstallError(f"could not create {target}: {exc}") from exc
-    return target
+        for target in targets:
+            try:
+                link_dir.mkdir(parents=True, exist_ok=True)
+                if target.is_symlink() or target.exists():
+                    target.unlink()
+                os.symlink(source, target)
+            except OSError as exc:
+                raise CliInstallError(f"could not create {target}: {exc}") from exc
+    return targets[0]
 
 
 def uninstall(link_dir: Path = USER_BIN_DIR, use_admin: bool = False) -> bool:
-    """Remove `link_dir/xanalyze` if it is there. Returns whether anything
-    was actually removed, so a caller can tell "already gone" from "just
-    removed it" without a second existence check."""
-    target = link_dir.absolute() / CLI_NAME
-    if any(ord(c) < 32 or ord(c) == 127 for c in str(target)):
+    """Remove `link_dir/xaudit` and `link_dir/xanalyze` where they are.
+    Returns whether anything was actually removed, so a caller can tell
+    "already gone" from "just removed it" without a second existence check."""
+    targets = [link_dir.absolute() / name for name in LINK_NAMES]
+    if any(ord(c) < 32 or ord(c) == 127 for target in targets for c in str(target)):
         raise CliInstallError("control characters are not allowed in installation paths")
-    if not target.is_symlink() and not target.exists():
+    present = [target for target in targets
+               if target.is_symlink() or target.exists()]
+    if not present:
         return False
     if use_admin:
-        _run_admin(f"/bin/rm -f {shlex.quote(str(target))}")
+        _run_admin(" ; ".join(f"/bin/rm -f {shlex.quote(str(target))}"
+                              for target in present))
     else:
-        try:
-            target.unlink()
-        except OSError as exc:
-            raise CliInstallError(f"could not remove {target}: {exc}") from exc
+        for target in present:
+            try:
+                target.unlink()
+            except OSError as exc:
+                raise CliInstallError(f"could not remove {target}: {exc}") from exc
     return True
 
 
 def installed_target(link_dir: Path = USER_BIN_DIR) -> Path | None:
     """The symlink's current target, or `None` if nothing is installed at
     `link_dir` — used by the UI to show an accurate install/not-installed
-    state instead of assuming."""
-    target = link_dir / CLI_NAME
-    if target.is_symlink():
-        return Path(os.readlink(target))
+    state instead of assuming. The pre-rename `xanalyze` link counts: an
+    install from before the rename has only that one."""
+    for name in LINK_NAMES:
+        target = link_dir / name
+        if target.is_symlink():
+            return Path(os.readlink(target))
     return None
 
 
