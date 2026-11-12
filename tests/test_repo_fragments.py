@@ -131,8 +131,12 @@ class ReachesTheFragment(unittest.TestCase):
                         "the .tsx file was never read; every negative case "
                         "above is passing vacuously")
 
-    def test_a_field_with_only_a_placeholder_is_reported(self):
-        self.assertIn("control-name", _rules(_run("src/Form.tsx", self.UNLABELLED)))
+    def test_a_literal_placeholder_provides_a_fallback_name(self):
+        self.assertNotIn("control-name", _rules(_run("src/Form.tsx", self.UNLABELLED)))
+
+    def test_a_field_without_any_name_is_reported(self):
+        source = self.UNLABELLED.replace(' placeholder="Vendor"', '')
+        self.assertIn("control-name", _rules(_run("src/Form.tsx", source)))
 
     def test_jsx_extensions_are_not_skipped(self):
         for path in ("src/Form.tsx", "src/Form.jsx"):

@@ -22,6 +22,7 @@ N other places.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 #: What makes two findings in two files the same finding. The flagged text
 #: and what it becomes: the offsets differ between copies (the compiled file
@@ -98,8 +99,7 @@ def issue_identity(issue) -> tuple:
     `col-6`, `id="nav"`). Over-masking would merge findings that really are
     different, and a wrongly merged problem hides a real one.
     """
-    snippet = mask_generated_ids(
-        " ".join((getattr(issue, "snippet", "") or "").split()))
+    snippet = canonical_markup(getattr(issue, "snippet", "") or "")
     selector = getattr(issue, "selector", "") or ""
     # A finding about the page or the run rather than an element - a missing
     # response header, a string left untranslated - has neither a snippet nor
@@ -113,10 +113,14 @@ def issue_identity(issue) -> tuple:
             if details.get(key):
                 evidence = f"{key}={details[key]}"
                 break
+    details = getattr(issue, "details", None) or {}
     return (
         getattr(issue, "rule_id", ""),
         getattr(issue, "category", ""),
         getattr(issue, "severity", ""),
+        getattr(issue, "confidence", "exact"),
+        details.get("zone", ""),
+        details.get("zone_name", "").removesuffix(" (outside the canvas)"),
         snippet or selector or evidence,
     )
 
@@ -232,6 +236,44 @@ def mask_generated_ids(text: str) -> str:
     text = _REACT_USE_ID_RE.sub("#", text)
     text = _PREFIX_RE.sub(lambda m: m.group(1) + "#", text)
     return _mask_identifier_attributes(text)
+
+
+@lru_cache(maxsize=8192)
+def canonical_markup(text: str) -> str:
+    """Compare element structure, preserving content and resource addresses."""
+    from bs4 import BeautifulSoup
+
+    if not text.lstrip().startswith("<"):
+        return " ".join(text.split())
+    document = BeautifulSoup(text, "html.parser")
+    for element in document.find_all(True):
+        fluent = any(value.startswith("ms-") for value in element.get("class", []))
+        for name, value in list(element.attrs.items()):
+            if name.startswith(("data-v-", "_ngcontent-", "_nghost-")):
+                element.attrs.pop(name)
+                element.attrs[mask_generated_ids(name)] = value
+                continue
+            if name not in _ID_ATTRS and not name.startswith("data-"):
+                continue
+            values = value if isinstance(value, list) else [value]
+            masked = []
+            for item in values:
+                if item is None:
+                    continue
+                value_text = _UUID_RE.sub("#", str(item))
+                value_text = _HEXRUN_RE.sub("#", value_text)
+                value_text = _DIGITRUN_RE.sub("#", value_text)
+                value_text = _REACT_USE_ID_RE.sub("#", value_text)
+                value_text = _PREFIX_RE.sub(lambda match: match.group(1) + "#", value_text)
+                masked.append(_mask_value(value_text))
+            if name == "class":
+                if fluent:
+                    masked = [re.sub(r"^(root|field|icon|dropdown|cellTitle|cellName|cell)-\d+$", r"\1-#", item)
+                              for item in masked]
+                element.attrs[name] = sorted(masked)
+            elif masked:
+                element.attrs[name] = masked if isinstance(value, list) else masked[0]
+    return " ".join(str(document).split())
 
 
 def group_issues(issues: list) -> list:

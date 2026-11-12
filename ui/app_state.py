@@ -14,7 +14,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal
 
 from analysis_modes import (
-    CHECK_AI_PATTERNS,
+    CHECK_ACCESSIBILITY,
     METHOD_LOCAL,
     SOURCE_SITE,
 )
@@ -53,7 +53,7 @@ class AppState(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._source: str = SOURCE_SITE
-        self._checks: tuple[str, ...] = (CHECK_AI_PATTERNS,)
+        self._checks: tuple[str, ...] = (CHECK_ACCESSIBILITY,)
         self._methods: tuple[str, ...] = (METHOD_LOCAL,)
         self._provider: str = ""
         self._ai_available: bool = False

@@ -111,7 +111,8 @@ A Windows build (`dist\XBrain Audit\XBrain Audit.exe` for the window and
 
 ```bash
 xaudit                                      # terminal interface
-xaudit fullscan https://example.com         # everything, in one run
+xaudit fullscan https://example.com         # website rules and reports
+xaudit fullscan https://example.com --ai-text # also inspect wording and characters
 xaudit fullscan ./my-project                # the same, over a checkout
 xaudit scan ./src                           # AI patterns and characters only
 xaudit audit ./page.html                    # website rules only
@@ -127,7 +128,7 @@ a single HTML file is read as the finished page it is.
 
 | Command | What it does |
 |---|---|
-| `fullscan TARGET` | AI patterns, characters and every website rule, plus reports |
+| `fullscan TARGET` | website rules and reports; AI-like wording and characters only with `--ai-text` |
 | `scan PATHS` | AI patterns and non-keyboard characters, changing nothing |
 | `audit TARGET` | website rules only, over a URL, an HTML file or a folder |
 | `fix` / `undo` | apply exact character corrections; restore the `.bak` copies |
@@ -254,8 +255,9 @@ assistant configuration. Reported as facts about origin, never as defects.
 
 **Certainty.** Every finding is `exact`, `needs-browser` or `advisory`. The
 undecided are not listed by default - on one real page that was 312 of 348
-contrast findings - and the run says how many it left out. `--unsettled`
-brings them back; `--confidence exact` drops the advisory ones too.
+contrast findings - and the run says how many it left out. Editorial
+recommendations are also hidden by default. `--unsettled` includes both;
+`--confidence exact` restricts the list to confirmed checks.
 
 **Distinct problems, not repeats.** The headline, `counts` in `--json`, the
 status line of the window and the terminal interface count each problem once: a

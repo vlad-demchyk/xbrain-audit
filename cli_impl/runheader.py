@@ -46,6 +46,9 @@ def describe(command: str, target: str, args, *, language: str = "",
     decision is what a reader needs, not the flag that may have been absent.
     """
     rows = [("command", command), ("target", target)]
+    if command == "fullscan":
+        rows.append(("AI text analysis", "on" if getattr(args, "ai_text", False)
+                     or getattr(args, "agent", False) else "off"))
     for attribute, label, render in _PARAMETERS:
         if attribute == "language":
             continue

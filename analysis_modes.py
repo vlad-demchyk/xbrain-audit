@@ -79,7 +79,7 @@ class AnalysisRequest:
     #: be answered from a shallower one's pages.
     depth: int = 0
     readers: tuple = (READER_CODE,)
-    checks: tuple = CHECKS
+    checks: tuple = (CHECK_ACCESSIBILITY,)
     methods: tuple = (METHOD_LOCAL,)
     #: Set by the caller from the account state; a request cannot know on its
     #: own whether anything is signed in.

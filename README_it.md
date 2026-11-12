@@ -113,7 +113,8 @@ La build per Windows (`dist\XBrain Audit\XBrain Audit.exe` per la finestra e
 
 ```bash
 xaudit                                      # interfaccia da terminale
-xaudit fullscan https://example.com         # tutto, in una sola esecuzione
+xaudit fullscan https://example.com         # regole del sito e report
+xaudit fullscan https://example.com --ai-text # anche testo e caratteri
 xaudit fullscan ./my-project                # lo stesso, su un repository
 xaudit scan ./src                           # solo pattern AI e caratteri
 xaudit audit ./page.html                    # solo le regole del sito
@@ -130,7 +131,7 @@ finita che è.
 
 | Comando | Cosa fa |
 |---|---|
-| `fullscan BERSAGLIO` | pattern AI, caratteri e tutte le regole del sito, più i report |
+| `fullscan BERSAGLIO` | regole del sito e report; testo dall'aspetto AI e caratteri solo con `--ai-text` |
 | `scan PERCORSI` | pattern AI e caratteri non da tastiera, senza modificare nulla |
 | `audit BERSAGLIO` | solo le regole del sito: URL, file HTML o cartella |
 | `fix` / `undo` | applica le correzioni esatte dei caratteri; ripristina le copie `.bak` |
@@ -252,8 +253,8 @@ mai come difetti.
 **Certezza.** Ogni risultato è `exact`, `needs-browser` o `advisory`. Ciò che non
 è deciso non viene elencato per impostazione predefinita - su una pagina reale
 erano 312 risultati di contrasto su 348 - e l'esecuzione dice quanti ne ha
-lasciati fuori. `--unsettled` li riporta, `--confidence exact` toglie anche
-quelli consultivi.
+lasciati fuori. Anche i consigli sono esclusi per impostazione predefinita.
+`--unsettled` include entrambi; `--confidence exact` limita l'elenco ai controlli confermati.
 
 **Problemi distinti, non ripetizioni.** Il titolo del riepilogo, `counts` in
 `--json`, la riga di stato della finestra e dell'interfaccia da terminale

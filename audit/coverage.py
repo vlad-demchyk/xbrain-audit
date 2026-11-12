@@ -88,7 +88,7 @@ def build_coverage(result, args=None, *, scan=None, pages=None) -> dict:
                       if f.get("evidence_status") == "unknown")
     hashes.update(scan.get("content_hashes") or {})
     options = {name: json_value(getattr(args, name)) for name in (
-        "detector", "model", "effort", "scope", "depth", "max_pages", "max_files",
+        "detector", "ai_text", "model", "effort", "scope", "depth", "max_pages", "max_files",
         "ext", "exclude", "no_default_excludes", "no_typography", "no_browser",
         "no_judgment_cache", "incremental", "confidence", "category", "unsettled", "include_environment",
         "breakpoints", "within", "medium", "agent", "no_session", "site_controls",
@@ -102,6 +102,9 @@ def build_coverage(result, args=None, *, scan=None, pages=None) -> dict:
     if not content:
         content = [{"engine": options.get("detector"), "status": "unknown",
                     "reason": "no detector execution record"}]
+    if options.get("ai_text") is False and not options.get("agent"):
+        content = [{"engine": "text-analysis", "status": "skipped",
+                    "reason": "not requested (--ai-text)"}]
     if options.get("agent"):
         content = [{"engine": "agent", "status": "unknown", "reason": "judgments pending"}]
     errors.extend(c for c in content if c["status"] == "error")

@@ -51,10 +51,10 @@ class TheUndecidedStayOut(unittest.TestCase):
 
     def test_the_default_view_is_what_the_tool_knows(self):
         self.assertEqual([i.rule_id for i in issues_in_view(self.issues)],
-                         ["image-alt", "geo-article-schema"])
+                         ["image-alt"])
 
     def test_the_number_left_out_is_available(self):
-        self.assertEqual(unsettled_count(self.issues), 1)
+        self.assertEqual(unsettled_count(self.issues), 2)
 
     def test_asking_brings_them_back(self):
         self.assertEqual(len(issues_in_view(self.issues, unsettled=True)), 3)

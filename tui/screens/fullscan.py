@@ -1,4 +1,4 @@
-"""Fullscan screen — combined AI patterns + accessibility in one run."""
+"""Fullscan screen with optional text analysis."""
 from __future__ import annotations
 
 import argparse
@@ -175,6 +175,7 @@ class FullscanScreen(RunScreen):
             yield Input(placeholder=self.tr("tui_within_placeholder"), id="within")
             yield Static("")
             yield Checkbox(self.tr("tui_no_session"), id="no-session")
+            yield Checkbox(self.tr("check_ai_patterns"), id="ai-text")
             yield Checkbox(self.tr("tui_incremental_full"), id="incremental")
             yield Checkbox(self.tr("tui_unsettled"), id="unsettled")
             yield Checkbox(self.tr("tui_site_controls"), id="site-controls")
@@ -257,6 +258,7 @@ class FullscanScreen(RunScreen):
                 self.query_one("#dev-server-port", Input).value),
             yes=False,
             detector="offline",
+            ai_text=self.query_one("#ai-text", Checkbox).value,
             scope="both",
             no_typography=False,
             confidence=self.query_one("#confidence", Select).value or None,

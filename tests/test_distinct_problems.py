@@ -161,7 +161,7 @@ class TheJsonCarriesBothNumbers(unittest.TestCase):
             path.write_text(self.PAGE, encoding="utf-8")
             done = subprocess.run(
                 [sys.executable, str(ROOT / "cli.py"), "--no-update-check", "audit", str(path),
-                 "--category", "accessibility", "--no-browser", "--json"],
+                 "--category", "accessibility", "--no-browser", "--unsettled", "--json"],
                 capture_output=True, text=True, encoding="utf-8", cwd=folder, timeout=120)
         return json.loads(done.stdout)
 

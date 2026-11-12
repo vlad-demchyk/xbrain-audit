@@ -148,7 +148,7 @@ class OneOwner(unittest.TestCase):
         "AI patterns only" while the combo showed "both questions".
         """
         self.assertEqual(set(self.window.app_state.checks),
-                         {CHECK_ACCESSIBILITY, CHECK_AI_PATTERNS})
+                         {CHECK_ACCESSIBILITY})
 
     def test_the_choices_are_read_from_the_state_not_from_the_widget(self):
         self.window.app_state.set_checks((CHECK_ACCESSIBILITY,))

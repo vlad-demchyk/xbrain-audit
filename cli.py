@@ -1399,7 +1399,7 @@ def build_parser() -> argparse.ArgumentParser:
                               "Out by default; the run says how many it left "
                               "out")
     p_audit.add_argument("--unsettled", action="store_true",
-                         help="also list what could not be decided: an "
+                         help="also list editorial recommendations and what could not be decided: an "
                               "engine's 'this element is on a background "
                               "image, check by hand'. Out by default - on one "
                               "page of python.org that was 312 of 348 contrast "
@@ -1574,7 +1574,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_fullscan = sub.add_parser(
         "fullscan",
-        help="full scan: AI patterns + accessibility audit + reports for agent")
+        help="website audit and reports; optional text analysis with --ai-text")
     p_fullscan.add_argument(
         "target",
         help="URL to crawl, a directory to scan, or one .html file")
@@ -1656,6 +1656,8 @@ def build_parser() -> argparse.ArgumentParser:
                             help="re-ask the model about passages it has "
                                  "already judged (slower, and the only way to "
                                  "get a fresh opinion)")
+    p_fullscan.add_argument("--ai-text", action="store_true",
+                            help="also analyze text for AI-like wording and typography (off by default)")
     p_fullscan.add_argument("--scope", default="both",
                             choices=["content", "technical", "both"],
                             help="what to read for AI patterns (default: both)")
@@ -1682,7 +1684,7 @@ def build_parser() -> argparse.ArgumentParser:
                                  "server decides, not the code (see `audit "
                                  "--include-environment`)")
     p_fullscan.add_argument("--unsettled", action="store_true",
-                            help="also list what could not be decided, even "
+                            help="also list recommendations and what could not be decided, even "
                                  "in the browser (see `audit --unsettled`)")
     p_fullscan.add_argument("--web-parts", action="store_true",
                          help="with --repo pointing at an SPFx solution: audit only the web parts that repository ships, wherever they appear, and name the part behind each finding")

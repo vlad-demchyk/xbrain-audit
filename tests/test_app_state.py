@@ -67,6 +67,7 @@ class TestChecksChanges(unittest.TestCase):
         self.assertEqual(self.state.checks, (CHECK_ACCESSIBILITY,))
 
     def test_mode_changes_with_checks(self):
+        self.state.set_checks((CHECK_AI_PATTERNS,))
         modes = []
         self.state.mode_changed.connect(lambda v: modes.append(v))
         self.state.set_checks((CHECK_ACCESSIBILITY,))
@@ -133,14 +134,16 @@ class TestMode(unittest.TestCase):
         self.state = AppState()
 
     def test_initial_mode(self):
-        # source=site, checks=(ai_patterns) -> web
-        self.assertEqual(self.state.mode, "web")
+        self.assertEqual(self.state.mode, "audit")
+        self.assertEqual(self.state.checks, (CHECK_ACCESSIBILITY,))
 
     def test_repo_mode(self):
+        self.state.set_checks((CHECK_AI_PATTERNS,))
         self.state.set_source(SOURCE_REPO)
         self.assertEqual(self.state.mode, "repo")
 
     def test_file_mode(self):
+        self.state.set_checks((CHECK_AI_PATTERNS,))
         self.state.set_source(SOURCE_FILE)
         self.assertEqual(self.state.mode, "file")
 
@@ -161,6 +164,7 @@ class TestWantsProvider(unittest.TestCase):
         self.state = AppState()
 
     def test_visible_when_ai_and_ai_method(self):
+        self.state.set_checks((CHECK_AI_PATTERNS,))
         self.state.set_ai_available(True)
         self.state.set_methods((METHOD_AI,))
         self.assertTrue(self.state.wants_provider)
@@ -190,7 +194,7 @@ class TestAnyChanged(unittest.TestCase):
     def test_fires_on_checks(self):
         count = []
         self.state.any_changed.connect(lambda: count.append(1))
-        self.state.set_checks((CHECK_ACCESSIBILITY,))
+        self.state.set_checks((CHECK_AI_PATTERNS,))
         self.assertEqual(len(count), 1)
 
     def test_not_fired_on_same_value(self):

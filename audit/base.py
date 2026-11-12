@@ -142,9 +142,8 @@ def issues_in_view(issues, categories=(), confidence: str = "",
     Nothing is silently lost: `unsettled_count` gives the number a caller
     prints, and `unsettled=True` brings the list back.
 
-    `advisory` stays. It is not the same thing: the fact is settled (a byline
-    is absent) and only its weight is a person's call, which is exactly what
-    the label says.
+    Editorial recommendations (`advisory`) are also out by default. They
+    remain available through `unsettled=True`, not counted as proven defects.
     """
     wanted = set(categories or ()) & set(CATEGORIES)
     kept = list(issues)
@@ -152,7 +151,7 @@ def issues_in_view(issues, categories=(), confidence: str = "",
         kept = [issue for issue in kept if issue.category in wanted]
     if not unsettled:
         kept = [issue for issue in kept
-                if getattr(issue, "confidence", EXACT) != NEEDS_BROWSER]
+                if getattr(issue, "confidence", EXACT) not in (NEEDS_BROWSER, ADVISORY)]
     if confidence:
         kept = [issue for issue in kept if meets_confidence(issue, confidence)]
     return kept
@@ -166,7 +165,7 @@ def unsettled_count(issues) -> int:
     list back.
     """
     return sum(1 for issue in issues
-               if getattr(issue, "confidence", EXACT) == NEEDS_BROWSER)
+               if getattr(issue, "confidence", EXACT) in (NEEDS_BROWSER, ADVISORY))
 
 
 def unsettled_summary(issues, limit: int = 5) -> str:
@@ -179,7 +178,7 @@ def unsettled_summary(issues, limit: int = 5) -> str:
     """
     counts: dict = {}
     for issue in issues:
-        if getattr(issue, "confidence", EXACT) == NEEDS_BROWSER:
+        if getattr(issue, "confidence", EXACT) in (NEEDS_BROWSER, ADVISORY):
             counts[issue.rule_id] = counts.get(issue.rule_id, 0) + 1
     ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     shown = [f"{rule} ×{count}" if count > 1 else rule

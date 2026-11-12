@@ -357,7 +357,7 @@ export default class X {
 
     def test_the_markup_in_the_literal_is_read(self):
         rules = {i.rule_id for i in self._findings(self.SOURCE)}
-        self.assertIn("control-name", rules)
+        self.assertNotIn("control-name", rules)
         self.assertIn("image-alt", rules)
 
     def test_the_code_around_it_is_still_not_read(self):

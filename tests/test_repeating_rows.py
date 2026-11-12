@@ -95,6 +95,7 @@ class TheRowsOfAPageOfImages(unittest.TestCase):
         self.window.audit_result = audit.analyze_files(
             [FileResult(path=str(path), raw_text=markup)],
             self.tmp.name, media=False)
+        self.window.app_state.set_unsettled(True)
         self.window._populate_audit_list()
         return [self.window.flagged_list.item(i).text()
                 for i in range(self.window.flagged_list.count())]

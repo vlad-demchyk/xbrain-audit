@@ -2523,12 +2523,9 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
         # into offering a "re-read in a browser" button for a pass that had
         # already run.
 
-        # Both by default: one pass over the fetched pages answers both
-        # questions, and a first run that silently examined only half of what
-        # the tool checks is how a report gets trusted for the wrong reason.
         self._fill_combo(self.checks_combo, [
-            (t("checks_both", lang), self.choice_key((CHECK_ACCESSIBILITY, CHECK_AI_PATTERNS))),
             (t("check_accessibility", lang), self.choice_key((CHECK_ACCESSIBILITY,))),
+            (t("checks_both", lang), self.choice_key((CHECK_ACCESSIBILITY, CHECK_AI_PATTERNS))),
             (t("check_ai_patterns", lang), self.choice_key((CHECK_AI_PATTERNS,))),
         ])
 

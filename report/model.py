@@ -181,13 +181,23 @@ class ReportFinding:
         show one id above occurrences the other found, which is a printed
         fact that is wrong for half its rows.
         """
-        from duplicates import mask_generated_ids
+        from duplicates import canonical_markup, issue_identity
+        from types import SimpleNamespace
         import json
 
+        if self.rule_id:
+            return issue_identity(SimpleNamespace(
+                rule_id=self.rule_id, category=self.category,
+                severity=self.severity, confidence=self.confidence or "exact",
+                snippet=self.snippet,
+                selector=(self.evidence or {}).get("selector", ""),
+                details={**((self.evidence or {}).get("details") or {}),
+                         "zone": self.zone, "zone_name": self.zone_name},
+            ))
         return (self.category, self.severity, self.rule_id, self.confidence,
                 self.zone, self.zone_name,
                 self.title, self.found, self.why, self.fix,
-                mask_generated_ids(" ".join((self.snippet or "").split())),
+                canonical_markup(self.snippet or ""),
                 self.replacement, self.engine, self.wcag,
                 json.dumps((self.evidence or {}).get("mapping", {}), sort_keys=True))
 

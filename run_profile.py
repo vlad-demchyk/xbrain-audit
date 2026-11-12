@@ -114,6 +114,7 @@ _OPTION_KINDS = {
     # single answer to "is this option meaningful here" rather than a
     # partial one that silently says no to anything unlisted.
     "scope": (KIND_SITE, KIND_REPO),
+    "ai_text": KINDS,
     "breakpoints": KINDS,
     "no_browser": KINDS,
     "render": KINDS,

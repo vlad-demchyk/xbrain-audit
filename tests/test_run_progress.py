@@ -153,6 +153,9 @@ class RunBookkeeping(unittest.TestCase):
     def test_hearing_about_a_later_stage_finishes_the_earlier_ones(self):
         """No worker says a stage ended. Being told about a later one is the
         only signal that the earlier ones are behind us."""
+        from analysis_modes import CHECK_AI_PATTERNS
+
+        self.window.app_state.set_checks((CHECK_AI_PATTERNS,))
         self.window._on_busy_changed(True)
         self.window._on_detecting("local engine")
         state = self.window.run_progress.stage_state

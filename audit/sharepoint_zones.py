@@ -715,9 +715,11 @@ def _outside_canvas(document, zones, web_parts) -> list:
     for zone in zones:
         inside.add(id(zone.element))
         inside.update(id(element) for element in zone.element.find_all(True))
+    ancestors = {id(parent) for zone in zones for parent in zone.element.parents}
     regions = {id(element) for element in _select(document, AXE_EXCLUDE)}
     roots = [element for element in document.find_all(True)
-             if id(element) not in inside and _module_class(element)
+             if id(element) not in inside and id(element) not in ancestors
+             and _module_class(element)
              and not _in_region(element, regions)
              and not _is_definitions(element)]
     if not roots:

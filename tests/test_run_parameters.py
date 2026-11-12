@@ -73,10 +73,10 @@ class TheViewOverOnePass(unittest.TestCase):
         Three of the four, not four: the undecided one is out by default,
         which is a different question and the class below covers it.
         """
-        self.assertEqual(len(issues_in_view(self.issues)), 3)
+        self.assertEqual(len(issues_in_view(self.issues)), 2)
 
     def test_every_category_chosen_is_the_same_as_none_chosen(self):
-        self.assertEqual(len(issues_in_view(self.issues, CATEGORIES)), 3)
+        self.assertEqual(len(issues_in_view(self.issues, CATEGORIES)), 2)
 
     def test_one_category_keeps_only_it(self):
         kept = issues_in_view(self.issues, (SEO,))
@@ -84,7 +84,7 @@ class TheViewOverOnePass(unittest.TestCase):
 
     def test_geo_is_a_category_a_reader_can_ask_for(self):
         """The category the audit gained last and the surfaces gained never."""
-        kept = issues_in_view(self.issues, (GEO,))
+        kept = issues_in_view(self.issues, (GEO,), unsettled=True)
         self.assertEqual([i.rule_id for i in kept], ["geo-article-provenance"])
 
     def test_a_certainty_floor_drops_what_is_below_it(self):
@@ -104,7 +104,7 @@ class TheViewOverOnePass(unittest.TestCase):
     def test_an_unknown_category_narrows_nothing_into_nothing(self):
         """A name the audit does not have is not a filter that hides
         everything: `CATEGORIES` is what the choice is intersected with."""
-        self.assertEqual(len(issues_in_view(self.issues, ("nonsense",))), 3)
+        self.assertEqual(len(issues_in_view(self.issues, ("nonsense",))), 2)
 
 
 class TheUndecidedAreNotFindings(unittest.TestCase):
@@ -128,23 +128,20 @@ class TheUndecidedAreNotFindings(unittest.TestCase):
     def test_they_are_out_of_the_default_view(self):
         kept = issues_in_view(self.issues)
         self.assertEqual([i.rule_id for i in kept],
-                         ["image-alt", "geo-article-provenance"])
+                         ["image-alt"])
 
     def test_asking_brings_them_back(self):
         self.assertEqual(len(issues_in_view(self.issues, unsettled=True)), 3)
 
-    def test_advisory_is_not_the_same_thing_and_stays(self):
-        """`advisory` is a settled fact whose weight is a person's call - a
-        byline is absent, and whether that matters is editorial. Hiding it
-        with the undecided would lose the GEO pass entirely."""
-        kept = issues_in_view(self.issues)
+    def test_advisory_is_available_when_requested(self):
+        kept = issues_in_view(self.issues, unsettled=True)
         self.assertIn("geo-article-provenance", [i.rule_id for i in kept])
 
     def test_the_number_hidden_is_available_to_be_printed(self):
         """Dropped in silence is a report lying by omission."""
         from audit.base import unsettled_count
 
-        self.assertEqual(unsettled_count(self.issues), 1)
+        self.assertEqual(unsettled_count(self.issues), 2)
 
 
 class NarrowingIsNotEditing(unittest.TestCase):
@@ -224,7 +221,7 @@ class TheWindowAsksForThemToo(unittest.TestCase):
 
     def test_the_list_shows_everything_when_nothing_is_chosen(self):
         self.window._populate_audit_list()
-        self.assertEqual(self.window.flagged_list.count(), 3)
+        self.assertEqual(self.window.flagged_list.count(), 2)
 
     def test_choosing_a_category_repaints_the_list(self):
         self.window.app_state.set_categories((SEO,))
@@ -233,7 +230,7 @@ class TheWindowAsksForThemToo(unittest.TestCase):
     def test_widening_brings_the_findings_back_without_a_new_run(self):
         self.window.app_state.set_categories((SEO,))
         self.window.app_state.set_categories(())
-        self.assertEqual(self.window.flagged_list.count(), 3)
+        self.assertEqual(self.window.flagged_list.count(), 2)
         self.assertEqual(len(self.window.audit_result.issues()), 3)
 
     def test_the_certainty_floor_reaches_the_list(self):

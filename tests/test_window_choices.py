@@ -61,10 +61,10 @@ class Choices(unittest.TestCase):
         self.assertEqual(set(self.window._chosen_readers()),
                          {READER_CODE, READER_BROWSER})
 
-    def test_both_questions_are_the_default(self):
+    def test_text_analysis_is_not_enabled_by_default(self):
         window = MainWindow()
         self.assertEqual(set(window.current_request().checks),
-                         {CHECK_ACCESSIBILITY, CHECK_AI_PATTERNS})
+                         {CHECK_ACCESSIBILITY})
 
     def test_the_account_is_offered_when_a_model_judges_copy(self):
         """Two conditions, not one. The combo beside the method used to name

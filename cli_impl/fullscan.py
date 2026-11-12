@@ -1,7 +1,7 @@
-"""The `fullscan` command: AI patterns + accessibility audit + reports.
+"""The `fullscan` command: website audit and optional text analysis.
 
-Combines scan (AI patterns, characters) and audit (accessibility, SEO,
-performance, best practices) into one command, saves the styled report
+Runs audit (accessibility, SEO, performance, best practices), with the
+wording and character scan enabled only by --ai-text, and saves the styled report
 and the agent briefing, and prints one JSON document for agent consumption.
 """
 from __future__ import annotations
@@ -901,6 +901,7 @@ def _build_combined(args, target: str, is_url: bool, lang: str,
     """Phase 3: the single JSON document the command prints."""
     from audit import base
     from finding_contract import SCHEMA_VERSION, serialize_issue
+    distinct_issues = [first for first, _others in duplicates.group_issues(audit_issues)]
     return {
         "schema_version": SCHEMA_VERSION,
         "target": target,
@@ -914,9 +915,11 @@ def _build_combined(args, target: str, is_url: bool, lang: str,
                                        duplicates.group_issues(audit_issues)),
             "occurrences": _severity_counts(audit_issues),
             "distinct": len(duplicates.group_issues(audit_issues)),
+            "category_problems": dict(Counter(issue.category for issue in distinct_issues)),
             "issues": [serialize_issue(i) for i in audit_issues],
         },
         "summary": {
+            "distinct_problems": len(distinct_issues) + len(duplicates.group(clean_findings)),
             "total_findings": len(clean_findings) + len(audit_issues),
             # One predicate, not two. See `is_character_finding`: counting
             # `source == "style"` here missed every judge finding, because a
@@ -1330,7 +1333,7 @@ def _maybe_start_devserver(args, repo_path: str):
 
 
 def cmd_fullscan(args) -> int:
-    """Full scan: AI patterns + accessibility audit + reports for agent.
+    """Website audit and reports, with text analysis only when requested.
 
     Combines scan (AI patterns, characters) and audit (accessibility, SEO,
     performance, best practices) into one command. Saves styled report and
@@ -1531,7 +1534,8 @@ def _run_phases_body(args, state, folder, timings, target, lang, is_url, is_page
     pages = None
     agent_candidates: list = []
     scan_findings, scan_result = [], None
-    if not is_url:
+    text_enabled = bool(getattr(args, "ai_text", False) or agent_mode)
+    if not is_url and text_enabled:
         guard("scan")
         if already("scan"):
             scan_result = checkpoint.load_scan_result(state.run_dir) or {}
@@ -1564,7 +1568,8 @@ def _run_phases_body(args, state, folder, timings, target, lang, is_url, is_page
                     (scan_result or {}).get("counts"), scan_result=scan_result)
                 state.done("scan", artifacts=[saved])
     elif state is not None:
-        state.skip("scan", "folded into the crawl for a website")
+        state.skip("scan", "folded into the crawl for a website" if text_enabled
+                   else "text analysis not requested (--ai-text)")
     if not is_url and state is not None:
         # A folder is not crawled. Said explicitly, because a phase left
         # `pending` is one `resume` will try to run: without this a finished
@@ -1624,7 +1629,7 @@ def _run_phases_body(args, state, folder, timings, target, lang, is_url, is_page
                 "agent_mode": True,
                 "candidates_count": len(agent_candidates),
             }
-        elif pages:
+        elif pages and text_enabled:
             # Not agent mode: the same content pass a repo gets, so the
             # AI-patterns and typography sections exist in the reports.
             timings.start("AI patterns scan")

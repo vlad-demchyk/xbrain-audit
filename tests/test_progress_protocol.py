@@ -43,6 +43,8 @@ def _run(*extra, target=None, command="fullscan"):
             str(target or TARGET), "--no-update-check", *extra]
     if command in ("fullscan", "audit"):
         argv.insert(4, "--no-browser")
+    if command == "fullscan":
+        argv.append("--ai-text")
     return subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", timeout=300,
                           cwd=str(ROOT))
 

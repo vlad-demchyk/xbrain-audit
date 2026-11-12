@@ -135,12 +135,21 @@ def summary_rows(payload: dict | None) -> list:
         return []
     rows: list = []
     summary = payload.get("summary")
+    audit_counts = (payload.get("audit") or {}).get("category_problems")
     if isinstance(summary, dict):
         # fullscan: one document covering both passes.
         for key in ("total_findings", "ai_patterns", "characters",
                     "accessibility", "seo", "performance", "best_practices"):
             if key in summary:
-                rows.append((key.replace("_", " "), str(summary[key])))
+                if isinstance(audit_counts, dict) and key == "total_findings":
+                    rows.append(("distinct problems", str(summary["distinct_problems"])))
+                    rows.append(("occurrences", str(summary[key])))
+                elif isinstance(audit_counts, dict) and key in (
+                        "accessibility", "seo", "performance", "best_practices"):
+                    rows.append((key.replace("_", " "),
+                                 str(audit_counts.get(key.replace('_', '-'), 0))))
+                else:
+                    rows.append((key.replace("_", " "), str(summary[key])))
     counts = payload.get("counts")
     if isinstance(counts, dict):
         # `counts` carries two different shapes. `scan` fills it with one key

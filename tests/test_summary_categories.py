@@ -81,17 +81,13 @@ class TheConfidenceFloorReachesTheJson(unittest.TestCase):
         kept = _issues_at_floor(self._result(), EXACT)
         self.assertEqual([issue.rule_id for issue in kept], ["a"])
 
-    def test_the_lowest_floor_keeps_everything_that_is_decided(self):
-        """Two of three: the floor lets `advisory` through, and the third row
-        is `needs-browser` - undecided, which is out of every view unless it
-        is asked for. A floor is about how strong a claim has to be; the
-        undecided make no claim at all."""
+    def test_a_low_floor_does_not_implicitly_enable_recommendations(self):
         kept = _issues_at_floor(self._result(), ADVISORY)
         self.assertEqual(sorted(i.rule_id for i in kept),
-                         ["a", "geo-article-schema"])
+                         ["a"])
 
     def test_no_floor_keeps_everything_that_is_decided(self):
-        self.assertEqual(len(_issues_at_floor(self._result(), None)), 2)
+        self.assertEqual(len(_issues_at_floor(self._result(), None)), 1)
 
     def test_asking_for_the_undecided_brings_them_back(self):
         kept = _issues_at_floor(self._result(), None, unsettled=True)

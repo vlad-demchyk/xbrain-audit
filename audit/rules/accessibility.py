@@ -78,6 +78,12 @@ def _accessible_name(tag) -> str:
     nested = tag.find("img") if hasattr(tag, "find") else None
     if nested is not None:
         return (nested.get("alt") or "").strip()
+    if tag.name == "textarea" or (tag.name == "input" and
+            tag.get("type", "text").lower() in
+            ("text", "search", "tel", "email", "url", "password")):
+        placeholder = (tag.get("placeholder") or tag.get("aria-placeholder") or "").strip()
+        if not is_binding(placeholder):
+            return placeholder
     return ""
 
 
@@ -235,9 +241,6 @@ class ControlName(AccessibilityRule):
                 # `label` into `aria-labelledby`. What `Select` renders is
                 # that component's business and this file cannot see it.
                 continue
-            # A component with no naming prop keeps the full weight: on
-            # XFormat these were `<Input placeholder=…>`, and a placeholder
-            # is not a name whatever `Input` renders.
             issues.append(Issue(
                 rule_id=self.id, severity=self.severity, selector=selector,
                 line=line, snippet=snippet_of(tag), source=context.source,
@@ -2017,6 +2020,7 @@ class ImageModernFormat(AccessibilityRule):
     id = "image-modern-format"
     severity = MINOR
     category = PERFORMANCE
+    confidence = ADVISORY
     # WebP and AVIF are a browser's formats. Mail clients are years behind on
     # both, and asking an email to ship them is asking it to break.
     web_only = True
@@ -2074,6 +2078,7 @@ class ImageModernFormat(AccessibilityRule):
                     rule_id=self.id, severity=self.severity,
                     category=self.category, selector=selector, line=line,
                     snippet=snippet_of(tag), source=context.source,
+                    confidence=self.confidence,
                     details={"src": raw_src[:120]},
                 ))
         return issues
@@ -2188,6 +2193,7 @@ class AbbreviationExpansion(AccessibilityRule):
     """
     id = "abbreviation-expansion"
     severity = MINOR
+    confidence = ADVISORY
     wcag = ("3.1.4",)
 
     # Common abbreviations that should be expanded
@@ -2270,6 +2276,7 @@ class AbbreviationExpansion(AccessibilityRule):
                     selector=selector, line=line,
                     snippet=f"...{abbrev}...",
                     source=context.source,
+                    confidence=self.confidence,
                     details={"abbreviation": abbrev},
                     fix_snippet=f'<abbr title="Full form">{abbrev}</abbr>',
                 ))
