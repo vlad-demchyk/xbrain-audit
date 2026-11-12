@@ -246,8 +246,9 @@ goes.
 
 **In a browser**, when one is available: axe-core and HTML_CodeSniffer, the
 page in the state a person puts it in - focus indicator and whether it can be
-seen against its background (3:1), whether a sticky header covers the focused
-element (2.4.11), keyboard traps, focus order, hover-only content, an open
+seen against its background (3:1), whether the text of a focused control can
+still be read when focus changes its colours (1.4.3), whether a sticky header
+covers the focused element (2.4.11), keyboard traps, focus order, hover-only content, an open
 modal, the form journey, the size of every pointer target and the space around
 it (2.5.8, measured by axe-core with the box and the nearest target in the
 finding) - and the same page at several widths. It reads and
@@ -405,6 +406,16 @@ set yourself wins**:
   Microsoft's. A modern page whose canvas is empty is reported as read and
   empty ("the page's canvas is empty"), not as not audited. stderr says how
   many pages were not audited, read empty or classic, with the reason.
+- **Keyboard, focus and image geometry on the zones.** The state pass,
+  HTML_CodeSniffer and the measurements run on SharePoint too, and leave the
+  chrome regions alone. Each finding records where its element is and lands in
+  its zone; one in Microsoft's markup is dropped and counted; one that cannot
+  be placed is listed without a zone and counted. "No skip link" is the page
+  frame's (SharePoint draws its own skip link in the chrome) and is counted as
+  Microsoft's. Page-load budgets (page weight, paint timings) measure Microsoft's
+  platform too: their numbers stay in the performance section, not in the list.
+  The image positions settle `perf-image-loading`. The coverage section says
+  per run which passes ran and how many state findings were unplaced.
 
 Limits:
 
@@ -419,6 +430,10 @@ Limits:
   appear in the inventory of the JSON summary only.
 - A session that is signed in but has no permission on the site is reported as
   such, and nothing is audited.
+- **No hover state, no opened menus.** The state pass focuses and reads; it
+  never hovers or clicks. Hover colours cannot be forced from inside the page
+  without rewriting the site's CSS (which changes which rule wins), and opening
+  a disclosure means running the page's own click handlers on a live site.
 
 ## Reports
 

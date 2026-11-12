@@ -243,7 +243,9 @@ suo nome accessibile dice dove porta.
 
 **Nel browser**, quando ce n'è uno: axe-core e HTML_CodeSniffer, la pagina nello
 stato in cui la mette una persona - indicatore di focus e se si distingue dallo
-sfondo (3:1), se un'intestazione fissa copre l'elemento a fuoco (2.4.11),
+sfondo (3:1), se il testo di un controllo a fuoco resta leggibile quando il
+focus ne cambia i colori (1.4.3), se un'intestazione fissa copre l'elemento a
+fuoco (2.4.11),
 trappole da tastiera, ordine di focus, contenuto solo in hover, una modale
 aperta, il percorso del modulo, la dimensione di ogni bersaglio del puntatore e
 lo spazio attorno (2.5.8, misurati da axe-core con il riquadro e il bersaglio più
@@ -415,6 +417,18 @@ gli stessi flag, gli stessi rifiuti (codice 2) e le stesse zone nel JSON - ogni 
   navigazione a sinistra sono di Microsoft. Una pagina moderna con il canvas
   vuoto è riportata come letta e vuota, non come non esaminata. stderr dice
   quante pagine non sono state esaminate, lette vuote o classiche, e perché.
+- **Tastiera, focus e posizione delle immagini nelle zone.** Il controllo degli
+  stati, HTML_CodeSniffer e le misure girano anche su SharePoint, lasciando
+  stare le regioni della cornice. Ogni risultato registra dove si trova il suo
+  elemento e finisce nella sua zona; uno nel markup di Microsoft viene scartato
+  e contato; uno non attribuibile viene elencato senza zona e contato. «Nessun
+  link per saltare» è della cornice della pagina (SharePoint ha il suo link
+  nella cornice) ed è contato come di Microsoft. I limiti di caricamento (peso
+  della pagina, tempi di disegno) misurano anche la piattaforma Microsoft: i
+  numeri restano nella sezione sulle prestazioni, non nell'elenco. La
+  posizione delle immagini decide `perf-image-loading`. La sezione sulla
+  copertura dice per ogni esecuzione quali controlli sono stati eseguiti e
+  quanti risultati degli stati non sono attribuibili.
 
 Limiti:
 
@@ -429,6 +443,11 @@ Limiti:
   Office) compaiono solo nell'inventario del riepilogo JSON.
 - Una sessione che ha effettuato l'accesso ma non ha permessi sul sito viene
   segnalata come tale, e nulla viene esaminato.
+- **Niente stato hover, niente menu aperti.** Il controllo degli stati mette
+  il focus e legge, ma non passa mai sopra col puntatore né clicca. I colori
+  di hover non si possono forzare dall'interno della pagina senza riscrivere il
+  CSS del sito (il che cambia quale regola vince), e aprire un menu significa
+  eseguire i gestori di clic della pagina su un sito reale.
 
 ## Report
 
