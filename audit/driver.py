@@ -542,6 +542,88 @@ class BrowserAuditRunner:
             QApplication.setActiveWindow(view)
         _pump(300)
 
+    def _verify_traps(self, payload):
+        """Keep a `keyboard-trap` only if real keys cannot leave it.
+
+        The state script flags an element whose Tab keydown is cancelled. That
+        is how a trap starts, and also how every roving-tabindex widget works:
+        Fluent's FocusZone, a menu, a tab list cancel Tab and move focus
+        themselves - out of the widget. On a live intranet the custom
+        header's links were flagged that way. WCAG 2.1.2 asks whether focus
+        can *leave*, so that is what is tried, with trusted key presses:
+        Tab up to the number of focusable elements in the widget plus a
+        margin, then Shift+Tab as many times. Focus reaching anything outside
+        the widget, or the page itself, is a way out. Only an element no key
+        got out of is kept, marked as verified that way. Without a view to
+        send keys to, the finding is kept as the script had it.
+        """
+        import json
+
+        if self._view is None or not payload or "keyboard-trap" not in str(payload):
+            return payload
+        try:
+            data = json.loads(payload)
+        except (TypeError, ValueError):
+            return payload
+        findings = data.get("findings") or []
+        kept = []
+        checked = 0
+        for finding in findings:
+            if finding.get("rule") != "keyboard-trap":
+                kept.append(finding)
+                continue
+            if checked >= TRAP_CHECKS or not finding.get("dom_path"):
+                kept.append(finding)
+                continue
+            checked += 1
+            verdict = self._trap_with_real_keys(finding["dom_path"])
+            if verdict is None:
+                kept.append(finding)          # could not be tried: as found
+            elif verdict:
+                finding["verified"] = "real Tab and Shift+Tab did not leave it"
+                kept.append(finding)
+        data["findings"] = kept
+        return json.dumps(data)
+
+    def _trap_with_real_keys(self, path: str):
+        """True: no key left the widget; False: one did; None: not tried."""
+        import json
+
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        prepared = _run_js(self._page, _TRAP_PREPARE % json.dumps(path))
+        try:
+            prepared = json.loads(prepared) if prepared else None
+        except (TypeError, ValueError):
+            prepared = None
+        if not prepared or not prepared.get("ok"):
+            _run_js(self._page, _TRAP_CLEANUP)
+            return None
+        limit = int(prepared.get("limit") or 3)
+        target = self._view.focusProxy() or self._view
+        escaped = False
+        try:
+            for modifier in (Qt.KeyboardModifier.NoModifier,
+                             Qt.KeyboardModifier.ShiftModifier):
+                if _run_js(self._page, _TRAP_REFOCUS) is not True:
+                    # Focus could not be put back on the element: nothing
+                    # this tries afterwards would say anything about it.
+                    return None
+                for _press in range(limit):
+                    key = Qt.Key.Key_Backtab if modifier else Qt.Key.Key_Tab
+                    QTest.keyClick(target, key, modifier)
+                    _pump(TRAP_KEY_MS)
+                    where = _run_js(self._page, _TRAP_WHERE)
+                    if where in ("out", "gone"):
+                        escaped = True
+                        break
+                if escaped:
+                    break
+        finally:
+            _run_js(self._page, _TRAP_CLEANUP)
+        return not escaped
+
     def _prime_keyboard(self) -> bool:
         """Press Tab once, natively, before the state pass reads focus.
 
@@ -909,8 +991,18 @@ class BrowserAuditRunner:
                     else:
                         QTimer.singleShot(0, next_script)
                     return
-                slot = _Slot(page, name, source,
-                             lambda n, v: (on_script_done(n, v), next_script()))
+                def script_done(n, v):
+                    if n != "states":
+                        on_script_done(n, v)
+                        next_script()
+                        return
+                    # Out of the result callback first: the trap check waits
+                    # on further `runJavaScript` answers, and Qt does not
+                    # deliver them while this callback is still running.
+                    QTimer.singleShot(0, lambda: (
+                        on_script_done(n, self._verify_traps(v)), next_script()))
+
+                slot = _Slot(page, name, source, script_done)
                 # Held for the length of the run. Without this the only
                 # reference to the slot is the callback Qt is holding, and Qt
                 # drops that as soon as it fires: the slot is then collected
@@ -1275,6 +1367,76 @@ class html_renderer:
         if not result.html:
             raise RuntimeError(snapshot.get("error", "rendered text snapshot unavailable"))
         return RenderedHTML(result.html or "", snapshot)
+
+
+#: At most this many trap candidates are tried with real keys on one page.
+TRAP_CHECKS = 6
+#: How long the page gets to react to one real key press.
+TRAP_KEY_MS = 60
+
+#: Find the flagged element by its recorded path, mark the widget it belongs
+#: to, focus the element. The widget is the nearest ancestor that manages
+#: focus itself (an ARIA composite role, a dialog, a Fluent FocusZone), else
+#: its grandparent. Returns how many key presses are enough to leave it.
+_TRAP_PREPARE = """(function(path) {
+  var steps = path.split('/');
+  if (steps[0] !== 'html') return null;
+  var node = document.documentElement;
+  for (var i = 1; i < steps.length; i++) {
+    var cut = steps[i].lastIndexOf(':');
+    var child = node.children[+steps[i].slice(cut + 1)];
+    if (!child || child.tagName.toLowerCase() !== steps[i].slice(0, cut)) return null;
+    node = child;
+  }
+  var widget = node.closest('[role=dialog],[role=alertdialog],[aria-modal=true],[role=toolbar],' +
+      '[role=menu],[role=menubar],[role=tablist],[role=listbox],[role=grid],[role=tree],' +
+      '[role=radiogroup],[data-focuszone-id]')
+    || (node.parentElement && node.parentElement.parentElement) || node.parentElement || node;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-xa-trap]'),
+    function(e) { e.removeAttribute('data-xa-trap'); });
+  widget.setAttribute('data-xa-trap', '');
+  window.__xaTrapStart = node;
+  var count = widget.querySelectorAll('a[href],button,input,select,textarea,summary,[tabindex]').length;
+  try { node.focus({preventScroll: true}); } catch (e) {}
+  return JSON.stringify({ok: document.activeElement === node, limit: Math.min(count + 3, 60)});
+})(%s)"""
+_TRAP_REFOCUS = """(function() {
+  var start = window.__xaTrapStart;
+  try { if (start) start.focus({preventScroll: true}); } catch (e) {}
+  return document.activeElement === start;
+})()"""
+_TRAP_WHERE = """(function() {
+  var widget = document.querySelector('[data-xa-trap]');
+  var active = document.activeElement;
+  if (!widget) return 'gone';
+  if (!active || active === document.body || active === document.documentElement) return 'out';
+  return widget.contains(active) ? 'in' : 'out';
+})()"""
+_TRAP_CLEANUP = """(function() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-xa-trap]'),
+    function(e) { e.removeAttribute('data-xa-trap'); });
+  var start = window.__xaTrapStart;
+  window.__xaTrapStart = null;
+  try { if (start && document.activeElement === start) start.blur(); } catch (e) {}
+  return true;
+})()"""
+
+
+def _run_js(page, script: str, timeout_ms: int = 2000):
+    """Run `script` in the page and wait for its answer, on this thread."""
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    loop = QEventLoop()
+    box = {}
+
+    def answered(value):
+        box["value"] = value
+        loop.quit()
+
+    page.runJavaScript(script, 1, answered)
+    QTimer.singleShot(timeout_ms, loop.quit)
+    loop.exec()
+    return box.get("value")
 
 
 def _pump(milliseconds: int) -> None:
