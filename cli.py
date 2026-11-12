@@ -1521,6 +1521,11 @@ def build_parser() -> argparse.ArgumentParser:
     common(p_compare)
     p_compare.set_defaults(func=cmd_compare)
 
+    # The reports of a finished run, again, from its folder: no crawl.
+    from cli_impl.rerender import add_parser as _add_report_parser
+
+    _add_report_parser(sub)
+
     p_ai = sub.add_parser("ai", help="account and AI-backed operations")
     ai_sub = p_ai.add_subparsers(dest="ai_command", required=True)
 

@@ -18,7 +18,7 @@ import platform_dirs
 #: The config folder's name. Owned by `app_identity`, like every other name
 #: the rename touched; `_config_dir` keeps reading `xanalyze` until it moves.
 APP_NAME = app_identity.APP_SLUG
-APP_VERSION = "0.77.0"
+APP_VERSION = "0.78.0"
 # Pre-rename config dir name. Only used to migrate an existing install's
 # settings into the new location the first time this runs after upgrading;
 # see `migrate_legacy_file`.

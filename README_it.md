@@ -481,6 +481,32 @@ Ogni documento si apre nominando il comando e i parametri che hanno cambiato ci�
 che è stato misurato. Un problema ripetuto è elencato una volta sola, con i suoi
 luoghi annidati sotto. `--json` conserva ogni risultato, per la CI.
 
+**Un componente, un problema.** In una web part SPFx personalizzata lo stesso
+difetto su ogni istanza è un solo problema: una correzione nel codice del
+componente lo corregge ovunque. Lì un problema è la famiglia del controllo (la
+regola statica e axe che chiedono «questo pulsante ha un nome» sono uno), la
+web part (compreso il markup che disegna fuori dal canvas) e la forma
+dell'elemento: il tag e le classi che nominano l'elemento del componente, senza
+classi di stato (`is-*`), contatori di Fluent (`root-262`) o hash atomici, e
+senza ciò che viene dai dati (indirizzi, alt, testo). È riportato una volta, con
+la gravità più alta, tutti i motori, i luoghi e una riga che dice che una
+correzione nel componente li corregge tutti. Il contenuto dell'autore e ogni
+altro sito restano un problema per elemento: ogni immagine e link scritto da
+una persona richiede la sua correzione. Il report, il riepilogo JSON e la
+finestra raggruppano allo stesso modo; `--json` elenca ancora ogni occorrenza.
+
+**Da verificare e raccomandazioni sono compatti.** Una riga per controllo e
+web part: criteri WCAG, perché nessun motore l'ha deciso, quanti luoghi, su
+quante pagine e tre esempi con la loro pagina. Solo i risultati provati hanno
+una scheda completa.
+
+**Rigenerare il report di un'esecuzione conclusa.** `xaudit report
+<cartella-esecuzione> --styled-report breve.pdf [--language it] [--unsettled]`
+riscrive il report impaginato dal checkpoint della cartella, con
+raggruppamento, mascheramento e impaginazione attuali, senza scansionare né
+verificare nulla. Ciò che è stato trovato è dell'esecuzione; come è mostrato è
+del codice di oggi.
+
 Per via di questo raggruppamento il riepilogo contiene due unità di misura,
 quindi ogni riga dichiara la propria: una categoria conta i **problemi
 distinti**, il conteggio dei caratteri conta le **occorrenze**, ed entrambi i

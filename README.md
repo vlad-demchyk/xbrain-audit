@@ -466,6 +466,31 @@ Every document opens by naming the command and the parameters that changed
 what was measured. A repeated problem is listed once with its locations nested
 under it. `--json` keeps every finding, for CI.
 
+**One component, one problem.** In a custom SPFx web part the same defect on
+every instance is one problem: one fix in the component's code fixes it
+everywhere. There a problem is the check's family (the static rule and axe
+asking "does this button have a name" are one), the web part (markup it draws
+outside the canvas included), and the element's shape - its tag and the classes
+that name the component's element, without state classes (`is-*`), Fluent
+counters (`root-262`) or atomic hashes, and without anything that comes from
+data (addresses, alt text, text). It is reported once, at its worst severity,
+with every engine, the places it occurs and a line saying one fix in the
+component fixes them all. The author's own content and every other site keep
+one problem per element: each image and link a person wrote needs its own fix.
+The report, the JSON summary and the window group the same way; `--json` still
+lists every occurrence.
+
+**To check by hand, and recommendations, are compact.** One row per check and
+web part: its WCAG criteria, why no engine could settle it, how many places,
+on how many pages, and three examples with their page. Only proven findings
+get a full card.
+
+**Re-rendering a finished run.** `xaudit report <run-folder> --styled-report
+short.pdf [--language it] [--unsettled]` writes the styled report again from a
+run folder's checkpoint, with the current grouping, masking and layout, without
+crawling or auditing anything. What was found is the run's; how it is shown is
+today's.
+
 Because of that grouping the summary holds two units at once, so every row
 of it names its own: a category counts **distinct problems**, a character
 tally counts **occurrences**, and both numbers are printed under the same
