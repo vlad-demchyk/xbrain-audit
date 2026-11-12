@@ -76,7 +76,7 @@ class GroupedFindings(unittest.TestCase):
         html = render_html(model, "en")
         self.assertIn("Found in 30 places", html)
         # Each place by the page's readable name (`report.model.page_label`).
-        self.assertIn("<li>p0</li>", html)
+        self.assertIn('<a href="https://x.com/p0">p0</a>', html)
         # Not every one of the thirty: a card that is only a list of URLs
         # stops being a finding.
         self.assertIn("and 18 more", html)

@@ -502,8 +502,12 @@ tabella per componente (ogni web part personalizzata, ogni parte dell'autore)
 somma a quella riga. «Da verificare» e «Raccomandazioni» sono schede come i
 risultati provati, una per gruppo. Le pagine sono nominate come le nomina una
 persona - il percorso decodificato sotto il sito (`Backup / Rubrica`), con
-l'indirizzo completo come link - e un luogo si legge `pagina — ultimi due passi
-del percorso dell'elemento`. Un gruppo è verificato membro per membro: non
+l'indirizzo completo come link - e una scheda elenca i luoghi in due colonne:
+l'elemento come lo si trova nella pagina (etichetta o testo, oppure id o classe
+propria: `<button> "Cerca"`, `button.search_a1b2c3d4`) e la pagina in cui si
+trova, con il link. La sezione Prestazioni è un riepilogo: pagine misurate,
+mediana e valore peggiore di LCP e CLS con le tre pagine peggiori per nome, INP
+in una riga; i valori pagina per pagina sono nel JSON. Un gruppo è verificato membro per membro: non
 mescola mai famiglie di controlli, web part, forme di elementi o, fuori dalle
 parti personalizzate, risultati che l'identità distingue.
 

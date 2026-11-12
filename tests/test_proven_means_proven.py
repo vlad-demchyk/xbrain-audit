@@ -61,7 +61,7 @@ class OneElementOneFinding(unittest.TestCase):
     def test_engines_in_different_zone_documents_merge_on_the_element(self):
         from audit.browser import merge_same_element
 
-        field = '<input type="text" placeholder="Cerca" class="searchbar_fd3679fe">'
+        field = '<input type="text" placeholder="Cerca" class="searchbar_a1b2c3d4">'
         static = _issue("label-placeholder-only", field + "…", "static")
         state = _issue("state:form-placeholder-as-label", field, "browser")
         text = '<span style="color:#777">Note</span>'

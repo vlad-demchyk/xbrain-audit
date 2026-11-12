@@ -145,6 +145,60 @@ def element_of(snippet: str = "", selector: str = "") -> str:
     return ""
 
 
+#: Attributes that name an element to a person, in the order a reader would
+#: recognise it by: its accessible name first, then what stands in for one.
+_NAMING_ATTRIBUTES = ("aria-label", "alt", "title", "placeholder")
+#: How long an element's name may be in a list of places.
+EXAMPLE_LENGTH = 48
+
+
+def element_label(snippet: str = "", selector: str = "") -> str:
+    """The element a place is about, as a reader finds it on the page.
+
+    `<button> "Cerca"`: the element and the words on it or its label, read
+    off the quoted markup. With no words (an unnamed button has none), the
+    element by its id or its own classes (`button.transparent_a1b2c3d4`),
+    then the last step of the selector, then the element alone. A list of
+    places used to repeat the CSS path tail, `button:nth-of-type(1)`, which
+    says where in the tree and not which button.
+    """
+    from duplicates import semantic_classes
+
+    tag = element_of(snippet, selector)
+    words = ""
+    shape = ""
+    opening = _TAG.search(snippet or "")
+    if opening:
+        attributes = {name.lower(): double or single for name, double, single in
+                      re.findall(r"""([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""", opening.group(3))}
+        if (attributes.get("id") or "").strip():
+            shape = f"{tag}#{attributes['id'].strip()}"
+        else:
+            # A component's own classes before a framework's (`ms-Button`).
+            classes = semantic_classes((attributes.get("class") or "").split())
+            classes = [name for name in classes if not name.startswith("ms-")] or list(classes)
+            if classes:
+                shape = ".".join((tag, *classes[:2]))
+        for name in _NAMING_ATTRIBUTES:
+            if (attributes.get(name) or "").strip():
+                words = attributes[name]
+                break
+    if not words:
+        inner = _TAG.sub(" ", (snippet or "").rstrip("…"))
+        words = html.unescape(inner)
+    words = " ".join(html.unescape(words).split())
+    if len(words) > EXAMPLE_LENGTH:
+        words = words[:EXAMPLE_LENGTH - 1].rstrip() + "…"
+    if words:
+        return f'<{tag}> "{words}"' if tag else f'"{words}"'
+    if shape:
+        return shape
+    step = (selector or "").split(">")[-1].strip()
+    if step:
+        return step
+    return f"<{tag}>" if tag else ""
+
+
 # ------------------------------------------------------------- highlighting
 
 #: One tag, with its attributes: `<a href="/x" class="y">`, `</a>`, `<br/>`.

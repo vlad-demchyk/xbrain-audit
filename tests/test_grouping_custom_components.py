@@ -45,9 +45,9 @@ class WhatMergesInACustomPart(unittest.TestCase):
         self.assertEqual(issue_identity(a), issue_identity(b))
 
     def test_the_static_rule_and_axe_of_one_family_are_one_problem(self):
-        a = _issue("control-name", '<button class="search_button_fd3679fe">', engine="static",
+        a = _issue("control-name", '<button class="search_button_a1b2c3d4">', engine="static",
                    severity="critical")
-        b = _issue("axe:button-name", '<button class="search_button_fd3679fe root-262">')
+        b = _issue("axe:button-name", '<button class="search_button_a1b2c3d4 root-262">')
         self.assertEqual(issue_identity(a), issue_identity(b))
 
     def test_outside_the_canvas_is_the_same_web_part(self):
@@ -74,8 +74,8 @@ class WhatMustNotMerge(unittest.TestCase):
 
     def test_a_different_semantic_class_is_a_different_element(self):
         self.assertNotEqual(
-            issue_identity(_issue("axe:button-name", '<button class="ms-Button searchbar_fd3679fe">')),
-            issue_identity(_issue("axe:button-name", '<button class="ms-Button menu_fd3679fe">')))
+            issue_identity(_issue("axe:button-name", '<button class="ms-Button searchbar_a1b2c3d4">')),
+            issue_identity(_issue("axe:button-name", '<button class="ms-Button menu_a1b2c3d4">')))
 
     def test_certainty_is_never_mixed(self):
         markup = '<span class="name_1a2b3c4d">Ann</span>'

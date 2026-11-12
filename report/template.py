@@ -110,6 +110,7 @@ _LABELS = {
         component_fix="One fix in the code of {name} fixes all {count} occurrences.",
         tally="{problems} distinct problems · {occurrences} occurrences on {pages} · {to_verify} to check by hand · {recommendations} recommendations (the last two are not in the totals)",
         found_in="Found in {count} places", and_more="and {count} more",
+        place_example="Example", place_page="Page",
         occurrences="Occurrences",
         distinct="distinct problems", occurrences_total="occurrences in total",
         source_at="Source: {path}:{line}",
@@ -182,6 +183,7 @@ _LABELS = {
         component_fix="Одне виправлення в коді {name} виправляє всі входження: {count}.",
         tally="Окремих проблем: {problems} · входжень: {occurrences}, сторінок: {pages} · перевірити вручну: {to_verify} · рекомендацій: {recommendations} (останні два не входять у підсумки)",
         found_in="Знайдено у {count} місцях", and_more="і ще {count}",
+        place_example="Приклад", place_page="Сторінка",
         occurrences="Повторів",
         distinct="окремих проблем", occurrences_total="входжень усього",
         source_at="Джерело: {path}:{line}",
@@ -254,6 +256,7 @@ _LABELS = {
         component_fix="Una sola correzione nel codice di {name} corregge tutte le {count} occorrenze.",
         tally="{problems} problemi distinti · {occurrences} occorrenze su {pages} · {to_verify} da verificare · {recommendations} raccomandazioni (le ultime due non sono nei totali)",
         found_in="Trovato in {count} punti", and_more="e altri {count}",
+        place_example="Esempio", place_page="Pagina",
         occurrences="Occorrenze",
         distinct="problemi distinti", occurrences_total="occorrenze in totale",
         source_at="Origine: {path}:{line}",
@@ -357,35 +360,56 @@ _LOCATIONS_SHOWN = 12
 
 
 def _locations_block(finding, labels: dict, root: str = "") -> str:
-    """Where the problem is: one line when it is in one place, a counted list
-    when the same problem was found in several.
+    """Where the problem is: a two-column table of places, the element in the
+    first column and the page it is on, linked, in the second.
 
-    Each place reads `page — last two steps of the element's path`
-    (`report.model.readable_location`): a full address followed by a
-    nine-step CSS path wrapped a character per line in the PDF and named the
-    page in a way nobody says it.
+    A place used to read `Backup / Bacheca-old - … > div:nth-of-type(1) >
+    button:nth-of-type(1)`: a page name and a CSS path tail in one string,
+    neither of which says which button, and no way to open the page. Now the
+    element is named as a reader finds it (`report.markup.element_label`),
+    and the page is its readable name (`report.model.page_label`) linked to
+    its full address.
     """
-    from report.model import readable_location
+    from report.markup import element_label
+    from report.model import page_label, split_location
 
-    places = [readable_location(where, root)
-              for where in (finding.locations or ([finding.location] if finding.location else []))]
-    if len(places) <= 1:
-        return f'<p class="location">{_esc(places[0] if places else "")}</p>'
-    # Shortened, two places can read the same (eight videos of one part,
-    # one per slide): one line with how many, the total still in the title.
-    counted: dict = {}
-    for where in places:
-        counted[where] = counted.get(where, 0) + 1
-    lines = [f"{where} (\u00d7{count})" if count > 1 else where
-             for where, count in counted.items()]
-    shown = lines[:_LOCATIONS_SHOWN]
-    items = "".join(f'<li>{_esc(where)}</li>' for where in shown)
-    rest = len(lines) - len(shown)
-    more = (f'<li class="more">{_esc(labels["and_more"]).format(count=rest)}</li>'
-            if rest > 0 else "")
+    places = finding.locations or ([finding.location] if finding.location else [])
+    if not places:
+        return ""
+    examples = list(finding.examples or [])
+    rows: dict = {}
+    for index, where in enumerate(places):
+        page, selector = split_location(where)
+        example = (examples[index] if index < len(examples)
+                   else element_label(finding.snippet, selector))
+        # Two places that read the same (eight videos of one part, one per
+        # slide): one row with how many, the total still in the heading.
+        key = (example, page)
+        rows[key] = rows.get(key, 0) + 1
+    ordered = list(rows.items())
+    shown = ordered[:_LOCATIONS_SHOWN]
+
+    def page_cell(page: str) -> str:
+        name = _esc(page_label(page, root) or page)
+        if "://" in page:
+            return f'<a href="{_esc(page)}">{name}</a>'
+        return name
+
+    body = "".join(
+        f'<tr><td class="place-example">{_esc(example)}'
+        + (f' <span class="place-count">(×{count})</span>' if count > 1 else "")
+        + f'</td><td class="place-page">{page_cell(page)}</td></tr>'
+        for (example, page), count in shown)
+    rest = len(ordered) - len(shown)
+    more = (f'<tr class="more"><td colspan="2">'
+            f'{_esc(labels["and_more"]).format(count=rest)}</td></tr>' if rest > 0 else "")
+    heading = (f'<p class="location">{_esc(labels["found_in"]).format(count=len(places))}</p>'
+               if len(places) > 1 else "")
     return (
-        f'<p class="location">{_esc(labels["found_in"]).format(count=len(places))}</p>'
-        f'<ul class="locations">{items}{more}</ul>'
+        f'{heading}<table class="places"><thead><tr>'
+        f'<th scope="col">{_esc(labels["place_example"])}</th>'
+        f'<th scope="col">{_esc(labels["place_page"])}</th></tr></thead>'
+        f'<tbody>{body}{more}</tbody></table>'
     )
 
 
@@ -1206,8 +1230,10 @@ def render_html(model: ReportModel, lang: str = "en") -> str:
         coverage_title, coverage_text = coverage_summary(model.coverage, lang)
         coverage_section = (f'<section class="authwall"><h2>{_esc(coverage_title)}</h2>'
                             f'<p class="authwall-note">{_esc(coverage_text)}</p></section>')
-        from audit.vitals import performance_lines
-        performance_title, lines = performance_lines(model.coverage, lang)
+        from audit.vitals import performance_summary
+        from report.model import page_label
+        performance_title, lines = performance_summary(
+            model.coverage, lang, label=lambda url: page_label(url, root or ""))
         if lines:
             coverage_section += (f'<section class="authwall"><h2>{_esc(performance_title)}</h2><ul>'
                                  + ''.join(f'<li>{_esc(line)}</li>' for line in lines) + '</ul></section>')
@@ -1386,12 +1412,25 @@ table.pages-table tr.more td {{ color: {palette.text_muted}; font-style: italic;
 .finding .location {{
   font-size: 8.3pt; color: {palette.text_muted}; margin: 0 0 3mm; overflow-wrap: anywhere;
 }}
-.finding ul.locations {{
-  margin: -1.5mm 0 3mm; padding-left: 5mm; font-size: 8.3pt;
-  color: {palette.text_muted}; list-style: square;
+.finding table.places {{
+  width: 100%; table-layout: fixed; border-collapse: collapse;
+  margin: -1mm 0 3mm; font-size: 8.3pt; color: {palette.text_muted};
 }}
-.finding ul.locations li {{ overflow-wrap: anywhere; margin: 0.3mm 0; }}
-.finding ul.locations li.more {{ list-style: none; margin-left: -3mm; font-style: italic; }}
+.finding table.places th {{
+  text-align: left; font-weight: 600; color: {palette.text};
+  border-bottom: 0.3mm solid {palette.border_strong}; padding: 0.6mm 1.5mm 0.6mm 0;
+}}
+.finding table.places th:first-child {{ width: 55%; }}
+.finding table.places td {{
+  padding: 0.5mm 1.5mm 0.5mm 0; vertical-align: top; overflow-wrap: anywhere;
+  border-bottom: 0.2mm solid {palette.border};
+}}
+.finding table.places tr {{ break-inside: avoid; }}
+.finding table.places td.place-example {{
+  font-family: '{palette.font_mono}', ui-monospace, Menlo, monospace; font-size: 7.8pt;
+}}
+.finding table.places td.place-page a {{ color: inherit; }}
+.finding table.places tr.more td {{ font-style: italic; border-bottom: 0; }}
 .finding-badges {{ margin-bottom: 2mm; }}
 .badge {{
   display: inline-block; padding: .5mm 2mm; font-size: 7.3pt;

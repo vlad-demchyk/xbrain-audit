@@ -158,6 +158,116 @@ def validate_scenario(actions) -> list[dict]:
     return normalized
 
 
+#: Why a metric has no value, in the report's language.
+_REASONS = {
+    "uk": {"no measured interactions": "немає виміряних взаємодій",
+           "navigation run has no scenario interactions": "прогін завантаження без взаємодій",
+           "CrUX requires a public HTTP(S) URL without credentials": "CrUX доступний для публічних HTTP(S) адрес без облікових даних",
+           "CRUX_API_KEY is not configured": "ключ CrUX не налаштовано",
+           "no field data for the requested scope": "немає польових даних у запитаних межах",
+           "Lighthouse CLI is not installed": "Lighthouse CLI не встановлено"},
+    "it": {"no measured interactions": "nessuna interazione misurata",
+           "navigation run has no scenario interactions": "caricamento senza interazioni",
+           "CRUX_API_KEY is not configured": "chiave CrUX non configurata",
+           "no field data for the requested scope": "nessun dato sul campo nell'ambito richiesto"},
+}
+
+#: How many of the worst pages the summary names per metric.
+SUMMARY_WORST = 3
+
+_SUMMARY_WORDS = {
+    "uk": dict(pages="Виміряно сторінок: {n}", lab="лабораторний прогін", median="медіана",
+               worst="найгірше", slowest="Найповільніші", unstable="Найнестабільніші",
+               no_throttle="без обмежень CPU/мережі", unit="мс",
+               inp_none="INP: не виміряно на {n} сторінках ({reason})",
+               inp="INP: медіана {median} мс, найгірше {worst} мс ({n} сторінок)",
+               json="Значення для кожної сторінки є в JSON.", none="немає даних"),
+    "it": dict(pages="Pagine misurate: {n}", lab="misura di laboratorio", median="mediana",
+               worst="peggiore", slowest="Più lente", unstable="Più instabili",
+               no_throttle="nessun limite CPU/rete", unit="ms",
+               inp_none="INP: non misurato su {n} pagine ({reason})",
+               inp="INP: mediana {median} ms, peggiore {worst} ms ({n} pagine)",
+               json="I valori pagina per pagina sono nel JSON.", none="nessun dato"),
+    "en": dict(pages="Pages measured: {n}", lab="lab observation", median="median",
+               worst="worst", slowest="Slowest", unstable="Least stable",
+               no_throttle="CPU/network unthrottled", unit="ms",
+               inp_none="INP: not measured on {n} pages ({reason})",
+               inp="INP: median {median} ms, worst {worst} ms ({n} pages)",
+               json="Per-page values are in the JSON.", none="no data"),
+}
+
+
+def performance_summary(coverage, lang="en", label=None) -> tuple[str, list[str]]:
+    """The measurements in a few lines a reader can take in: how many pages,
+    under which conditions, the median and the worst of each metric, and the
+    worst pages by name.
+
+    `performance_lines` writes one line per page - address, viewport, every
+    metric - and a hundred-page run printed a hundred of them in the PDF,
+    lines nobody compares by eye: the per-page numbers are the JSON's.
+    `label` turns a page address into the name the rest of the report uses
+    (`report.model.page_label`). Field and Lighthouse sources, one line each
+    and not per page, follow as `performance_lines` words them.
+    """
+    label = label or (lambda url: url)
+    text = _SUMMARY_WORDS.get(lang, _SUMMARY_WORDS["en"])
+    coverage = coverage or {}
+    title, source_lines = performance_lines({**coverage, "performance": []}, lang)
+    pages = coverage.get("performance", [])
+    if not pages:
+        return title, source_lines
+    values: dict = {name: [] for name in METRICS}
+    missing: dict = {}
+    viewports: dict = {}
+    unthrottled = True
+    for page in pages:
+        data = page.get("measurements") or {}
+        conditions = data.get("conditions") or {}
+        viewport = conditions.get("viewport") or {}
+        size = f"{viewport.get('width', '?')}×{viewport.get('height', '?')}"
+        viewports[size] = viewports.get(size, 0) + 1
+        if not (conditions.get("cpu", {}).get("throttling")
+                == conditions.get("network", {}).get("throttling") == "none"):
+            unthrottled = False
+        for name in METRICS:
+            metric = (data.get("vitals") or {}).get(name) or {}
+            value = metric.get("value") if metric.get("status") == "checked" else None
+            if type(value) in (int, float):
+                values[name].append((value, page.get("source", "")))
+            else:
+                reason = metric.get("reason", "")
+                bucket = missing.setdefault(name, {})
+                bucket[reason] = bucket.get(reason, 0) + 1
+    size = max(viewports, key=viewports.get)
+    lines = [text["pages"].format(n=len(pages)) + f" · {text['lab']}, {size}"
+             + (f", {text['no_throttle']}" if unthrottled else "")]
+
+    def number(name, value):
+        return f"{value:.3g}" if name == "CLS" else f"{round(value):d} {text['unit']}"
+
+    for name, worst_word in (("LCP", text["slowest"]), ("CLS", text["unstable"])):
+        measured = sorted(values[name], key=lambda pair: -pair[0])
+        if not measured:
+            lines.append(f"{name}: {text['none']}")
+            continue
+        middle = median(value for value, _source in measured)
+        named = ", ".join(f"{label(source)} ({number(name, value)})"
+                          for value, source in measured[:SUMMARY_WORST])
+        lines.append(f"{name}: {text['median']} {number(name, middle)}, "
+                     f"{text['worst']} {number(name, measured[0][0])}. {worst_word}: {named}")
+    inp = values["INP"]
+    if inp:
+        lines.append(text["inp"].format(median=round(median(v for v, _s in inp)),
+                                        worst=round(max(v for v, _s in inp)), n=len(inp)))
+    if missing.get("INP"):
+        reason = max(missing["INP"].items(), key=lambda item: item[1])[0]
+        lines.append(text["inp_none"].format(
+            n=sum(missing["INP"].values()),
+            reason=_REASONS.get(lang, {}).get(reason, reason) or "?"))
+    lines.append(text["json"])
+    return title, lines + source_lines
+
+
 def performance_lines(coverage, lang="en") -> tuple[str, list[str]]:
     """Human exports keep clean metric values and uncertainty beside conditions."""
     title, lab, field, unknown, cached = {
@@ -172,18 +282,7 @@ def performance_lines(coverage, lang="en") -> tuple[str, list[str]]:
     }.get(lang, ("ms", "CPU/network", "unthrottled", "median"))
     statuses = {"uk": {"checked": "перевірено", "unknown": "невідомо", "error": "помилка", "skipped": "пропущено"},
                 "it": {"checked": "verificato", "unknown": "sconosciuto", "error": "errore", "skipped": "saltato"}}
-    reasons = {
-        "uk": {"no measured interactions": "немає виміряних взаємодій",
-               "navigation run has no scenario interactions": "прогін завантаження без взаємодій",
-               "CrUX requires a public HTTP(S) URL without credentials": "CrUX доступний для публічних HTTP(S) адрес без облікових даних",
-               "CRUX_API_KEY is not configured": "ключ CrUX не налаштовано",
-               "no field data for the requested scope": "немає польових даних у запитаних межах",
-               "Lighthouse CLI is not installed": "Lighthouse CLI не встановлено"},
-        "it": {"no measured interactions": "nessuna interazione misurata",
-               "navigation run has no scenario interactions": "caricamento senza interazioni",
-               "CRUX_API_KEY is not configured": "chiave CrUX non configurata",
-               "no field data for the requested scope": "nessun dato sul campo nell'ambito richiesto"},
-    }.get(lang, {})
+    reasons = _REASONS.get(lang, {})
     lines = []
     for page in coverage.get("performance", []):
         data = page.get("measurements") or {}

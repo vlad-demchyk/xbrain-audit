@@ -487,7 +487,11 @@ table per component (each custom web part, each author part) adds up to that
 line. "To check by hand" and "Recommendations" are cards like the proven
 findings, one per group. Pages are named as a person names them - the decoded
 path below the site (`Backup / Rubrica`), the full address as the link - and a
-place reads `page — last two steps of the element's path`. A group is checked
+card lists its places in two columns: the element as you find it on the page
+(its label or words, or its id or own class: `<button> "Cerca"`,
+`button.search_a1b2c3d4`) and the page it is on, linked. The performance section
+is a summary: pages measured, median and worst LCP and CLS with the three worst
+pages by name, INP in one line; the per-page numbers are in the JSON. A group is checked
 member by member: it never mixes check families, web parts, element shapes or,
 outside custom parts, findings the identity tells apart.
 

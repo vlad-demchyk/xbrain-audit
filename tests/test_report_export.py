@@ -619,7 +619,8 @@ class ReportReadability(unittest.TestCase):
              "explanation": "cliché: delve",
              "source_file": "/repo/hero.php", "source_line": 12}]})
         html = render_html(model, lang="en")
-        table = html[html.index("ai-patterns"):]
+        start = html.index("ai-patterns")
+        table = html[start:html.index("</table>", start)]
         self.assertIn("/repo/hero.php:12", table)
         # One <tr>, not two: the path is a line inside the explanation cell.
         self.assertEqual(table.count("<tr>"), 2)  # header row + the one finding

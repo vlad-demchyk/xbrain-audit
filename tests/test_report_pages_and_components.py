@@ -76,30 +76,74 @@ class ThePagesLists(unittest.TestCase):
         self.assertIn(f'<a href="{BACKUP}">Backup / I nostri Obiettivi strategici</a>', section)
         self.assertEqual(section.count("<tr>") - 1, 3)
 
-    def test_cards_name_places_readably(self):
-        html = render_html(_model(), "en")
-        findings = html.split('<section class="findings">')[1].split("</section>")[0]
-        self.assertNotIn("div:nth-of-type(1) > div > section", findings)
-        self.assertIn("Backup / I nostri Obiettivi strategici — … &gt; figure &gt;", findings)
-
-    def test_places_that_read_the_same_are_one_line_with_a_count(self):
-        from report.model import ReportFinding
-        from report.template import _locations_block, _labels
-
-        finding = ReportFinding(
-            title="t", category="accessibility", severity="serious", location="",
-            locations=[f"{BACKUP} — div:nth-of-type({n}) > div > video:nth-of-type(1)"
-                       for n in range(1, 4)])
-        block = _locations_block(finding, _labels("en"), SITE)
-        self.assertEqual(block.count("<li>"), 1)
-        self.assertIn("(×3)", block)
-        self.assertIn("Found in 3 places", block)
-
     def test_the_overview_counts_pages_out_of_the_pages_examined(self):
         for lang, words in (("en", "on 3 of the 3 pages"), ("it", "su 3 delle 3 pagine")):
             with self.subTest(lang):
                 self.assertIn(words, render_html(_model(lang), lang))
 
+    def test_cards_list_places_as_the_element_and_a_link_to_its_page(self):
+        html = render_html(_model(), "en")
+        findings = html.split('<section class="findings">')[1].split("</section>")[0]
+        self.assertNotIn("div:nth-of-type(1) &gt; div &gt; section", findings)
+        self.assertNotIn("… &gt; figure &gt;", findings)
+        self.assertIn('<th scope="col">Example</th><th scope="col">Page</th>', findings)
+        self.assertIn(f'<td class="place-page"><a href="{BACKUP}">'
+                      "Backup / I nostri Obiettivi strategici</a></td>", findings)
+        italian = render_html(_model("it"), "it")
+        self.assertIn('<th scope="col">Esempio</th><th scope="col">Pagina</th>', italian)
+
+    def test_places_that_read_the_same_are_one_row_with_a_count(self):
+        from report.model import ReportFinding
+        from report.template import _labels, _locations_block
+
+        finding = ReportFinding(
+            title="t", category="accessibility", severity="serious", location="",
+            snippet='<video class="clip">',
+            locations=[f"{BACKUP} — div:nth-of-type({n}) > div > video:nth-of-type(1)"
+                       for n in range(1, 4)])
+        block = _locations_block(finding, _labels("en"), SITE)
+        self.assertEqual(block.count('<td class="place-example">'), 1)
+        self.assertIn("(×3)", block)
+        self.assertIn("Found in 3 places", block)
+
+    def test_the_rest_past_the_shown_rows_is_counted(self):
+        from report.model import ReportFinding
+        from report.template import _LOCATIONS_SHOWN, _labels, _locations_block
+
+        places = [f"{SITE}/SitePages/P{n}.aspx — main > button" for n in range(_LOCATIONS_SHOWN + 5)]
+        finding = ReportFinding(title="t", category="accessibility", severity="serious",
+                                location="", snippet="<button>Go</button>", locations=places)
+        block = _locations_block(finding, _labels("it"), SITE)
+        self.assertEqual(block.count('<td class="place-page">'), _LOCATIONS_SHOWN)
+        self.assertIn("e altri 5", block)
+
+
+class ElementLabels(unittest.TestCase):
+    def test_an_element_is_named_by_its_label_or_its_words(self):
+        from report.markup import element_label
+
+        self.assertEqual(element_label('<button aria-label="Cerca" class="transparent_a1b2c3d4">'),
+                         '<button> "Cerca"')
+        self.assertEqual(element_label("<a href='/x'>Leggi  <b>tutto</b></a>"), '<a> "Leggi tutto"')
+        self.assertEqual(element_label('<input placeholder="Nome">'), '<input> "Nome"')
+        self.assertEqual(element_label('<img alt="" src="/a.png">', "figure > img.hero"), "img.hero")
+        self.assertEqual(element_label("<div>", ""), "<div>")
+        # An unnamed button: by its id or its component's own class, not its
+        # place among its siblings.
+        self.assertEqual(element_label(
+            '<button type="button" class="ms-Button ms-Button--default transparent_a1b2c3d4 root-326">',
+            "div > button:nth-of-type(1)"), "button.transparent_a1b2c3d4")
+        self.assertEqual(element_label('<button id="btn-notification" class="x">',
+                                       "button:nth-of-type(1)"), "button#btn-notification")
+        long = element_label("<p>" + "parola " * 30 + "</p>")
+        self.assertTrue(long.endswith('…"'))
+        self.assertLessEqual(len(long), 60)
+
+    def test_a_group_keeps_each_places_own_element(self):
+        model = _model()
+        grouped = model.grouped_findings()
+        header = next(f for f in grouped if f.zone_name == "Contoso Header")
+        self.assertEqual(len(header.examples), len(header.locations))
 
 class TheComponentsAddUp(unittest.TestCase):
     def test_each_component_once_and_the_rows_sum_to_the_totals(self):

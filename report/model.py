@@ -147,6 +147,10 @@ class ReportFinding:
     #: first. Filled by `ReportModel.grouped_findings`; empty on an
     #: ungrouped finding, where `location` alone is the answer.
     locations: list = field(default_factory=list)
+    #: The element at each of `locations`, as a reader finds it
+    #: (`report.markup.element_label`), index for index. Filled with
+    #: `locations`; empty means "work it out from `snippet`".
+    examples: list = field(default_factory=list)
     #: The platform that emitted the element, when one did - so the branded
     #: report says which rows are not the reader's to fix. Empty is the
     #: author's own markup, which is most of them.
@@ -410,7 +414,15 @@ class ReportModel:
 
         from duplicates import admits
 
+        from report.markup import element_label
+
+        def example(finding) -> str:
+            return element_label(finding.snippet,
+                                 split_location(finding.location)[1]
+                                 or (finding.evidence or {}).get("selector", ""))
+
         grouped: dict = {}
+        examples: dict = {}
         engines: dict = {}
         firsts: dict = {}
         order: list = []
@@ -426,14 +438,16 @@ class ReportModel:
                 where = finding.location
                 if where and where not in grouped[key]:
                     grouped[key].append(where)
+                    examples[key].append(example(finding))
                 if finding.engine and finding.engine not in engines[key]:
                     engines[key].append(finding.engine)
                 continue
             grouped[key] = [finding.location] if finding.location else []
+            examples[key] = [example(finding)] if finding.location else []
             engines[key] = [finding.engine] if finding.engine else []
             firsts[key] = finding
             order.append((key, finding))
-        return [replace(first, locations=grouped[key],
+        return [replace(first, locations=grouped[key], examples=examples[key],
                         engine=", ".join(engines[key]) or first.engine)
                 for key, first in order]
 
