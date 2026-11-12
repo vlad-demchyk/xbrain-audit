@@ -33,9 +33,7 @@ default and the light-only choice below.
 """
 from __future__ import annotations
 
-import base64
 import html
-from pathlib import Path
 
 from audit.base import ADVISORY, EXACT, NEEDS_BROWSER
 from report.markup import (
@@ -50,11 +48,8 @@ from ui.tokens import Palette, palettes
 #: checkout (which may not exist on the machine building the report) keeps
 #: the report generator, like the desktop app itself, buildable from this
 #: repository alone.
-#: The product mark, as it appears on every document. A PNG rather than the
-#: window's SVG pair: it is one blue on transparency, so it reads on a light
-#: and a dark page alike and needs no second file, and a rasterised mark is
-#: what the PDF renderer embeds anyway.
-_LOGO_PATH = Path(__file__).resolve().parent.parent / "ui" / "design" / "assets" / "logo.png"
+#: No product mark on the document: the old XAnalyze logo went with the rename
+#: to XBrain Audit, and a report is about the audited site, not the tool.
 
 #: Horizontal-only gutter around text, in millimetres - see the `@page`
 #: note above. `report.pdf` deliberately does *not* read this: the page
@@ -260,22 +255,6 @@ _SEVERITY_LABEL = {
 
 def _labels(lang: str) -> dict:
     return _LABELS.get(lang, _LABELS["en"])
-
-
-#: Which media type the data URI declares, by suffix. Getting this wrong
-#: does not raise - it renders a broken image, which is worse.
-_LOGO_MEDIA_TYPES = {".png": "image/png", ".svg": "image/svg+xml",
-                     ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
-
-
-def _logo_data_uri() -> str:
-    try:
-        raw = _LOGO_PATH.read_bytes()
-    except OSError:
-        return ""
-    media = _LOGO_MEDIA_TYPES.get(_LOGO_PATH.suffix.lower(), "image/png")
-    encoded = base64.b64encode(raw).decode("ascii")
-    return f"data:{media};base64,{encoded}"
 
 
 def _esc(value) -> str:
@@ -993,7 +972,6 @@ def render_html(model: ReportModel, lang: str = "en") -> str:
         by_severity[finding.severity] = by_severity.get(finding.severity, 0) + 1
         by_category[finding.category] = by_category.get(finding.category, 0) + 1
     mode_label = labels["mode"].get(model.meta.mode, model.meta.mode)
-    logo = _logo_data_uri()
 
     stat_cards = []
     for rank in range(4):
@@ -1089,18 +1067,8 @@ body {{
 a {{ color: {palette.accent}; }}
 h1, h2, h3 {{ font-family: '{palette.font}', Arial, sans-serif; color: {palette.text}; }}
 .report-header {{
-  /* Top-aligned, not centred. The text column is four lines now - name,
-     target, mode, run parameters - and a centred mark floats halfway down
-     it, level with nothing. Against the first line it reads as belonging
-     to the name. */
-  display: flex; align-items: flex-start; gap: 5mm;
   border-bottom: 1px solid {palette.border}; padding-bottom: 5mm; margin-bottom: 8mm;
 }}
-/* 14 mm, not 22. The mark is an identifier at the top of a technical
-   document, not the subject of the page: at 22 mm it took a fifth of the
-   header's width and pushed the name and the target into a narrow column. */
-.report-header img {{ width: 14mm; height: auto; flex: 0 0 auto;
-  margin-top: 0.5mm; }}
 .report-header h1 {{ font-size: 17pt; margin: 0 0 1.5mm; overflow-wrap: anywhere; }}
 .report-header .meta {{ margin: 0; font-size: 9pt; color: {palette.text_muted}; }}
 .report-header .run {{ margin: 1.5mm 0 0; font-size: 8pt; color: {palette.text_muted};
@@ -1286,8 +1254,6 @@ footer {{
 }}
 """.strip()
 
-    logo_img = f'<img src="{logo}" alt="">' if logo else ""
-
     run_line = ""
     if getattr(model.meta, "run", None):
         # One line rather than a table: it is the document's passport, not
@@ -1306,7 +1272,6 @@ footer {{
 </head>
 <body>
 <header class="report-header">
-  {logo_img}
   <div>
     <h1>{_esc(name or labels["title"])}</h1>
     {f'<p class="target">{target_line}</p>' if target_line else ''}

@@ -273,7 +273,7 @@ class EveryBundleCarriesWhatTheCodeReads(unittest.TestCase):
     * `xbrain-audit-desktop.css` - `overlay_file()` degrades to the shared token
       file, so every bundle ever built painted in xFormat's web colours while
       the source tree painted in XBrain Audit's, and it looked deliberate.
-    * `ui/design/assets` in the CLI spec - `report/template._logo_data_uri`
+    * `ui/design/assets` in the CLI spec - the report logo of the time (since removed)
       returns `""` when it cannot read the mark, so the built CLI produced
       perfectly valid, unbranded reports and said nothing.
 
@@ -306,11 +306,9 @@ class EveryBundleCarriesWhatTheCodeReads(unittest.TestCase):
         """Named in the spec but renamed on disk is the same failure with an
         extra step, so the spec is checked against the modules, not against
         string literals."""
-        from report.template import _LOGO_PATH
         from ui import theme
 
-        for path in (tokens.token_file(), tokens.OVERLAY_PATH, _LOGO_PATH,
-                     theme._ICONS):
+        for path in (tokens.token_file(), tokens.OVERLAY_PATH, theme._ICONS):
             with self.subTest(path=getattr(path, "name", path)):
                 self.assertIsNotNone(path)
                 self.assertTrue(path.exists())
