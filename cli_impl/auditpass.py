@@ -210,9 +210,9 @@ def _run_browser_pass(result, suppressions, args=None) -> None:
         performance_scenario=scenario,
         performance_fresh=getattr(args, "performance_fresh", False),
     )
-    # A SharePoint run reads the zones, not the chrome: axe is confined to
-    # them, the whole-document engines are off, and the DOM is kept so each
-    # finding can be placed. See `audit.sharepoint_zones`.
+    # A SharePoint run reads the zones, not the chrome: every engine leaves
+    # the chrome regions alone, and the DOM is kept so each finding can be
+    # placed in a zone. See `audit.sharepoint_zones`.
     sharepoint = bool(getattr(result, "sharepoint", None))
     zone_summary = None
     if sharepoint:
@@ -220,6 +220,7 @@ def _run_browser_pass(result, suppressions, args=None) -> None:
 
         options = sharepoint_zones.browser_options(options)
         zone_summary = sharepoint_zones.Summary()
+        zone_summary.record_passes(options)
     if within:
         progress.notice(
             "within",
@@ -340,6 +341,11 @@ def _add_skipped(result, zone_summary) -> None:
         by_rule[rule] = by_rule.get(rule, 0) + count
     skipped["by_rule"] = dict(sorted(by_rule.items(),
                                      key=lambda kv: (-kv[1], kv[0])))
+    # Which browser engines ran on the zones, and what became of their
+    # findings: the coverage says it per run (`audit.coverage`).
+    browser = zone_summary.as_dict().get("browser") or {}
+    if browser:
+        summary["browser"] = browser
     result.sharepoint = summary
 
 

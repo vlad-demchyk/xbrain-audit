@@ -43,6 +43,12 @@ STATE_RULES = {
     # with a sticky header and had passed every automated engine.
     "focus-indicator-low-contrast": SERIOUS,
     "focus-obscured": SERIOUS,
+    # The text of a control as it looks while it has focus. A focus style
+    # that swaps the fill or the text colour draws a new pair of colours no
+    # other engine reads: axe and HTML_CodeSniffer measure the unfocused
+    # page. Read in the real `:focus` state, the one the page's own CSS puts
+    # the element in - nothing is emulated.
+    "focus-text-low-contrast": SERIOUS,
     # Not a defect of the page: the page never had focus, so the two focus
     # checks above and `focus-not-visible` had nothing to read. Said once per
     # page instead of being silent, because "no focus problems found" and "focus
@@ -74,6 +80,7 @@ STATE_WCAG = {
     "modal-focus-not-contained": ("2.4.3",),
     "focus-indicator-low-contrast": ("2.4.7", "1.4.11"),
     "focus-obscured": ("2.4.11",),
+    "focus-text-low-contrast": ("1.4.3",),
     "focus-not-measured": ("2.4.7",),
     "form-field-unnamed": ("4.1.2", "3.3.2"),
     "form-placeholder-as-label": ("3.3.2",),
@@ -88,6 +95,17 @@ STATE_WCAG = {
 STATE_SCRIPT = r"""
 (function() {
   var FOCUSABLE = 'a[href],button,input,select,textarea,summary,[tabindex]';
+  // Regions the run was told to leave alone (`BrowserAuditOptions.exclude`):
+  // a person's suppressed selectors, and on SharePoint Microsoft's chrome.
+  // Without this the pass read the chrome first and its 120-element budget
+  // was spent on the suite bar before it reached a single web part.
+  var EXCLUDE = [] /* XAUDIT_STATE_EXCLUDE */;
+  function excluded(el) {
+    for (var i = 0; i < EXCLUDE.length; i++) {
+      try { if (el.closest && el.closest(EXCLUDE[i])) return true; } catch (e) {}
+    }
+    return false;
+  }
   var findings = [];
   var active = document.activeElement;
   var scrollX = window.scrollX, scrollY = window.scrollY;
@@ -110,10 +128,33 @@ STATE_SCRIPT = r"""
     return parts.join(' > ');
   }
 
+  // Where the element is, from the root: `html/body:1/div:0/a:3`, each step
+  // a tag and its index among its parent's element children. The selector
+  // above is short and relative, which reads well in a report and can match
+  // more than one element; this cannot, so a finding can be placed in the
+  // captured DOM exactly (`audit.sharepoint_zones.element_by_path`). Empty
+  // for an element in a shadow root: the captured DOM does not have it.
+  function pathFor(el) {
+    var steps = [];
+    while (el && el.nodeType === 1) {
+      var parent = el.parentElement;
+      if (!parent) {
+        if (el !== document.documentElement) return '';
+        steps.unshift(el.tagName.toLowerCase());
+        break;
+      }
+      steps.unshift(el.tagName.toLowerCase() + ':' +
+                    Array.prototype.indexOf.call(parent.children, el));
+      el = parent;
+    }
+    return steps.join('/');
+  }
+
   function record(rule, el, extra) {
     var item = {rule: rule, selector: el ? selectorFor(el) : '',
                 html: el ? (el.outerHTML || '').slice(0, 200) : '',
-                tag: el ? el.tagName.toLowerCase() : ''};
+                tag: el ? el.tagName.toLowerCase() : '',
+                dom_path: el ? pathFor(el) : ''};
     for (var k in (extra || {})) item[k] = extra[k];
     findings.push(item);
     return item;
@@ -219,7 +260,7 @@ STATE_SCRIPT = r"""
 
   var candidates = Array.prototype.slice.call(document.querySelectorAll(FOCUSABLE))
     .filter(function(el) {
-      return visible(el) && el.tabIndex >= 0 && !el.disabled;
+      return visible(el) && el.tabIndex >= 0 && !el.disabled && !excluded(el);
     })
     .slice(0, 120);   // a bounded pass; huge pages are sampled, not skipped
 
@@ -328,6 +369,36 @@ STATE_SCRIPT = r"""
     return null;
   }
 
+  // The text a focused control shows, against what it now sits on. Only
+  // asked when focus changed the fill or the text colour: otherwise the
+  // pair is the unfocused one, which axe has measured already. Only text
+  // the element itself holds (a text node child), because a child with its
+  // own colour is a different pair this does not read. Unknown is never a
+  // verdict: a background image, a gradient, a colour syntax this cannot
+  // parse, or a box too small to be read leave the question unanswered.
+  function checkFocusedText(el, after) {
+    var ownText = Array.prototype.some.call(el.childNodes, function(node) {
+      return node.nodeType === 3 && /\S/.test(node.nodeValue || '');
+    });
+    if (!ownText) return null;
+    var box = el.getBoundingClientRect();
+    if (box.width <= 1 || box.height <= 1) return null;
+    var text = parseColor(after.color);
+    var behind = backgroundBehind(el);
+    if (!text || !behind) return null;
+    var shown = text.a < 1 ? over(text, behind) : text;
+    var ratio = contrastOf(shown, behind);
+    var size = parseFloat(after.fontSize || '0');
+    var weight = parseInt(after.fontWeight || '400', 10);
+    // WCAG's large text: 18pt (24px), or 14pt (18.66px) bold.
+    var large = size >= 24 || (size >= 18.66 && weight >= 700);
+    var required = large ? 3 : 4.5;
+    if (ratio >= required) return null;
+    return {rule: 'focus-text-low-contrast', extra: {
+      ratio: Math.round(ratio * 100) / 100, required: required,
+      color: cssRgb(shown), background: cssRgb(behind)}};
+  }
+
   candidates.forEach(function(el) {
     // Off-canvas, not below the fold. The third condition used to be
     // `rect.top > innerHeight + scrollY + 2000`, which is a statement about
@@ -352,7 +423,7 @@ STATE_SCRIPT = r"""
     var priorPriority = el.style.getPropertyPriority('transition');
     var hadStyleAttribute = el.hasAttribute('style');
     el.style.setProperty('transition', 'none', 'important');
-    var pending = null;
+    var pending = null, textPending = null;
     try {
     // Whatever held focus before (the probe, or the previous element) is
     // let go first: the "before" snapshot has to be of an unfocused element,
@@ -427,6 +498,7 @@ STATE_SCRIPT = r"""
         outline: gainedOutline, shadow: gainedShadow,
         border: gainedBorder, background: gainedBackground});
     }
+    if (gainedBackground || gainedColor) textPending = checkFocusedText(el, after);
     } finally {
       if (priorTransition) el.style.setProperty('transition', priorTransition, priorPriority);
       else el.style.removeProperty('transition');
@@ -435,6 +507,7 @@ STATE_SCRIPT = r"""
       if (!hadStyleAttribute && el.getAttribute('style') === '') el.removeAttribute('style');
     }
     if (pending) record(pending.rule, el, pending.extra);
+    if (textPending) record(textPending.rule, el, textPending.extra);
   });
 
   // --- 1b. Is the focused element hidden by something the page built? ------
@@ -591,6 +664,7 @@ STATE_SCRIPT = r"""
   Array.prototype.slice.call(document.querySelectorAll('[class*="dropdown"],[class*="submenu"],[class*="tooltip"],[class*="popover"]'))
     .slice(0, 40)
     .forEach(function(el) {
+      if (excluded(el)) return;
       var style = getComputedStyle(el);
       if (style.display !== 'none' && style.visibility !== 'hidden') return;
       var parent = el.parentElement;
@@ -635,6 +709,7 @@ STATE_SCRIPT = r"""
         type === 'reset') return false;
     if (el.disabled) return false;
     if (el.getAttribute('aria-hidden') === 'true') return false;
+    if (excluded(el)) return false;
     return visible(el);
   }).slice(0, 60);
 
@@ -710,6 +785,7 @@ STATE_SCRIPT = r"""
     '[role="alert"],[class*="error"],[class*="invalid"],[id*="error"]'
   )).filter(function(el) {
     if (!visible(el)) return false;
+    if (excluded(el)) return false;
     if (!el.closest || !el.closest('form')) return false;
     var text = (el.textContent || '').trim();
     // A wrapper whose class happens to contain "error" is not a message.
@@ -833,5 +909,15 @@ def _load(payload) -> dict:
         return {"error": "state pass returned a non-JSON result"}
 
 
-def state_script() -> str:
-    return STATE_SCRIPT
+def state_script(exclude=()) -> str:
+    """The state pass, told which regions to leave alone.
+
+    `exclude` is `BrowserAuditOptions.exclude`: the selectors a person
+    suppressed, and on SharePoint Microsoft's chrome. Elements inside them
+    are not examined. The skip-link check still counts the whole page's
+    navigation, because "is there a way past it" is a question about the
+    page, not about a region.
+    """
+    selectors = [str(selector) for selector in (exclude or ()) if str(selector).strip()]
+    return STATE_SCRIPT.replace("[] /* XAUDIT_STATE_EXCLUDE */",
+                                json.dumps(selectors))

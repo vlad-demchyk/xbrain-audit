@@ -331,6 +331,9 @@ OOTB_CONTENT_RULES = frozenset({
     "axe:empty-heading", "axe:heading-order",
     "axe:valid-lang",
     "axe:video-caption", "axe:audio-caption",
+    # HTML_CodeSniffer, by success criterion: 1.1.1 (text alternatives),
+    # 2.4.4 (link purpose), 3.1.2 (language of parts).
+    "htmlcs:1_1_1", "htmlcs:2_4_4", "htmlcs:3_1_2",
 })
 
 #: Rule-id prefixes that are content by construction: the AI review judges
@@ -962,8 +965,47 @@ def _by_snippet(document, snippet: str):
     return None
 
 
+def element_by_path(document, path: str):
+    """The element at `path` in the captured DOM, or `None`.
+
+    `path` is what the state pass and the HTML_CodeSniffer collector record
+    (`html/body:1/div:0/a:3`): from the root, each step a tag and its index
+    among the parent's element children. Every step's tag is checked, so a
+    DOM that changed between the finding and the capture (a part that
+    re-rendered at another width) gives `None`, never a neighbour.
+    """
+    from bs4 import Tag
+
+    steps = [step for step in str(path or "").split("/") if step]
+    if not steps or steps[0] != "html":
+        return None
+    node = next((child for child in document.children
+                 if isinstance(child, Tag) and child.name == "html"), None)
+    for step in steps[1:]:
+        if node is None:
+            return None
+        name, _, index = step.rpartition(":")
+        if not name or not index.isdigit():
+            return None
+        children = [child for child in node.children if isinstance(child, Tag)]
+        position = int(index)
+        if position >= len(children) or children[position].name != name:
+            return None
+        node = children[position]
+    return node
+
+
 def element_for(document, issue):
-    """The element a browser finding is about, or `None`."""
+    """The element a browser finding is about, or `None`.
+
+    The recorded path first (exact, when the engine gave one), then the
+    selector, then the quoted markup.
+    """
+    path = (getattr(issue, "details", None) or {}).get("dom_path")
+    if path:
+        found = element_by_path(document, path)
+        if found is not None:
+            return found
     target = _first_target(getattr(issue, "selector", ""))
     if target:
         try:
@@ -992,10 +1034,27 @@ def classify_browser_issues(issues, markup: str, web_parts=(),
     document, zone_map = map_page(markup, web_parts, registry)
     kept = []
     for issue in issues:
-        if getattr(issue, "rule_id", "") in COVERAGE_RULES:
-            # Not a finding: what axe could not reach. Passed on to be
-            # recorded as coverage (`browser.take_untested_frames`).
+        rule = getattr(issue, "rule_id", "") or ""
+        if rule in COVERAGE_RULES or rule in RUN_FACT_RULES:
+            # Not a finding about an element: what axe could not reach
+            # (recorded as coverage by `browser.take_untested_frames`), an
+            # engine that failed, a focus the run could not measure. Facts
+            # about this run, passed on as they are.
             kept.append(issue)
+            continue
+        engine = browser_engine(issue)
+        if rule in page_measurement_rules():
+            # A budget over the whole page load - Microsoft's bundles, its
+            # chrome's DOM and requests included. No zone owns it; the
+            # numbers stay in the performance section.
+            if summary is not None:
+                summary.count_browser(engine, "page_level", rule)
+            continue
+        if is_page_frame_finding(issue):
+            # The page frame's: see `PAGE_FRAME_RULES`.
+            if summary is not None:
+                summary.skip_finding(issue, platform=True)
+                summary.count_browser(engine, "platform", rule)
             continue
         element = element_for(document, issue)
         if element is None:
@@ -1003,33 +1062,100 @@ def classify_browser_issues(issues, markup: str, web_parts=(),
             details.setdefault("zone", "")
             issue.details = details
             kept.append(issue)
+            if summary is not None:
+                summary.count_browser(engine, "unplaced", rule)
             continue
         zone = zone_map.zone_of(element)
         if zone is None:
             if summary is not None:
                 summary.skip_finding(issue, platform=True)
+                summary.count_browser(engine, "platform", rule)
             continue
-        kept.extend(apply_zone([issue], zone, summary=summary))
+        placed = apply_zone([issue], zone, summary=summary)
+        if summary is not None:
+            summary.count_browser(engine, "placed" if placed else "skipped", rule)
+        kept.extend(placed)
     return kept
+
+
+#: Browser findings that are facts about the run, not about an element:
+#: kept as they are, never placed and never counted as unplaced. An engine
+#: that failed (`state-pass`, `htmlcs` with `engine_error`), and a page whose
+#: focus styles could not be read.
+RUN_FACT_RULES = frozenset({"state-pass", "htmlcs", "state:focus-not-measured"})
+
+#: Findings about the page frame, which on SharePoint is Microsoft's: "can a
+#: keyboard get past the navigation" (2.4.1), asked by three engines. The
+#: navigation (the suite bar, the app bar, the site header and its menus)
+#: is the chrome. SharePoint Online draws its own skip link there -
+#: `sp-skipToContent`, a link to the canvas that appears on the first Tab;
+#: HYPOTHESIS for a tenant this was not run on - and nobody running the site
+#: can add or change one. Each engine points the finding at some element:
+#: the state pass at the first focusable one it examined, which with the
+#: chrome excluded is inside a web part, and HTML_CodeSniffer at whichever
+#: link it read first. Placed by that element it would blame a part for the
+#: platform's navigation, so it is dropped and counted as Microsoft's.
+PAGE_FRAME_RULES = frozenset({"state:no-skip-link", "axe:bypass", "htmlcs:2_4_1"})
+
+
+def is_page_frame_finding(issue) -> bool:
+    """Is this the page frame's question (`PAGE_FRAME_RULES`)?
+
+    HTML_CodeSniffer files an `<iframe>` without a title (`H64`) under 2.4.1
+    too; that one is about an element a part may own, and is placed.
+    """
+    rule = getattr(issue, "rule_id", "") or ""
+    if rule not in PAGE_FRAME_RULES:
+        return False
+    code = str((getattr(issue, "details", None) or {}).get("code", ""))
+    return not (rule.startswith("htmlcs:") and ".H64" in code)
+
+
+def page_measurement_rules() -> frozenset:
+    """The rules a page-load measurement can raise (`DEFAULT_BUDGETS`)."""
+    from audit.browser import DEFAULT_BUDGETS
+
+    return frozenset(rule for _limit, _severity, rule in DEFAULT_BUDGETS.values())
+
+
+def browser_engine(issue) -> str:
+    """Which browser pass a finding came from, as coverage names them."""
+    rule = getattr(issue, "rule_id", "") or ""
+    if rule.startswith("state:"):
+        return "states"
+    if rule.startswith("htmlcs:"):
+        return "htmlcs"
+    if rule.startswith("axe:"):
+        return "axe"
+    return "measurements"
 
 
 def browser_options(options):
     """`options` confined to the zones, for the browser pass on SharePoint.
 
-    axe is told to leave the chrome regions alone (`AXE_EXCLUDE`) and reads
-    the rest; nothing is `include`d, because the markup an SPFx part moves
-    out of the canvas has no selector (see `AXE_INCLUDE`). What it finds
-    outside a zone is dropped and counted by `classify_browser_issues`. The
-    other three engines read the whole document by construction - the same
-    reason `--within` switches them off - so they are switched off here, and
-    the DOM is captured so each finding can be placed.
+    Every engine is told to leave the chrome regions alone (`AXE_EXCLUDE`)
+    and reads the rest; nothing is `include`d, because the markup an SPFx
+    part moves out of the canvas has no selector (see `AXE_INCLUDE`). axe
+    takes the exclusion as its context; the state pass skips elements inside
+    it; HTML_CodeSniffer walks the whole document and its messages inside it
+    are dropped in the page. The DOM is captured so each finding can be
+    placed in a zone by `classify_browser_issues`: axe by its selector, the
+    state pass and HTML_CodeSniffer by the element's recorded path. What
+    lands outside a zone is dropped and counted as Microsoft's; what cannot
+    be placed is kept and counted as unplaced.
+
+    The three whole-document engines were off here until 0.77.0, because
+    their findings could not be placed: a SharePoint audit checked no
+    keyboard, focus or hover-only content and never settled
+    `perf-image-loading`.
+    What is still left out, and why, is said by `classify_browser_issues`
+    (the page-level budgets, `no-skip-link`) and by the coverage.
     """
     from dataclasses import replace
 
     exclude = list(getattr(options, "exclude", []) or [])
     exclude.extend(selector for selector in AXE_EXCLUDE if selector not in exclude)
     return replace(options, include=list(AXE_INCLUDE), exclude=exclude,
-                   run_htmlcs=False, run_states=False, run_measurements=False,
                    capture_html=True)
 
 
@@ -1109,6 +1235,11 @@ class Summary:
     #: Findings in Microsoft's markup that were not reported.
     skipped_findings: int = 0
     skipped_by_rule: dict = field(default_factory=dict)
+    #: The browser pass: which engines ran (`passes`), and per engine how
+    #: many findings were placed in a zone, dropped as Microsoft's
+    #: (`platform`), skipped by a content-only zone (`skipped`), left
+    #: unplaced (kept, zone ""), or not listed as page-level measurements.
+    browser: dict = field(default_factory=dict)
 
     def add_page(self, zone_map: ZoneMap, url: str) -> None:
         self.pages += 1
@@ -1135,6 +1266,28 @@ class Summary:
         part = self.parts.setdefault(zone.name, _part_entry(zone))
         part["findings"] += count
 
+    def record_passes(self, options) -> None:
+        """Which browser engines this run asked for, as they will run."""
+        from audit import browser
+
+        available = browser.engines_available()
+        self.browser["passes"] = {
+            "axe": bool(getattr(options, "run_axe", False)) and bool(available.get("axe")),
+            "states": bool(getattr(options, "run_states", False)),
+            "measurements": bool(getattr(options, "run_measurements", False)),
+            "htmlcs": bool(getattr(options, "run_htmlcs", False)) and bool(available.get("htmlcs")),
+        }
+
+    def count_browser(self, engine: str, outcome: str, rule: str = "") -> None:
+        """One browser finding's fate: `placed`, `platform`, `skipped`,
+        `unplaced` or `page_level`, by engine and, when unplaced, by rule."""
+        engines = self.browser.setdefault("engines", {})
+        counts = engines.setdefault(engine, {})
+        counts[outcome] = counts.get(outcome, 0) + 1
+        if outcome == "unplaced" and rule:
+            by_rule = self.browser.setdefault("unplaced_by_rule", {})
+            by_rule[rule] = by_rule.get(rule, 0) + 1
+
     def skip_finding(self, issue, platform: bool = False) -> None:
         self.skipped_findings += 1
         rule = getattr(issue, "rule_id", "") or ""
@@ -1155,4 +1308,6 @@ class Summary:
                 "by_rule": dict(sorted(self.skipped_by_rule.items(),
                                        key=lambda kv: (-kv[1], kv[0]))),
             },
+            "browser": {key: (dict(value) if isinstance(value, dict) else value)
+                        for key, value in self.browser.items()},
         }

@@ -5710,6 +5710,46 @@ _STRINGS: dict[str, dict[str, str]] = {
               "sticky header's height, ideally through a CSS variable. For a "
               "bar at the bottom, `scroll-margin-bottom` does the same.",
     },
+    "a11y_state:focus_text_low_contrast_title": {
+        "uk": "Текст елемента у фокусі погано читається",
+        "it": "Il testo dell'elemento con il focus si legge male",
+        "en": "The text of the focused element is hard to read",
+    },
+    "a11y_state:focus_text_low_contrast_found": {
+        "uk": "У стані фокуса текст ({color}) на тлі {background} має "
+              "контраст {ratio}:1, а потрібно щонайменше {required}:1.",
+        "it": "Con il focus il testo ({color}) su sfondo {background} ha un "
+              "contrasto di {ratio}:1, ne servono almeno {required}:1.",
+        "en": "With focus, the text ({color}) on a {background} background "
+              "has a contrast of {ratio}:1; at least {required}:1 is needed.",
+    },
+    "a11y_state:focus_text_low_contrast_why": {
+        "uk": "Стиль фокуса змінив тло або колір тексту, і нова пара кольорів "
+              "майже зливається. Людина з клавіатури бачить, де вона, але не "
+              "може прочитати, що саме вибрала. Звичайна перевірка контрасту "
+              "цього не бачить: вона міряє сторінку без фокуса.",
+        "it": "Lo stile del focus ha cambiato lo sfondo o il colore del testo, "
+              "e la nuova coppia di colori si confonde. Chi usa la tastiera "
+              "vede dove si trova, ma non riesce a leggere che cosa ha "
+              "selezionato. Il normale controllo del contrasto non lo vede: "
+              "misura la pagina senza focus.",
+        "en": "The focus style changed the background or the text colour, and "
+              "the new pair of colours blends together. Someone using the "
+              "keyboard can see where they are but cannot read what they "
+              "picked. The ordinary contrast check does not see it: it "
+              "measures the page without focus.",
+    },
+    "a11y_state:focus_text_low_contrast_fix": {
+        "uk": "У правилі `:focus` / `:focus-visible` підберіть колір тексту і "
+              "тла з контрастом щонайменше 4.5:1 (3:1 для великого тексту), "
+              "або змінюйте лише обведення, а кольори тексту залишайте.",
+        "it": "Nella regola `:focus` / `:focus-visible` scegli testo e sfondo "
+              "con un contrasto di almeno 4.5:1 (3:1 per il testo grande), "
+              "oppure cambia solo il contorno e lascia i colori del testo.",
+        "en": "In the `:focus` / `:focus-visible` rule pick a text and "
+              "background colour with at least 4.5:1 (3:1 for large text), or "
+              "change only the outline and leave the text colours alone.",
+    },
     "a11y_state:focus_order_mismatch_title": {
         "uk": "Порядок фокуса не збігається з порядком читання",
         "it": "L'ordine del focus non segue l'ordine di lettura",

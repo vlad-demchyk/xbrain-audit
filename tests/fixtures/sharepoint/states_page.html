@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+  SYNTHETIC FIXTURE for the browser pass on SharePoint (states, measurements,
+  HTML_CodeSniffer). Not captured from a tenant: every name, text, address
+  and GUID is invented. The structure follows `modern_page.html` beside it.
+
+  Planted, and where each must end up:
+  * `#spCommandBar` (an excluded chrome region): a button with no focus
+    style and an image with no alt - never examined, never reported;
+  * `#msPageToolbar` (Microsoft's, outside every named region and every
+    zone): a link with no focus style - found, dropped as Microsoft's;
+  * the site header's navigation: nine links and no skip link -
+    `no-skip-link`, counted as Microsoft's, never blamed on a part;
+  * "Contoso Tiles" (custom SPFx): a link with no focus style, a button whose
+    focus turns its fill pale under white text, an image with no alt, an
+    image above the fold and one far below it - all placed in the part;
+  * Text web part: a link with a strong focus ring, and a button whose
+    focus turns it black with white text - nothing.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home - Contoso Intranet (synthetic)</title>
+<style>
+  body { margin: 0; font: 16px/1.4 sans-serif; background: #fff; color: #111; }
+  a, button { outline: 2px solid transparent; }
+  .noring:focus { outline: none; box-shadow: none; }
+  .ring:focus { outline: 3px solid #000; outline-offset: 2px; }
+  .paleFocus_1a2b3c4d { background: #0b5394; color: #fff; border: 0; padding: 8px; font-size: 16px; }
+  .paleFocus_1a2b3c4d:focus { outline: 3px solid #000; background: #e8e8e8; color: #fff; }
+  .goodFocus { background: #fff; color: #111; border: 1px solid #111; padding: 8px; }
+  .goodFocus:focus { outline: 3px solid #000; background: #000; color: #fff; }
+  .spacer { height: 2400px; }
+</style>
+</head>
+<body>
+<div id="SPPageChrome">
+<div id="spPageChromeAppDiv" data-sp-feature-tag="Page Chrome" data-sp-feature-instance-id="_Page Chrome">
+  <div id="spSiteHeader" data-sp-feature-tag="Site header host" data-sp-feature-instance-id="_Site header host">
+    <header data-automationid="SiteHeader">
+      <nav>
+        <a class="ring" href="#n1">One</a> <a class="ring" href="#n2">Two</a>
+        <a class="ring" href="#n3">Three</a> <a class="ring" href="#n4">Four</a>
+        <a class="ring" href="#n5">Five</a> <a class="ring" href="#n6">Six</a>
+        <a class="ring" href="#n7">Seven</a> <a class="ring" href="#n8">Eight</a>
+        <a class="ring" href="#n9">Nine</a>
+      </nav>
+    </header>
+  </div>
+  <div id="spCommandBar">
+    <button class="noring" type="button">Edit</button>
+    <img src="/_layouts/15/images/command.png" width="16" height="16">
+  </div>
+  <div id="msPageToolbar">
+    <a class="noring" href="#share">Share</a>
+  </div>
+  <div id="spPageCanvasContent">
+    <div id="Canvas" class="SPCanvas" data-automation-id="Canvas">
+      <div data-automation-id="CanvasLayout">
+        <div data-automation-id="CanvasControl" id="10000000-0000-4000-8000-0000000000a1">
+          <div data-sp-feature-tag="Rich Text Editor" data-sp-feature-instance-id="10000000-0000-4000-8000-0000000000a1">
+            <div class="rte-webpart">
+              <p>Read the <a class="ring" href="#policy">company policy</a>.</p>
+              <button class="goodFocus" type="button">Save</button>
+            </div>
+          </div>
+        </div>
+        <div data-automation-id="CanvasControl" id="10000000-0000-4000-8000-0000000000a2">
+          <div id="vpc_WebPart.ContosoTilesWebPart.external.10000000-0000-4000-8000-0000000000a2">
+            <div data-viewport-id="WebPart.ContosoTilesWebPart.external.10000000-0000-4000-8000-0000000000a2">
+              <div data-sp-feature-tag="ContosoTilesWebPart web part (Contoso Tiles)" data-sp-feature-instance-id="10000000-0000-4000-8000-0000000000a2" data-sp-web-part-id="cccccccc-dddd-4eee-8fff-000000000001">
+                <div class="tiles_1a2b3c4d">
+                  <a class="noring tile_1a2b3c4d" href="#tile-one">First tile</a>
+                  <button class="paleFocus_1a2b3c4d" type="button">Open</button>
+                  <img class="above_1a2b3c4d" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="40" height="40">
+                  <div class="spacer"></div>
+                  <img class="below_1a2b3c4d" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs=" width="40" height="40" alt="Below">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

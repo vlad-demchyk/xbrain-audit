@@ -148,6 +148,11 @@ def build_coverage(result, args=None, *, scan=None, pages=None) -> dict:
             # Frames axe could not test (cross-origin), per page: a limit of
             # this run's coverage, not a defect of the page.
             "untested_frames": json_value(result.coverage.get("untested_frames", [])),
+            # A SharePoint run: which browser engines read the zones, and what
+            # became of their findings (`sharepoint_zones.Summary.browser`).
+            "sharepoint_browser": json_value(
+                (getattr(result, "sharepoint", None) or {}).get("browser")
+                if isinstance(getattr(result, "sharepoint", None), dict) else None) or {},
             "options": options, "content_hashes": hashes,
             "hash_coordinate_system": "decoded-text-utf8",
             "mapping_confidence": "unknown",
@@ -186,4 +191,84 @@ def coverage_summary(coverage, lang="en") -> tuple[str, str]:
         }
         text += said.get(lang, said["en"]).format(pages=len(frames),
                                                   origins=", ".join(origins[:5]))
+    text += sharepoint_browser_sentence(coverage.get("sharepoint_browser"), lang)
     return title, text
+
+
+#: What a SharePoint run's browser pass did, said in the coverage section.
+_SHAREPOINT_BROWSER = {
+    "en": {
+        "ran": "ran", "off": "off",
+        "passes": " SharePoint, browser pass on the zones: axe {axe}, state pass "
+                  "(keyboard, focus) {states}, measurements (image geometry, "
+                  "page load) {measurements}, HTML_CodeSniffer {htmlcs}.",
+        "states": " State findings: {placed} placed in a zone, {platform} in "
+                  "Microsoft's chrome (not listed), {skipped} about the own markup "
+                  "of Microsoft's web parts (not listed), {unplaced} could not be "
+                  "placed (listed without a zone).",
+        "others": " Findings of other engines that could not be placed (listed "
+                  "without a zone): {count}.",
+        "page_level": " Page-load measurement findings not listed: {count} (they "
+                      "measure the whole page, Microsoft's platform included; the "
+                      "numbers are in the performance section).",
+    },
+    "uk": {
+        "ran": "виконано", "off": "вимкнено",
+        "passes": " SharePoint, перевірка в браузері по зонах: axe {axe}, "
+                  "перевірка станів (клавіатура, фокус) {states}, вимірювання "
+                  "(розташування картинок, завантаження сторінки) {measurements}, "
+                  "HTML_CodeSniffer {htmlcs}.",
+        "states": " Знахідки перевірки станів: {placed} зараховано зоні, {platform} "
+                  "у хромі Microsoft (не показано), {skipped} про власну розмітку "
+                  "web parts від Microsoft (не показано), {unplaced} не вдалося "
+                  "прив'язати до зони (показано без зони).",
+        "others": " Знахідки інших рушіїв, які не вдалося прив'язати до зони "
+                  "(показано без зони): {count}.",
+        "page_level": " Знахідки вимірювань завантаження сторінки не показано: "
+                      "{count} (вони міряють усю сторінку разом із платформою "
+                      "Microsoft; числа є в розділі швидкодії).",
+    },
+    "it": {
+        "ran": "eseguito", "off": "disattivato",
+        "passes": " SharePoint, controllo nel browser per zone: axe {axe}, "
+                  "controllo degli stati (tastiera, focus) {states}, misure "
+                  "(posizione delle immagini, caricamento della pagina) "
+                  "{measurements}, HTML_CodeSniffer {htmlcs}.",
+        "states": " Risultati del controllo degli stati: {placed} attribuiti a "
+                  "una zona, {platform} nel contorno di Microsoft (non elencati), "
+                  "{skipped} sul markup proprio delle web part di Microsoft (non "
+                  "elencati), {unplaced} non attribuibili (elencati senza zona).",
+        "others": " Risultati di altri motori non attribuibili a una zona "
+                  "(elencati senza zona): {count}.",
+        "page_level": " Risultati delle misure di caricamento non elencati: "
+                      "{count} (misurano tutta la pagina, piattaforma Microsoft "
+                      "inclusa; i numeri sono nella sezione sulle prestazioni).",
+    },
+}
+
+
+def sharepoint_browser_sentence(browser, lang: str = "en") -> str:
+    """Which browser engines read a SharePoint run's zones, and how many state
+    findings could not be placed. Empty for a run that was not SharePoint."""
+    if not isinstance(browser, dict) or not browser.get("passes"):
+        return ""
+    words = _SHAREPOINT_BROWSER.get(lang, _SHAREPOINT_BROWSER["en"])
+    passes = browser.get("passes") or {}
+    text = words["passes"].format(**{
+        name: words["ran"] if passes.get(name) else words["off"]
+        for name in ("axe", "states", "measurements", "htmlcs")})
+    engines = browser.get("engines") or {}
+    states = engines.get("states") or {}
+    if passes.get("states"):
+        text += words["states"].format(**{
+            outcome: int(states.get(outcome, 0) or 0)
+            for outcome in ("placed", "platform", "skipped", "unplaced")})
+    others = sum(int((counts or {}).get("unplaced", 0) or 0)
+                 for engine, counts in engines.items() if engine != "states")
+    if others:
+        text += words["others"].format(count=others)
+    page_level = sum(int((counts or {}).get("page_level", 0) or 0)
+                     for counts in engines.values())
+    if page_level:
+        text += words["page_level"].format(count=page_level)
+    return text

@@ -850,9 +850,11 @@ class BrowserAuditRunner:
                 return
             scripts = {
                 "axe": lambda: browser.axe_script(options),
-                "htmlcs": browser.htmlcs_script,
+                "htmlcs": lambda: browser.htmlcs_script(
+                    exclude=getattr(options, "exclude", None) or ()),
                 "measurements": lambda: browser.MEASUREMENT_SCRIPT,
-                "states": states.state_script,
+                "states": lambda: states.state_script(
+                    getattr(options, "exclude", None) or ()),
                 "html": lambda: browser.HTML_SCRIPT,
                 "text": lambda: TEXT_SNAPSHOT_SCRIPT.replace(
                     'const scope = ""; // XAUDIT_SCOPE',

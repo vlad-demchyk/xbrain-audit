@@ -373,8 +373,9 @@ class TheBrowserPassReadsZones(unittest.TestCase):
                                         args)
         options = seen["options"]
         self.assertTrue(options.capture_html)
-        self.assertFalse(options.run_htmlcs or options.run_states
-                         or options.run_measurements)
+        # Since 0.77.0 every engine reads the zones; its findings are placed.
+        self.assertTrue(options.run_htmlcs and options.run_states
+                        and options.run_measurements)
         # Nothing included: SPFx markup moved out of the canvas has no selector.
         self.assertEqual(options.include, [])
         self.assertIn("#SuiteNavWrapper", options.exclude)
@@ -384,6 +385,9 @@ class TheBrowserPassReadsZones(unittest.TestCase):
         self.assertEqual(skipped["findings"], 2)
         self.assertEqual(skipped["by_rule"], {"axe:region": 1, "region": 1})
         self.assertEqual(skipped["elements"], 3)
+        # Which engines ran is recorded for the coverage to say.
+        passes = result.sharepoint["browser"]["passes"]
+        self.assertTrue(passes["states"] and passes["measurements"])
 
     def test_an_ordinary_site_is_not_confined(self):
         from audit.engine import AccessibilityResult, DocumentReport

@@ -405,8 +405,10 @@ class TheBrowserPass(unittest.TestCase):
         # The page wrapper holds the canvas: excluding it would exclude
         # every web part.
         self.assertNotIn("#spPageChromeAppDiv", options.exclude)
-        self.assertFalse(options.run_htmlcs or options.run_states
-                         or options.run_measurements)
+        # The whole-document engines run too: their findings are placed by
+        # the element's path (`test_sharepoint_states`).
+        self.assertTrue(options.run_htmlcs and options.run_states
+                        and options.run_measurements)
         self.assertTrue(options.capture_html)
 
     def test_an_unscoped_axe_call_is_unchanged(self):

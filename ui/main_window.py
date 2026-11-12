@@ -3445,6 +3445,7 @@ class MainWindow(AccountMixin, AuditPanelMixin, DiagnosisStripMixin,
 
             options = sharepoint_zones.browser_options(options)
             zone_summary = sharepoint_zones.Summary()
+            zone_summary.record_passes(options)
         # Every width, not just the one this screen happens to be: the point
         # of asking a browser at all is to see what a visitor sees, and a
         # visitor on a phone is shown a different document. The merge keeps

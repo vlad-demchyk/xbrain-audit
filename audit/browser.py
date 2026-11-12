@@ -298,12 +298,46 @@ def axe_script(options: BrowserAuditOptions) -> str:
 """
 
 
-def htmlcs_script(standard: str = "WCAG2AA") -> str:
+def htmlcs_script(standard: str = "WCAG2AA", exclude=()) -> str:
     """HTML_CodeSniffer, which reports through a callback rather than a
-    promise — hence the collector array."""
+    promise — hence the collector array.
+
+    HTML_CodeSniffer takes no context: it walks the whole document. So the
+    regions in `exclude` (`BrowserAuditOptions.exclude`: suppressed
+    selectors, and Microsoft's chrome on SharePoint) are taken out of its
+    messages in the page, before the 400-message cap, or a chrome-heavy page
+    would spend the cap on markup nobody asked about. Each message carries
+    `path`, the element's position from the root, so a finding can be placed
+    in the captured DOM (`audit.sharepoint_zones.element_by_path`): the
+    engine gives no selector of its own.
+    """
+    selectors = [str(selector) for selector in (exclude or ()) if str(selector).strip()]
     return f"""
 (function() {{
   {_read(HTMLCS_PATH)}
+  var __xaExclude = {json.dumps(selectors)};
+  function __xaExcluded(el) {{
+    if (!el || !el.closest) return false;
+    for (var i = 0; i < __xaExclude.length; i++) {{
+      try {{ if (el.closest(__xaExclude[i])) return true; }} catch (e) {{}}
+    }}
+    return false;
+  }}
+  function __xaPath(el) {{
+    var steps = [];
+    while (el && el.nodeType === 1) {{
+      var parent = el.parentElement;
+      if (!parent) {{
+        if (el !== document.documentElement) return '';
+        steps.unshift(el.tagName.toLowerCase());
+        break;
+      }}
+      steps.unshift(el.tagName.toLowerCase() + ':' +
+                    Array.prototype.indexOf.call(parent.children, el));
+      el = parent;
+    }}
+    return steps.join('/');
+  }}
   // The name an element gets from its own attributes. HTML_CodeSniffer's
   // H30.2 reads only a link's content, so a gallery link named by
   // `aria-label` was reported as having no name at all.
@@ -358,6 +392,7 @@ def htmlcs_script(standard: str = "WCAG2AA") -> str:
     try {{
       HTMLCS.process({json.dumps(standard)}, document, function() {{
         (HTMLCS.getMessages() || []).forEach(function(m) {{
+          if (__xaExcluded(m.element)) return;
           found.push({{
             type: m.type,
             code: m.code,
@@ -366,7 +401,8 @@ def htmlcs_script(standard: str = "WCAG2AA") -> str:
             tag: (m.element && m.element.tagName || '').toLowerCase(),
             label: __xaAttributeName(m.element),
             hidden: __xaVisuallyHidden(m.element),
-            logo: __xaInLogo(m.element)
+            logo: __xaInLogo(m.element),
+            path: m.element && m.element.nodeType === 1 ? __xaPath(m.element) : ''
           }});
         }});
         resolve(JSON.stringify({{messages: found.slice(0, 400)}}));
@@ -795,6 +831,7 @@ def issues_from_htmlcs(payload: str, source: str) -> list:
             source=source,
             engine="htmlcs",
             details={"engine": "HTML_CodeSniffer", "code": code,
+                     "dom_path": message.get("path", ""),
                      "undetermined": undetermined,
                      "manual_check": manual, "obsolete_criterion": obsolete,
                      "accessible_name_from_attributes": named_by,
