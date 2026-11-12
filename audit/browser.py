@@ -813,6 +813,14 @@ def issues_from_htmlcs(payload: str, source: str) -> list:
         if unverified:
             engine_codes.note_unverified(engine_codes.HTMLCS, code)
         manual = manual or unverified
+        # HTML_CodeSniffer's own verdict: 1 is an error, 2 a warning - "check
+        # whether this is a problem" (H42 "should this paragraph be a
+        # heading?", G141 "is the heading structure nested?", F24 "is a
+        # background set with this colour?"). A warning is a question the
+        # engine asks a person, so it goes to the to-check list, never into
+        # the proven totals: on a live intranet 97 of them were counted as
+        # defects.
+        warning = message.get("type") == 2
         issues.append(Issue(
             rule_id=f"htmlcs:{_short_code(code)}",
             # An unmeasurable element is not a failing one. Kept - the
@@ -825,12 +833,14 @@ def issues_from_htmlcs(payload: str, source: str) -> list:
             # `advisory`, not `needs-browser`: a browser has already looked,
             # and what is left is a person's call.
             confidence=(NEEDS_BROWSER if undetermined
-                        else ADVISORY if (manual or obsolete) else EXACT),
+                        else ADVISORY if (manual or obsolete)
+                        else NEEDS_BROWSER if warning else EXACT),
             category=ACCESSIBILITY,
             snippet=message.get("html", ""),
             source=source,
             engine="htmlcs",
             details={"engine": "HTML_CodeSniffer", "code": code,
+                     "htmlcs_type": "warning" if warning else "error",
                      "dom_path": message.get("path", ""),
                      "undetermined": undetermined,
                      "manual_check": manual, "obsolete_criterion": obsolete,
@@ -982,6 +992,84 @@ def record_untested_frames(result, source: str, frames: list) -> None:
             browser.append(item)
 
 
+_CONFIDENCE_STRENGTH = {"exact": 0, "advisory": 1, "needs-browser": 2}
+_SEVERITY_STRENGTH = {"critical": 0, "serious": 1, "moderate": 2, "minor": 3}
+_OPENING_TAG = re.compile(r"\s*(<[a-zA-Z][^>]*>)")
+
+
+def _same_element_key(issue):
+    """`(source, zone, part, family, opening tag)`, or None when the finding
+    is not about one element or its family has no cross-engine twin."""
+    family = _family_of(issue)
+    if family == issue.rule_id or family in _DOCUMENT_FAMILIES:
+        return None
+    match = _OPENING_TAG.match(issue.snippet or "")
+    if not match:
+        return None
+    from duplicates import canonical_markup
+
+    details = issue.details or {}
+    return (issue.source, details.get("zone", ""), details.get("zone_name", ""),
+            family, canonical_markup(match.group(1)))
+
+
+def merge_same_element(documents) -> None:
+    """One finding per element and problem, whichever engines found it.
+
+    The static rules, axe, HTML_CodeSniffer and the state pass answer some
+    questions twice or three times (`_RULE_FAMILIES`): the same field with a
+    placeholder for a label, the same text's contrast, the same unnamed
+    button. On a SharePoint page the engines' findings live in different
+    documents (one per zone) and quote the element at different lengths, so
+    `deduplicate` did not pair them. Matched here by the element's opening
+    tag on one page, in one zone, within one family. The strongest is kept -
+    settled before unsettled, then the worse severity - and it names the
+    others (`also_found_by`, `agreement`).
+    """
+    best: dict = {}
+    for document in documents:
+        for issue in document.issues:
+            key = _same_element_key(issue)
+            if key is None:
+                continue
+            kept = best.get(key)
+            rank = (_CONFIDENCE_STRENGTH.get(issue.confidence, 3),
+                    _SEVERITY_STRENGTH.get(issue.severity, 4))
+            if kept is None:
+                best[key] = [issue, rank, []]
+                continue
+            if rank < kept[1]:
+                kept[2].append(kept[0])
+                kept[0], kept[1] = issue, rank
+            else:
+                kept[2].append(issue)
+    dropped = set()
+    for issue, _rank, others in best.values():
+        if not others:
+            continue
+        rules = [issue.rule_id] + [other.rule_id for other in others]
+        if len(rules) != len(set(rules)):
+            # One rule twice on the same opening tag is two elements that
+            # look alike (two "clicca qui" links to one address), not two
+            # engines on one element: left as they are.
+            continue
+        details = dict(issue.details or {})
+        found_by = list(details.get("also_found_by") or [])
+        for other in others:
+            dropped.add(id(other))
+            if other.rule_id != issue.rule_id and other.rule_id not in found_by:
+                found_by.append(other.rule_id)
+        if found_by:
+            details["also_found_by"] = found_by
+            details["agreement"] = max(int(details.get("agreement", 1) or 1),
+                                       1 + len(found_by))
+        issue.details = details
+    if dropped:
+        for document in documents:
+            document.issues = [issue for issue in document.issues
+                               if id(issue) not in dropped]
+
+
 def _documents_of(result, document) -> list:
     """The other documents of the page `document` is one of, readable ones."""
     documents = getattr(result, "documents", None)
@@ -1025,8 +1113,9 @@ def merge_page_audit(result, document, page_audit) -> bool:
         page_audit.issues, frames = take_untested_frames(page_audit.issues)
     if frames:
         record_untested_frames(result, document.source, frames)
-    merge_into_document(document, page_audit,
-                        siblings=_documents_of(result, document))
+    siblings = _documents_of(result, document)
+    merge_into_document(document, page_audit, siblings=siblings)
+    merge_same_element([document, *siblings])
     return True
 
 
@@ -1435,6 +1524,10 @@ _RULE_FAMILIES = {
     # markup labelled and a script detached is the opposite - either way it
     # is one problem with one element, not two rows.
     "control-name": "name", "state:form-field-unnamed": "name",
+    # a placeholder standing in for a label: the static rule reads the
+    # markup, the state pass the live field - one field, one problem.
+    "label-placeholder-only": "placeholder-label",
+    "state:form-placeholder-as-label": "placeholder-label",
     "axe:button-name": "name", "axe:link-name": "name",
     "axe:input-button-name": "name", "axe:aria-input-field-name": "name",
     "axe:label": "name", "htmlcs:4_1_2": "name",

@@ -21,7 +21,10 @@
     body - visible focus, nothing; a Fluent-style search box whose ring is
     the `::after` of its root, two levels above the input - nothing; and a
     focus-visible library stamping `data-fui-focus-visible` on whatever has
-    focus, which no quoted finding may carry.
+    focus, which no quoted finding may carry;
+  * a heading permalink the way SharePoint's text part draws it: invisible
+    (`opacity: 0`) until focused, then shown with a border on the icon
+    inside it - visible focus, nothing.
 -->
 <html lang="en">
 <head>
@@ -37,6 +40,10 @@
   .goodFocus { background: #fff; color: #111; border: 1px solid #111; padding: 8px; }
   .goodFocus:focus { outline: 3px solid #000; background: #000; color: #fff; }
   .spacer { height: 2400px; }
+  .permalink { opacity: 0; outline: none; text-decoration: none; }
+  .permalink:focus { opacity: 1; outline: none; }
+  .permalink i { display: inline-block; width: 16px; height: 16px; }
+  .permalink:focus i { border: 1px solid #605e5c; }
   .ms-Button { position: relative; outline: none; border: 0; background: #fff; color: #111; padding: 8px; }
   .ms-Button:focus { outline: none; }
   .ms-SearchBox { position: relative; display: inline-block; }
@@ -72,6 +79,7 @@
         <div data-automation-id="CanvasControl" id="10000000-0000-4000-8000-0000000000a1">
           <div data-sp-feature-tag="Rich Text Editor" data-sp-feature-instance-id="10000000-0000-4000-8000-0000000000a1">
             <div class="rte-webpart">
+              <h3 id="policy-heading">Policy <a class="permalink anchor_1a2b3c4d" href="#policy-heading" title="Permalink"><i aria-hidden="true"></i></a></h3>
               <p>Read the <a class="ring" href="#policy">company policy</a>.</p>
               <button class="goodFocus" type="button">Save</button>
             </div>

@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 
 from .base import (
-    ACCESSIBILITY, MINOR, MODERATE, NEEDS_BROWSER, SERIOUS, Issue,
+    ACCESSIBILITY, EXACT, MINOR, MODERATE, NEEDS_BROWSER, SERIOUS, Issue,
 )
 
 #: What each check reports, and how badly. Keyboard traps come first because
@@ -380,6 +380,31 @@ STATE_SCRIPT = r"""
     return null;
   }
 
+  // The look of the first few elements inside one, for a ring drawn on a
+  // descendant (an icon inside a link). Bounded: a card with a hundred
+  // children is not read whole for one focus check.
+  var KID_LIMIT = 12;
+  function kidLook(k) {
+    var c = getComputedStyle(k);
+    return [c.outlineStyle, c.outlineWidth, c.boxShadow, c.borderTopStyle, c.borderTopWidth,
+            c.borderTopColor, c.backgroundColor, c.opacity].join('|');
+  }
+  function descendantLooks(el) {
+    return Array.prototype.slice.call(el.querySelectorAll('*'), 0, KID_LIMIT).map(kidLook);
+  }
+  function descendantGained(el, before) {
+    var kids = Array.prototype.slice.call(el.querySelectorAll('*'), 0, KID_LIMIT);
+    return kids.some(function(k, i) {
+      if (before[i] === undefined || kidLook(k) === before[i]) return false;
+      var c = getComputedStyle(k);
+      if (c.display === 'none' || c.visibility === 'hidden') return false;
+      var outline = c.outlineStyle !== 'none' && parseFloat(c.outlineWidth || '0') > 0;
+      var border = c.borderTopStyle !== 'none' && parseFloat(c.borderTopWidth || '0') > 0;
+      var fill = parseColor(c.backgroundColor);
+      return outline || border || c.boxShadow !== 'none' || (fill !== null && fill.a > 0);
+    });
+  }
+
   // A pseudo-element's look, for the two that can draw a ring.
   function pseudoLooks(el) {
     return ['::before', '::after'].map(function(which) {
@@ -476,6 +501,13 @@ STATE_SCRIPT = r"""
     var beforeShadow = before.boxShadow, beforeBorder = before.borderColor;
     var beforeOutlineW = before.outlineWidth, beforeOutlineS = before.outlineStyle;
     var beforeBg = before.backgroundColor, beforeColor = before.color;
+    // An element that is not seen until it has focus - SharePoint's heading
+    // permalinks sit at `opacity: 0` and appear on focus - has a visible
+    // focus state: it appears. Read now: `before` is a live style object.
+    var beforeOpacity = parseFloat(before.opacity || '1'), beforeVisibility = before.visibility;
+    // The ring can be drawn on a descendant: the same permalink puts a 1px
+    // border on the icon inside it, and leaves the link's own box alone.
+    var kidsBefore = descendantLooks(el);
     // The ring can be drawn on a container: Coach's FAQ draws it on the
     // `<details>` through `:has(summary:focus-visible)`, and the summary
     // itself keeps `outline: none`. Every question was reported as having no
@@ -505,6 +537,7 @@ STATE_SCRIPT = r"""
     try { el.focus({preventScroll: true}); } catch (e) { restoreAncestors(); return; }
     if (document.activeElement !== el) { restoreAncestors(); return; }
     var pseudoRing = pseudoGained(el, pseudoBefore);
+    var kidRing = descendantGained(el, kidsBefore);
     var ancestorRing = ancestors.some(function(kept) {
       var cs = getComputedStyle(kept.el);
       var look = [cs.outlineStyle, cs.outlineWidth, cs.boxShadow, cs.borderColor].join('|');
@@ -540,7 +573,9 @@ STATE_SCRIPT = r"""
         !gainedBackground && !gainedColor) {
       // A ring on a container is a visible change; its contrast is not
       // measured here, which is a question left open rather than a pass.
-      if (!ancestorRing && !pseudoRing) {
+      var appeared = (beforeOpacity < 0.1 && parseFloat(after.opacity || '1') >= 0.5) ||
+                     (beforeVisibility === 'hidden' && after.visibility === 'visible');
+      if (!ancestorRing && !pseudoRing && !kidRing && !appeared) {
         pending = {rule: 'focus-not-visible', extra: {outline: after.outlineStyle}};
       }
     } else {
@@ -921,9 +956,13 @@ def issues_from_states(payload: str, source: str) -> list:
         details = {k: v for k, v in finding.items()
                    if k not in ("rule", "selector", "html")}
         details["engine"] = "state-pass"
+        # A keyboard-trap candidate the runner could not try with real keys
+        # (`BrowserAuditRunner._verify_traps`) is a question, not a trap.
+        unsettled = rule == "keyboard-trap" and bool(finding.get("unverified"))
         issues.append(Issue(
             rule_id=f"state:{rule}",
             severity=severity,
+            confidence=NEEDS_BROWSER if unsettled else EXACT,
             category=ACCESSIBILITY,
             selector=finding.get("selector", ""),
             snippet=finding.get("html", ""),

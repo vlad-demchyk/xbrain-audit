@@ -559,34 +559,50 @@ class BrowserAuditRunner:
         """
         import json
 
-        if self._view is None or not payload or "keyboard-trap" not in str(payload):
+        if not payload or "keyboard-trap" not in str(payload):
             return payload
         try:
             data = json.loads(payload)
         except (TypeError, ValueError):
             return payload
+        if self._view is None:
+            # No window to send keys to: a candidate, not a finding.
+            for finding in data.get("findings") or []:
+                if finding.get("rule") == "keyboard-trap":
+                    finding["unverified"] = True
+            return json.dumps(data)
         findings = data.get("findings") or []
         kept = []
         checked = 0
+        #: One verdict per widget: a tab list flags each of its tabs, and
+        #: trying the same widget once per tab is the same answer, slower.
+        verdicts: dict = {}
         for finding in findings:
             if finding.get("rule") != "keyboard-trap":
                 kept.append(finding)
                 continue
             if checked >= TRAP_CHECKS or not finding.get("dom_path"):
+                # Not tried: kept as a question, never as a proven trap. A
+                # live run kept eight of these past the old cap of six, and
+                # real Tab left every one of them at the first press.
+                finding["unverified"] = True
                 kept.append(finding)
                 continue
             checked += 1
-            verdict = self._trap_with_real_keys(finding["dom_path"])
+            verdict = self._trap_with_real_keys(finding["dom_path"], verdicts)
             if verdict is None:
-                kept.append(finding)          # could not be tried: as found
+                finding["unverified"] = True  # could not be tried: a question
+                kept.append(finding)
             elif verdict:
                 finding["verified"] = "real Tab and Shift+Tab did not leave it"
                 kept.append(finding)
         data["findings"] = kept
         return json.dumps(data)
 
-    def _trap_with_real_keys(self, path: str):
-        """True: no key left the widget; False: one did; None: not tried."""
+    def _trap_with_real_keys(self, path: str, verdicts: dict | None = None):
+        """True: no key left the widget; False: one did; None: not tried.
+
+        `verdicts` remembers the answer per widget for the same page."""
         import json
 
         from PySide6.QtCore import Qt
@@ -600,6 +616,10 @@ class BrowserAuditRunner:
         if not prepared or not prepared.get("ok"):
             _run_js(self._page, _TRAP_CLEANUP)
             return None
+        widget = prepared.get("widget")
+        if verdicts is not None and widget in verdicts:
+            _run_js(self._page, _TRAP_CLEANUP)
+            return verdicts[widget]
         limit = int(prepared.get("limit") or 3)
         target = self._view.focusProxy() or self._view
         escaped = False
@@ -622,6 +642,8 @@ class BrowserAuditRunner:
                     break
         finally:
             _run_js(self._page, _TRAP_CLEANUP)
+        if verdicts is not None and widget is not None:
+            verdicts[widget] = not escaped
         return not escaped
 
     def _prime_keyboard(self) -> bool:
@@ -1370,7 +1392,7 @@ class html_renderer:
 
 
 #: At most this many trap candidates are tried with real keys on one page.
-TRAP_CHECKS = 6
+TRAP_CHECKS = 20
 #: How long the page gets to react to one real key press.
 TRAP_KEY_MS = 60
 
@@ -1395,10 +1417,14 @@ _TRAP_PREPARE = """(function(path) {
   Array.prototype.forEach.call(document.querySelectorAll('[data-xa-trap]'),
     function(e) { e.removeAttribute('data-xa-trap'); });
   widget.setAttribute('data-xa-trap', '');
+  var known = window.__xaTrapWidgets || (window.__xaTrapWidgets = []);
+  var index = known.indexOf(widget);
+  if (index < 0) { known.push(widget); index = known.length - 1; }
   window.__xaTrapStart = node;
   var count = widget.querySelectorAll('a[href],button,input,select,textarea,summary,[tabindex]').length;
   try { node.focus({preventScroll: true}); } catch (e) {}
-  return JSON.stringify({ok: document.activeElement === node, limit: Math.min(count + 3, 60)});
+  return JSON.stringify({ok: document.activeElement === node, limit: Math.min(count + 3, 60),
+                         widget: index});
 })(%s)"""
 _TRAP_REFOCUS = """(function() {
   var start = window.__xaTrapStart;

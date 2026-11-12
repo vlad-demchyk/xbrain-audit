@@ -317,6 +317,13 @@ class TheRealBrowser(unittest.TestCase):
         self.assertFalse(any("fluent_1a2b3c4d" in issue.snippet for issue in self.raw
                              if issue.rule_id == "state:focus-not-visible"))
 
+    def test_a_link_that_appears_on_focus_with_a_ring_on_its_icon_is_visible_focus(self):
+        """SharePoint's heading permalinks: opacity 0 until focused, then a
+        border on the icon inside. Reported as invisible focus on a live
+        intranet, 159 times; a person tabbing sees the box."""
+        self.assertFalse(any("anchor_1a2b3c4d" in issue.snippet for issue in self.raw
+                             if issue.rule_id == "state:focus-not-visible"))
+
     def test_a_ring_on_an_ancestors_after_is_visible_focus(self):
         self.assertFalse(any("search_1a2b3c4d" in issue.snippet for issue in self.raw
                              if issue.rule_id == "state:focus-not-visible"))
