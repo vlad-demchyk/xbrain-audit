@@ -102,6 +102,9 @@ _LABELS = {
         top_places="Pages with the most findings",
         pages_more="and {count} more pages", page_col="Page or file",
         top_patterns="Highest-scoring passages",
+        side_col_rule="Check", side_col_wcag="WCAG", side_col_why="Why it is not settled",
+        side_col_count="Occurrences", side_col_pages="Pages", side_col_parts="Parts",
+        side_col_examples="Examples", side_more="and {count} more",
         found_in="Found in {count} places", and_more="and {count} more",
         occurrences="Occurrences",
         distinct="distinct problems", occurrences_total="occurrences in total",
@@ -167,6 +170,9 @@ _LABELS = {
         top_places="Сторінки з найбільшою кількістю знахідок",
         pages_more="і ще {count} сторінок", page_col="Сторінка або файл",
         top_patterns="Уривки з найвищою оцінкою",
+        side_col_rule="Перевірка", side_col_wcag="WCAG", side_col_why="Чому не вирішено",
+        side_col_count="Повторів", side_col_pages="Сторінок", side_col_parts="Частини",
+        side_col_examples="Приклади", side_more="і ще {count}",
         found_in="Знайдено у {count} місцях", and_more="і ще {count}",
         occurrences="Повторів",
         distinct="окремих проблем", occurrences_total="входжень усього",
@@ -232,6 +238,9 @@ _LABELS = {
         top_places="Pagine con più rilievi",
         pages_more="e altre {count} pagine", page_col="Pagina o file",
         top_patterns="Passaggi con punteggio più alto",
+        side_col_rule="Controllo", side_col_wcag="WCAG", side_col_why="Perché non è deciso",
+        side_col_count="Occorrenze", side_col_pages="Pagine", side_col_parts="Parti",
+        side_col_examples="Esempi", side_more="e altri {count}",
         found_in="Trovato in {count} punti", and_more="e altri {count}",
         occurrences="Occorrenze",
         distinct="problemi distinti", occurrences_total="occorrenze in totale",
@@ -972,6 +981,104 @@ def _top_patterns_section(model: ReportModel, labels: dict, lang="en") -> str:
             f'<th>{_esc(labels["explanation"])}</th></tr>{"".join(rows)}</table></section>')
 
 
+#: How many example places a compact row of the to-check and the
+#: recommendations sections prints.
+_SIDE_EXAMPLES = 3
+#: How long an example's quoted markup may be in such a row.
+_SIDE_SNIPPET = 140
+
+
+def _page_of(location: str) -> str:
+    """The page a location names: `source — selector` -> `source`."""
+    return (location or "").split(" — ", 1)[0]
+
+
+def _side_rows(items) -> list:
+    """The to-check and recommendations findings, one row per rule and part.
+
+    These two sections used to print a full card per grouped finding, like
+    the proven findings. On a live 104-page intranet the to-check list had
+    1436 entries - most of them one people-directory part's photos whose
+    contrast no engine could measure - and the PDF ran to 1018 pages. What a
+    reader needs from a list of open questions is which checks are open,
+    how often, where, and a few places to look; the proven findings keep
+    their cards. Grouped by rule over `ReportModel.grouped_findings` (the
+    same identity as the main list), so every occurrence is counted once.
+    """
+    rows: dict = {}
+    for finding in items:
+        # Never across rules or across parts: a row is one check in one
+        # component, the unit somebody fixes.
+        key = (finding.rule_id or finding.title, finding.zone, finding.zone_name)
+        row = rows.get(key)
+        if row is None:
+            row = rows[key] = {
+                "first": finding, "title": finding.title, "rule_id": finding.rule_id,
+                "wcag": [], "why": "", "count": 0, "pages": [], "parts": [],
+                "examples": [], "rank": finding.severity_rank,
+                "confidence": finding.confidence or "",
+            }
+        row["rank"] = min(row["rank"], finding.severity_rank)
+        for criterion in finding.wcag or ():
+            if criterion not in row["wcag"]:
+                row["wcag"].append(criterion)
+        if not row["why"]:
+            row["why"] = _flatten_sentence(finding.caveat or finding.why or finding.found)
+        places = finding.locations or ([finding.location] if finding.location else [])
+        row["count"] += max(1, len(places))
+        for where in places:
+            page = _page_of(where)
+            if page and page not in row["pages"]:
+                row["pages"].append(page)
+        if finding.zone_name and finding.zone_name not in row["parts"]:
+            row["parts"].append(finding.zone_name)
+        if len(row["examples"]) < _SIDE_EXAMPLES:
+            snippet = " ".join((finding.snippet or "").split())
+            if len(snippet) > _SIDE_SNIPPET:
+                snippet = snippet[:_SIDE_SNIPPET - 1] + "…"
+            row["examples"].append((snippet, places[0] if places else ""))
+    return sorted(rows.values(), key=lambda row: (row["rank"], -row["count"],
+                                                  row["title"]))
+
+
+def _side_table(rows, labels: dict) -> str:
+    """The compact rows of `_side_rows`: one `<tr>` per rule."""
+    body = []
+    for row in rows:
+        examples = "".join(
+            f'<li><code>{_esc(snippet)}</code> <span class="where">{_esc(where)}</span></li>'
+            if snippet else f'<li><span class="where">{_esc(where)}</span></li>'
+            for snippet, where in row["examples"])
+        rest = row["count"] - len(row["examples"])
+        if rest > 0:
+            examples += f'<li class="more">{_esc(labels["side_more"].format(count=rest))}</li>'
+        parts = ", ".join(row["parts"])
+        rule = (f'<br><span class="rule">{_esc(row["rule_id"])}</span>'
+                if row["rule_id"] else "")
+        # The certainty badge and the caveat, as on a card: what kind of
+        # claim this row is must not depend on which layout printed it.
+        certainty = row["confidence"]
+        if certainty and certainty != EXACT:
+            label = labels["cert"].get(certainty, certainty)
+            rule += (f'<br><span class="badge badge-cert cert-{_esc(certainty)}">'
+                     f'{_esc(label)}</span>')
+        body.append(
+            '<tr class="side-row">'
+            f'<td><strong>{_esc(row["title"])}</strong>{rule}</td>'
+            f'<td>{_esc(", ".join(row["wcag"]))}</td>'
+            f'<td><span class="caveat">{_esc(row["why"])}</span></td>'
+            f'<td class="num">{row["count"]}</td>'
+            f'<td class="num">{len(row["pages"])}</td>'
+            f'<td>{_esc(parts)}</td>'
+            f'<td><ul class="side-examples">{examples}</ul></td></tr>')
+    head = "".join(f'<th{cls}>{_esc(labels[key])}</th>' for key, cls in (
+        ("side_col_rule", ""), ("side_col_wcag", ""), ("side_col_why", ""),
+        ("side_col_count", ' class="num"'), ("side_col_pages", ' class="num"'),
+        ("side_col_parts", ""), ("side_col_examples", "")))
+    return (f'<table class="category-table side-table"><tr>{head}</tr>'
+            + "".join(body) + '</table>')
+
+
 def render_html(model: ReportModel, lang: str = "en") -> str:
     """`ReportModel` -> a complete `<html>` document, ready for a browser or
     for `report.pdf.render_pdf`.
@@ -1045,10 +1152,10 @@ def render_html(model: ReportModel, lang: str = "en") -> str:
     def _side_section(key, items):
         if not items:
             return ""
-        return (f'<section class="findings {key}"><h2>{_esc(labels[key])} ({len(items)})</h2>'
-                               f'<p class="authwall-note">{_esc(labels[key + "_note"])}</p>'
-                               + "".join(_finding_card(f, lang, palette) for f in items)
-                               + '</section>')
+        rows = _side_rows(items)
+        return (f'<section class="findings {key}"><h2>{_esc(labels[key])} ({len(rows)})</h2>'
+                f'<p class="authwall-note">{_esc(labels[key + "_note"])}</p>'
+                + _side_table(rows, labels) + '</section>')
 
     # To-check right after the findings: each may be a real failure. Advice
     # goes last, after the pages: it changes no total and asks nothing urgent.
@@ -1207,6 +1314,11 @@ table.category-table .src {{
   color: {palette.text_muted}; font-size: 8pt; margin-top: 1mm;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }}
+.side-table td {{ vertical-align: top; font-size: 8.5pt; }}
+.side-table .rule {{ font-family: monospace; font-size: 7.5pt; color: {palette.text_muted}; }}
+.side-examples {{ margin: 0; padding-left: 4mm; }}
+.side-examples code {{ font-size: 7.5pt; word-break: break-all; }}
+.side-examples .where {{ color: {palette.text_muted}; font-size: 7.5pt; word-break: break-all; }}
 .repo-coverage {{ color: {palette.text_muted}; font-size: 9pt; margin: -1mm 0 2mm; }}
 /* The index of what was examined is context, not content: small type, and a
    fixed narrow column for the count so the addresses get the width. */
