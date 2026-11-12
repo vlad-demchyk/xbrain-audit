@@ -534,11 +534,17 @@ def _problem_map(result, render, lang: str) -> list:
     problems = []
     for first, others in duplicates.group_issues(issues):
         explanation = render(first, lang)
+        group = [first, *others]
+        # A custom component's group spans severities and engines (one
+        # "name" problem from the static rule and axe): reported at its
+        # worst, naming every engine that found it.
+        worst = min(group, key=lambda issue: _SEVERITY_ORDER.get(issue.severity, 9))
+        engines = list(dict.fromkeys(issue.engine for issue in group if issue.engine))
         problems.append({
             "rule": first.rule_id,
-            "severity": first.severity,
+            "severity": worst.severity,
             "category": first.category,
-            "engine": first.engine,
+            "engine": ", ".join(engines) or first.engine,
             "title": explanation.title,
             "found": explanation.found,
             "why": explanation.why,

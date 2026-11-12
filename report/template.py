@@ -105,6 +105,7 @@ _LABELS = {
         side_col_rule="Check", side_col_wcag="WCAG", side_col_why="Why it is not settled",
         side_col_count="Occurrences", side_col_pages="Pages", side_col_parts="Parts",
         side_col_examples="Examples", side_more="and {count} more",
+        component_fix="One fix in the code of {name} fixes all {count} occurrences.",
         found_in="Found in {count} places", and_more="and {count} more",
         occurrences="Occurrences",
         distinct="distinct problems", occurrences_total="occurrences in total",
@@ -173,6 +174,7 @@ _LABELS = {
         side_col_rule="Перевірка", side_col_wcag="WCAG", side_col_why="Чому не вирішено",
         side_col_count="Повторів", side_col_pages="Сторінок", side_col_parts="Частини",
         side_col_examples="Приклади", side_more="і ще {count}",
+        component_fix="Одне виправлення в коді {name} виправляє всі входження: {count}.",
         found_in="Знайдено у {count} місцях", and_more="і ще {count}",
         occurrences="Повторів",
         distinct="окремих проблем", occurrences_total="входжень усього",
@@ -241,6 +243,7 @@ _LABELS = {
         side_col_rule="Controllo", side_col_wcag="WCAG", side_col_why="Perché non è deciso",
         side_col_count="Occorrenze", side_col_pages="Pagine", side_col_parts="Parti",
         side_col_examples="Esempi", side_more="e altri {count}",
+        component_fix="Una sola correzione nel codice di {name} corregge tutte le {count} occorrenze.",
         found_in="Trovato in {count} punti", and_more="e altri {count}",
         occurrences="Occorrenze",
         distinct="problemi distinti", occurrences_total="occorrenze in totale",
@@ -426,6 +429,10 @@ def _finding_card(finding, lang: str, palette: Palette) -> str:
     parts.append(f'<h3>{_esc(finding.title)}</h3>')
     parts.append(_meta_line(finding, labels))
     parts.append(_locations_block(finding, labels))
+    component = _component_line(finding.zone, finding.zone_name,
+                                finding.occurrences, labels)
+    if component:
+        parts.append(f'<p class="component-fix">{_esc(component)}</p>')
     if (finding.evidence or {}).get("mapping"):
         from repo_pairing import mapping_lines
         for line in mapping_lines(finding.evidence["mapping"], lang):
@@ -462,6 +469,16 @@ def _finding_card(finding, lang: str, palette: Palette) -> str:
         parts.append(f'<p class="caveat">{_esc(finding.caveat)}</p>')
     parts.append('</article>')
     return "\n".join(parts)
+
+
+def _component_line(zone: str, zone_name: str, count: int, labels: dict) -> str:
+    """For a custom web part's group: one fix in its code fixes them all."""
+    if zone != "custom" or count < 2 or not zone_name:
+        return ""
+    from duplicates import OUTSIDE_CANVAS
+
+    return labels["component_fix"].format(
+        name=zone_name.removesuffix(OUTSIDE_CANVAS), count=count)
 
 
 def _field(label: str, value: str, escape: bool, kind: str = "") -> str:
@@ -1010,6 +1027,13 @@ def _side_rows(items) -> list:
         # Never across rules or across parts: a row is one check in one
         # component, the unit somebody fixes.
         key = (finding.rule_id or finding.title, finding.zone, finding.zone_name)
+        if finding.zone == "custom":
+            # A custom part's problem is its family, as in the main list.
+            from audit.browser import _rule_family
+            from duplicates import OUTSIDE_CANVAS
+
+            key = (_rule_family(finding.rule_id or finding.title), finding.zone,
+                   finding.zone_name.removesuffix(OUTSIDE_CANVAS))
         row = rows.get(key)
         if row is None:
             row = rows[key] = {
@@ -1017,6 +1041,7 @@ def _side_rows(items) -> list:
                 "wcag": [], "why": "", "count": 0, "pages": [], "parts": [],
                 "examples": [], "rank": finding.severity_rank,
                 "confidence": finding.confidence or "",
+                "zone": finding.zone,
             }
         row["rank"] = min(row["rank"], finding.severity_rank)
         for criterion in finding.wcag or ():
@@ -1037,6 +1062,12 @@ def _side_rows(items) -> list:
             if len(snippet) > _SIDE_SNIPPET:
                 snippet = snippet[:_SIDE_SNIPPET - 1] + "…"
             row["examples"].append((snippet, places[0] if places else ""))
+            # One grouped problem in many places (one component's pattern):
+            # further places as examples, the markup quoted once.
+            for where in places[1:]:
+                if len(row["examples"]) >= _SIDE_EXAMPLES:
+                    break
+                row["examples"].append(("", where))
     return sorted(rows.values(), key=lambda row: (row["rank"], -row["count"],
                                                   row["title"]))
 
@@ -1053,6 +1084,9 @@ def _side_table(rows, labels: dict) -> str:
         if rest > 0:
             examples += f'<li class="more">{_esc(labels["side_more"].format(count=rest))}</li>'
         parts = ", ".join(row["parts"])
+        component = _component_line(row["zone"], row["parts"][0] if row["parts"] else "",
+                                    row["count"], labels)
+        why = row["why"]
         rule = (f'<br><span class="rule">{_esc(row["rule_id"])}</span>'
                 if row["rule_id"] else "")
         # The certainty badge and the caveat, as on a card: what kind of
@@ -1066,7 +1100,9 @@ def _side_table(rows, labels: dict) -> str:
             '<tr class="side-row">'
             f'<td><strong>{_esc(row["title"])}</strong>{rule}</td>'
             f'<td>{_esc(", ".join(row["wcag"]))}</td>'
-            f'<td><span class="caveat">{_esc(row["why"])}</span></td>'
+            f'<td><span class="caveat">{_esc(why)}</span>'
+            + (f'<br><span class="component-fix">{_esc(component)}</span>' if component else "")
+            + '</td>'
             f'<td class="num">{row["count"]}</td>'
             f'<td class="num">{len(row["pages"])}</td>'
             f'<td>{_esc(parts)}</td>'
@@ -1315,6 +1351,7 @@ table.category-table .src {{
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }}
 .side-table td {{ vertical-align: top; font-size: 8.5pt; }}
+.component-fix {{ font-size: 8.4pt; font-weight: 600; margin: 1.5mm 0 0; }}
 .side-table .rule {{ font-family: monospace; font-size: 7.5pt; color: {palette.text_muted}; }}
 .side-examples {{ margin: 0; padding-left: 4mm; }}
 .side-examples code {{ font-size: 7.5pt; word-break: break-all; }}

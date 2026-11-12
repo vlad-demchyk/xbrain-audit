@@ -99,6 +99,8 @@ def issue_identity(issue) -> tuple:
     `col-6`, `id="nav"`). Over-masking would merge findings that really are
     different, and a wrongly merged problem hides a real one.
     """
+    if ((getattr(issue, "details", None) or {}).get("zone") or "") == "custom":
+        return component_identity(issue)
     snippet = canonical_markup(getattr(issue, "snippet", "") or "")
     selector = getattr(issue, "selector", "") or ""
     # A finding about the page or the run rather than an element - a missing
@@ -120,7 +122,7 @@ def issue_identity(issue) -> tuple:
         getattr(issue, "severity", ""),
         getattr(issue, "confidence", "exact"),
         details.get("zone", ""),
-        details.get("zone_name", "").removesuffix(" (outside the canvas)"),
+        details.get("zone_name", "").removesuffix(OUTSIDE_CANVAS),
         snippet or selector or evidence,
     )
 
@@ -236,6 +238,92 @@ def mask_generated_ids(text: str) -> str:
     text = _REACT_USE_ID_RE.sub("#", text)
     text = _PREFIX_RE.sub(lambda m: m.group(1) + "#", text)
     return _mask_identifier_attributes(text)
+
+
+# ------------------------------------------------- a custom component
+#
+# A custom SPFx web part is code somebody deployed into the tenant. The same
+# defect on every instance of its button, on every page it is placed on, is
+# one problem: one fix in the component's code fixes all of them. Measured on
+# a live intranet: 383 unnamed `ms-Button`s in one custom header were 383
+# rows. So inside a `custom` zone a problem is the rule's family, the web
+# part, and the element's shape - its tag and the classes that name the
+# component's element - and not what each instance says or points at.
+#
+# Not for `author` zones and not for any other site: there each image and
+# each link was written by a person, and needs its own fix.
+
+#: Class shapes that are not part of the element's identity in a component:
+#: state classes (`is-disabled`), Fluent UI's style counters (`root-262`,
+#: `field-261`), Griffel's atomic hashes (`f16hsg94`, always with a digit,
+#: and `___1q2w3e_0000000`).
+_STATE_CLASS = re.compile(r"^is-")
+_FLUENT_COUNTER = re.compile(r"^[A-Za-z]+-\d+$")
+_GRIFFEL_ATOMIC = re.compile(r"^(f(?=[a-z0-9]*\d)[a-z0-9]{6,8}|___[A-Za-z0-9_]+)$")
+_OPEN_TAG = re.compile(r"<\s*([a-zA-Z][\w-]*)([^>]*)")
+_CLASS_ATTR = re.compile(r"""\bclass\s*=\s*("([^"]*)"|'([^']*)'|([^\s>"']+))""", re.I)
+_SELECTOR_PART = re.compile(r"^([a-zA-Z][\w-]*)?((?:[.#:\[][^\s>+~]*)*)$")
+
+#: The part of a zone name that says where the markup was found, not whose.
+OUTSIDE_CANVAS = " (outside the canvas)"
+
+
+def semantic_classes(classes) -> tuple:
+    """The classes that name a component's element, sorted."""
+    kept = {name for name in classes
+            if name and not _STATE_CLASS.match(name)
+            and not _FLUENT_COUNTER.match(name)
+            and not _GRIFFEL_ATOMIC.match(name)}
+    return tuple(sorted(kept))
+
+
+def element_shape(snippet: str, selector="") -> str:
+    """`tag.class.class` of the element a finding quotes: the shape of a
+    component's element, without anything that comes from data."""
+    match = _OPEN_TAG.search(snippet or "")
+    if match:
+        tag = match.group(1).lower()
+        found = _CLASS_ATTR.search(match.group(2) or "")
+        value = ""
+        if found:
+            value = found.group(2) or found.group(3) or found.group(4) or ""
+        return ".".join((tag,) + semantic_classes(value.split()))
+    if isinstance(selector, (list, tuple)):
+        selector = " ".join(str(part) for part in selector)
+    last = str(selector or "").strip().split(" ")[-1] if selector else ""
+    part = _SELECTOR_PART.match(last) if last else None
+    if not part:
+        return ""
+    tag = (part.group(1) or "").lower()
+    classes = re.findall(r"\.([\w-]+)", part.group(2) or "")
+    return ".".join(((tag,) if tag else ()) + semantic_classes(classes))
+
+
+def component_identity(issue) -> tuple:
+    """What makes two findings in a custom web part the same problem.
+
+    The rule's family (`audit.browser._family_of`: `control-name`,
+    `axe:button-name` and `htmlcs:4_1_2` are one "name" problem), the web
+    part (`(outside the canvas)` folded into its name), the element's shape
+    (`element_shape`), its category and how settled it is. Severity is not in
+    it: a group is reported at its worst.
+    """
+    from audit.browser import _family_of
+
+    details = getattr(issue, "details", None) or {}
+    try:
+        family = _family_of(issue)
+    except Exception:  # noqa: BLE001 - a family is a grouping hint, never a reason to fail
+        family = getattr(issue, "rule_id", "") or ""
+    return (
+        "component",
+        family,
+        getattr(issue, "category", ""),
+        getattr(issue, "confidence", "exact"),
+        str(details.get("zone_name", "")).removesuffix(OUTSIDE_CANVAS),
+        element_shape(getattr(issue, "snippet", "") or "",
+                      getattr(issue, "selector", "") or ""),
+    )
 
 
 @lru_cache(maxsize=8192)

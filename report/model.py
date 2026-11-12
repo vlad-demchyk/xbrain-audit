@@ -343,17 +343,25 @@ class ReportModel:
         from dataclasses import replace
 
         grouped: dict = {}
+        engines: dict = {}
         order: list = []
+        # Worst first (`sorted_findings`), so a group's first finding carries
+        # its highest severity - the one a component's group is reported at.
         for finding in self.sorted_findings():
             key = finding.identity
             if key in grouped:
                 where = finding.location
                 if where and where not in grouped[key]:
                     grouped[key].append(where)
+                if finding.engine and finding.engine not in engines[key]:
+                    engines[key].append(finding.engine)
                 continue
             grouped[key] = [finding.location] if finding.location else []
+            engines[key] = [finding.engine] if finding.engine else []
             order.append((key, finding))
-        return [replace(first, locations=grouped[key]) for key, first in order]
+        return [replace(first, locations=grouped[key],
+                        engine=", ".join(engines[key]) or first.engine)
+                for key, first in order]
 
     def first_things(self, per_kind: int = 3) -> list:
         """What to do first, per kind of document, rather than what is wrong.
