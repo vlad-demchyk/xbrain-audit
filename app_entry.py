@@ -26,7 +26,7 @@ TUI (terminal interface). With a subcommand, runs the CLI. As
 from __future__ import annotations
 
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 #: Must match `cli_install.CLI_NAME` - the name the symlink is installed
 #: under. Not imported from there to keep this dispatch trivial to read
@@ -46,7 +46,7 @@ def _invoked_as_cli() -> bool:
         # The executable itself rather than argv[0]: what cmd puts in
         # argv[0] is what was typed, and `XAnalyze` typed in lower case
         # would otherwise be taken for the command line.
-        return Path(sys.executable).stem.lower() == _WINDOWS_CLI_STEM
+        return PureWindowsPath(sys.executable).stem.lower() == _WINDOWS_CLI_STEM
     return Path(sys.argv[0]).name == _CLI_INVOCATION_NAME
 
 
