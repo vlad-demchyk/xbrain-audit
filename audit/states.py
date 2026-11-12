@@ -150,9 +150,20 @@ STATE_SCRIPT = r"""
     return steps.join('/');
   }
 
+  // The element as the page has it, minus the markers a focus-visible
+  // library stamps on while it has focus (Fluent UI 9, the WICG polyfill):
+  // they exist only because this pass focused it, and would keep the quote
+  // from matching the same element found by another engine.
+  function quoted(el) {
+    return (el.outerHTML || '')
+      .replace(/ data-fui-focus-visible=""/g, '')
+      .replace(/ data-focus-visible-added=""/g, '')
+      .slice(0, 200);
+  }
+
   function record(rule, el, extra) {
     var item = {rule: rule, selector: el ? selectorFor(el) : '',
-                html: el ? (el.outerHTML || '').slice(0, 200) : '',
+                html: el ? quoted(el) : '',
                 tag: el ? el.tagName.toLowerCase() : '',
                 dom_path: el ? pathFor(el) : ''};
     for (var k in (extra || {})) item[k] = extra[k];
@@ -478,6 +489,9 @@ STATE_SCRIPT = r"""
       node.style.setProperty('transition', 'none', 'important');
       var cs = getComputedStyle(node);
       kept.look = [cs.outlineStyle, cs.outlineWidth, cs.boxShadow, cs.borderColor].join('|');
+      // Fluent's SearchBox draws the ring as the `::after` of its root, two
+      // levels above the focused `<input>`.
+      kept.pseudo = pseudoLooks(node);
       ancestors.push(kept);
       node = node.parentElement;
     }
@@ -494,6 +508,7 @@ STATE_SCRIPT = r"""
     var ancestorRing = ancestors.some(function(kept) {
       var cs = getComputedStyle(kept.el);
       var look = [cs.outlineStyle, cs.outlineWidth, cs.boxShadow, cs.borderColor].join('|');
+      if (pseudoGained(kept.el, kept.pseudo)) return true;
       if (look === kept.look) return false;
       return (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth || '0') > 0) ||
              cs.boxShadow !== 'none' || cs.borderColor !== kept.look.split('|')[3];

@@ -18,7 +18,10 @@
     focus turns it black with white text - nothing;
   * a Fluent-style button in the part (`ms-Button`): its ring is an `::after`
     drawn only once a trusted Tab put `ms-Fabric--isFocusVisible` on the
-    body - visible focus, nothing.
+    body - visible focus, nothing; a Fluent-style search box whose ring is
+    the `::after` of its root, two levels above the input - nothing; and a
+    focus-visible library stamping `data-fui-focus-visible` on whatever has
+    focus, which no quoted finding may carry.
 -->
 <html lang="en">
 <head>
@@ -36,6 +39,9 @@
   .spacer { height: 2400px; }
   .ms-Button { position: relative; outline: none; border: 0; background: #fff; color: #111; padding: 8px; }
   .ms-Button:focus { outline: none; }
+  .ms-SearchBox { position: relative; display: inline-block; }
+  .ms-SearchBox-field { border: 0; outline: none; padding: 4px; }
+  .ms-SearchBox:focus-within::after { content: ""; position: absolute; inset: 0; border: 2px solid #0078d4; pointer-events: none; }
   .ms-Fabric--isFocusVisible .ms-Button:focus::after { content: ""; position: absolute; inset: 1px; border: 1px solid #fff; outline: 1px solid #605e5c; }
 </style>
 </head>
@@ -79,6 +85,7 @@
                   <a class="noring tile_1a2b3c4d" href="#tile-one">First tile</a>
                   <button class="paleFocus_1a2b3c4d" type="button">Open</button>
                   <button class="ms-Button fluent_1a2b3c4d" type="button">Fluent</button>
+                  <div class="ms-SearchBox"><div class="iconContainer"><input class="ms-SearchBox-field search_1a2b3c4d" aria-label="Search"></div></div>
                   <img class="above_1a2b3c4d" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="40" height="40">
                   <div class="spacer"></div>
                   <img class="below_1a2b3c4d" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs=" width="40" height="40" alt="Below">
@@ -97,6 +104,12 @@
   window.addEventListener('keydown', function(event) {
     if (event.isTrusted && event.key === 'Tab') document.body.classList.add('ms-Fabric--isFocusVisible');
   }, true);
+  document.addEventListener('focusin', function(event) {
+    event.target.setAttribute('data-fui-focus-visible', '');
+  });
+  document.addEventListener('focusout', function(event) {
+    event.target.removeAttribute('data-fui-focus-visible');
+  });
 </script>
 </body>
 </html>

@@ -317,6 +317,14 @@ class TheRealBrowser(unittest.TestCase):
         self.assertFalse(any("fluent_1a2b3c4d" in issue.snippet for issue in self.raw
                              if issue.rule_id == "state:focus-not-visible"))
 
+    def test_a_ring_on_an_ancestors_after_is_visible_focus(self):
+        self.assertFalse(any("search_1a2b3c4d" in issue.snippet for issue in self.raw
+                             if issue.rule_id == "state:focus-not-visible"))
+
+    def test_a_focus_visible_marker_is_not_quoted(self):
+        for issue in self.raw:
+            self.assertNotIn("data-fui-focus-visible", issue.snippet)
+
     def test_the_text_of_a_focused_button_is_measured_against_its_new_fill(self):
         hits = self._kept("state:focus-text-low-contrast")
         self.assertEqual(len(hits), 1)
