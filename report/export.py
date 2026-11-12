@@ -37,8 +37,12 @@ def write_styled_report(path, model: ReportModel, lang: str = "en",
     still says the report is in the same folder, which is true - but naming
     the file is the difference between a redirect and a hint.
     """
+    from privacy import mask_text
+
     target = Path(path)
-    html = render_html(model, lang)
+    # The page list, the zones and the evidence are quoted into the page;
+    # the findings were masked at birth, the rest is masked here (`privacy`).
+    html = mask_text(render_html(model, lang))
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.suffix.lower() == ".pdf":
         from report.notice import write_notice_pdf

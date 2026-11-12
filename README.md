@@ -197,7 +197,7 @@ fixable in place.
 
 **Website rules**, by category, with the count the test suite enforces:
 
-`accessibility` (40), `best-practices` (13), `geo` (2), `performance` (8), `security` (10), `seo` (8)
+`accessibility` (41), `best-practices` (13), `geo` (2), `performance` (8), `security` (10), `seo` (8)
 
 A rule runs where it means something and nowhere else, decided on evidence:
 the file's syntax (JSX rules only in `.jsx`/`.tsx`), what the document is for
@@ -225,6 +225,14 @@ does not name themselves are left out of the hreflang reciprocity check and
 counted in one row; a link HTML_CodeSniffer reports as an image with no `alt`
 but that is named by `aria-label`, `aria-labelledby` or `title` is a note to
 check the name, not a violation.
+
+**Label in name (2.5.3).** `label-in-name` reports a link or button whose
+`aria-label` leaves out words of its visible text: `<a aria-label="Read
+system notices">Read more</a>` is called something a voice-control user
+cannot say. Conservative: only `aria-label`, only words (case, punctuation and
+order ignored), never an icon or a symbol, never visually hidden text. The same
+link is not reported as vague link text: its accessible name says where it
+goes.
 
 **In a browser**, when one is available: axe-core and HTML_CodeSniffer, the
 page in the state a person puts it in - focus indicator and whether it can be
@@ -377,6 +385,15 @@ set yourself wins**:
   chrome (a custom header, a pop-up). That markup is found by its CSS module
   classes (`name_1a2b3c4d`), bound to the part whose alias or bundle shares
   them, and audited as custom - an inference, marked as such in the report.
+  An SVG sprite of definitions (`<defs>`, a hidden icon set) draws nothing and
+  is never taken for a part.
+- **Classic pages and empty canvases.** A classic page (no modern canvas,
+  content in `#DeltaPlaceHolderMain`) is read through its web parts: each
+  `WebPartWPQn` with content is audited with every rule as "Classic web part
+  (WPQn)", the suite bar, ribbon, title area and left navigation are
+  Microsoft's. A modern page whose canvas is empty is reported as read and
+  empty ("the page's canvas is empty"), not as not audited. stderr says how
+  many pages were not audited, read empty or classic, with the reason.
 
 Limits:
 
@@ -407,6 +424,17 @@ XBrain Audit/example.com/2026-09-02-0930/
   changes.md    what changed since the last run
   state.json    resumable state
 ```
+
+**Personal data stays out.** A page behind a sign-in quotes the person signed
+in: an embedded survey's address carries `username=` and a per-user `hash=`.
+The values of such query parameters (`username`, `user`, `email`, `mail`,
+`hash`, `token`, `access_token`, `auth`, `key`, `sig`, `signature`, `session`,
+`sid`, `code`, `password`, `pwd`, `upn`, `login`) and e-mail addresses are
+replaced with `[masked]` and `[email]` in every finding, in the JSON, Markdown,
+HTML and PDF reports and on stderr; the parameter's name stays. Fingerprints are
+computed from the masked text, so the same finding has the same fingerprint for
+everybody. It is a filter over known shapes, not a guarantee: share a report
+about a signed-in site with care.
 
 Every document opens by naming the command and the parameters that changed
 what was measured. A repeated problem is listed once with its locations nested

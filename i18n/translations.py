@@ -3232,9 +3232,29 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Screen readers can pull up a list of every link on the page, out of context. In that list, fifteen rows reading \"read more\" are fifteen identical choices with nothing to choose between.",
     },
     "a11y_link_text_vague_fix": {
-        "uk": "Напишіть у самому посиланні, куди воно веде: «Тарифи і ціни» замість «детальніше». Якщо дизайн вимагає короткого напису, лишіть його видимим, а повний опис дайте через aria-label.",
-        "it": "Scrivi nel link stesso dove porta: «Piani e prezzi» invece di «leggi di più». Se il design impone una scritta breve, lasciala visibile e metti la descrizione completa in aria-label.",
-        "en": "Say in the link itself where it goes: \"Plans and pricing\" instead of \"read more\". If the design needs the short label, keep it visible and put the full description in aria-label.",
+        "uk": "Напишіть у самому посиланні, куди воно веде: «Тарифи і ціни» замість «детальніше». Якщо дизайн вимагає короткого напису, лишіть його видимим, а повний опис дайте через aria-label, який починається з того самого напису: «Детальніше: тарифи і ціни».",
+        "it": "Scrivi nel link stesso dove porta: «Piani e prezzi» invece di «leggi di più». Se il design impone una scritta breve, lasciala visibile e metti la descrizione completa in un aria-label che inizi con la stessa scritta: «Leggi di più: piani e prezzi».",
+        "en": "Say in the link itself where it goes: \"Plans and pricing\" instead of \"read more\". If the design needs the short label, keep it visible and put the full description in an aria-label that starts with the same words: \"Read more: plans and pricing\".",
+    },
+    "a11y_label_in_name_title": {
+        "uk": "Видимого напису немає в доступному імені",
+        "it": "L'etichetta visibile non è nel nome accessibile",
+        "en": "The visible label is not in the accessible name",
+    },
+    "a11y_label_in_name_found": {
+        "uk": "Видно «{text}», а aria-label називає елемент «{name}».",
+        "it": "Si vede «{text}», ma aria-label chiama l'elemento «{name}».",
+        "en": "The element reads \"{text}\", but aria-label names it \"{name}\".",
+    },
+    "a11y_label_in_name_why": {
+        "uk": "aria-label замінює видимий текст як імʼя елемента. Людина, що керує голосом, каже те, що бачить («натисни {text}»), і нічого не відбувається. Програма читання з екрана оголошує інший напис, ніж той, що на екрані.",
+        "it": "aria-label sostituisce il testo visibile come nome dell'elemento. Chi usa il controllo vocale pronuncia ciò che vede («clicca {text}») e non succede nulla. Lo screen reader annuncia un'etichetta diversa da quella sullo schermo.",
+        "en": "aria-label replaces the visible text as the element's name. Someone using voice control says what they see (\"click {text}\") and nothing happens. A screen reader announces a different label from the one on screen.",
+    },
+    "a11y_label_in_name_fix": {
+        "uk": "Почніть aria-label з видимого напису: «{text}: …». Або приберіть aria-label, якщо видимий текст уже описує мету, чи зробіть видимим повний опис.",
+        "it": "Fai iniziare aria-label con l'etichetta visibile: «{text}: …». Oppure togli aria-label se il testo visibile descrive già lo scopo, o rendi visibile la descrizione completa.",
+        "en": "Start the aria-label with the visible label: \"{text}: …\". Or drop aria-label if the visible text already says what it does, or make the full description visible.",
     },
     "a11y_html_lang_title": {
         "uk": "Мова документа не вказана",

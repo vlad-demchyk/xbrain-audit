@@ -32,6 +32,7 @@ unless it looks at `Issue.engine`.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 
 from . import browser, states
@@ -89,8 +90,43 @@ BUSY_POLL_MS = 250
 #: fades its scenes in, and `axe:color-contrast` measured "Екзамен" at
 #: opacity below 1 on one run and not on the next. Infinite animations (a
 #: spinner, a marquee) never end and are not waited for.
+#:
+#: Only a busy element a visitor can see counts. SharePoint Online keeps one
+#: `[aria-busy="true"]` on every page: the search box's suggestions popup
+#: (`role="listbox"`), empty and not rendered until somebody types. Counting
+#: it made every page of a live intranet wait the full 8 s and then report
+#: "still aria-busy, measured as it was" - a warning about nothing, on every
+#: page, which teaches the reader to ignore the one that matters. Rendered
+#: means: not under `aria-hidden="true"` or `hidden`, not
+#: `display: none` / `visibility: hidden`, and a box with an area (or, for a
+#: `display: contents` wrapper, a child that has one).
 _BUSY_SCRIPT = """(function() {
-  if (document.querySelector('[aria-busy="true"]')) return true;
+  function boxed(el) {
+    var rects = el.getClientRects();
+    for (var i = 0; i < rects.length; i++) {
+      if (rects[i].width > 0 && rects[i].height > 0) return true;
+    }
+    return false;
+  }
+  function rendered(el) {
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+      if (n.getAttribute('aria-hidden') === 'true' || n.hidden) return false;
+    }
+    var style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden'
+        || style.visibility === 'collapse') return false;
+    if (boxed(el)) return true;
+    if (style.display !== 'contents') return false;
+    var kids = el.children;
+    for (var k = 0; k < kids.length; k++) {
+      if (boxed(kids[k])) return true;
+    }
+    return false;
+  }
+  var busy = document.querySelectorAll('[aria-busy="true"]');
+  for (var b = 0; b < busy.length; b++) {
+    if (rendered(busy[b])) return true;
+  }
   if (!document.getAnimations) return false;
   return document.getAnimations().some(function(a) {
     if (a.playState !== 'running' || !a.effect) return false;
@@ -209,7 +245,48 @@ def ensure_headless_application():
         os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
             f"{flags} {' '.join(additions)}").strip()
     _HEADLESS_APPLICATION = QApplication([])
+    install_masking_message_handler()
     return _HEADLESS_APPLICATION
+
+
+_MESSAGE_HANDLER_INSTALLED = False
+
+
+def install_masking_message_handler() -> None:
+    """Qt's own log lines, the page's console among them, masked on stderr.
+
+    QtWebEngine forwards the page's console to stderr as `js: ...`, and a
+    signed-in page logs its own addresses there - with the user's login and
+    tokens in the query (see `privacy`). The default handler printed them as
+    they were. This one prints the same line, through `privacy.mask_text`.
+    Only for the headless application this module creates: the desktop app
+    owns its own handler.
+    """
+    global _MESSAGE_HANDLER_INSTALLED
+    if _MESSAGE_HANDLER_INSTALLED:
+        return
+    try:
+        from PySide6.QtCore import qFormatLogMessage, qInstallMessageHandler
+    except ImportError:  # pragma: no cover - an older binding: leave Qt's
+        return
+
+    def handler(mode, context, message):
+        try:
+            write_qt_message(qFormatLogMessage(mode, context, message))
+        except Exception:  # noqa: BLE001 - a log line is never a crash
+            pass
+
+    qInstallMessageHandler(handler)
+    _MESSAGE_HANDLER_INSTALLED = True
+
+
+def write_qt_message(line: str, stream=None) -> None:
+    """One Qt log line on stderr, masked."""
+    from privacy import mask_text
+
+    out = stream if stream is not None else sys.stderr
+    out.write(mask_text(str(line)) + "\n")
+    out.flush()
 
 
 def offscreen_fonts() -> None:

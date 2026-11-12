@@ -136,11 +136,39 @@ PLATFORM_REGIONS = (
     ("site-nav", ("#spLeftNav",)),
     ("comments", ("#CommentsWrapper",)),
     ("footer", ('[data-automation-id="SiteFooter"]', "#spSiteFooter")),  # HYPOTHESIS
+    # A classic page's chrome (SharePoint 2013 master page). VERIFIED on a
+    # live classic subsite: the suite bar, the ribbon, the title area (which
+    # holds the search box web part) and the left navigation.
+    ("classic-suite-bar", ("#suiteBarDelta",)),
+    ("classic-ribbon", ("#s4-ribbonrow",)),
+    ("classic-title-area", ("#titleAreaBox",)),
+    ("classic-nav", ("#sideNavBox",)),
 )
 
 #: The wrapper of the whole page, canvas included. Counted by name, never
 #: excluded: excluding it would exclude every web part with it.
 PAGE_CHROME = ("page-chrome", ("#spPageChromeAppDiv",))
+
+#: The modern canvas and its layout. VERIFIED: both are on a modern page
+#: even when nobody put a web part on it - the layout is then empty.
+CANVAS = '[data-automation-id="Canvas"]'
+CANVAS_LAYOUT = '[data-automation-id="CanvasLayout"]'
+
+#: A classic page's content area, the first that exists. VERIFIED on a live
+#: classic subsite: `#DeltaPlaceHolderMain` inside `#contentBox`.
+CLASSIC_MAIN = ("#DeltaPlaceHolderMain", "#contentBox")
+#: A classic web part: `div#WebPartWPQ<n>` carrying `webpartid`. VERIFIED.
+#: The search box in the title area is one too, and is outside the main
+#: area - Microsoft's chrome.
+CLASSIC_WEB_PART = "div[id^=WebPartWPQ][webpartid]"
+#: A classic rich-text field (a publishing page's content, a Content Editor
+#: web part's body). VERIFIED inside the web parts of a live page.
+CLASSIC_RICH_TEXT = ".ms-rtestate-field"
+
+#: What kind of page `map_document` recognised.
+PAGE_MODERN = "modern"
+PAGE_EMPTY_CANVAS = "empty-canvas"
+PAGE_CLASSIC = "classic"
 
 #: What axe is confined to in the browser pass. Empty on purpose: an SPFx
 #: part can move its markup out of the canvas into the chrome (see
@@ -376,11 +404,19 @@ class ZoneMap:
     elements_total: int = 0
     #: `{region name: count}` for the chrome that was recognised by name.
     platform_regions: dict = field(default_factory=dict)
+    #: `PAGE_MODERN`, `PAGE_EMPTY_CANVAS`, `PAGE_CLASSIC`, or "" for a page
+    #: this module could not read.
+    page_kind: str = ""
+    #: Said about a recognised page with nothing in it to audit.
+    note: str = ""
 
     @property
     def recognised(self) -> bool:
-        """Did this page have a canvas this module could read?"""
-        return bool(self.zones)
+        """Did this page have a canvas (or a classic content area) this
+        module could read? An empty one counts: it was read, and it is
+        empty - which is a different answer from "not audited"."""
+        return bool(self.zones) or self.page_kind in (PAGE_EMPTY_CANVAS,
+                                                      PAGE_CLASSIC)
 
     def zone_of(self, element):
         """The zone `element` sits in, or `None` when it is Microsoft's."""
@@ -613,6 +649,51 @@ def _in_region(element, regions: set) -> bool:
     return False
 
 
+#: What draws something on screen inside an SVG. Anything of these under a
+#: `<defs>` or `<symbol>` only defines it.
+_SVG_DRAWING = ("path", "circle", "rect", "polygon", "polyline", "ellipse",
+                "line", "use", "image", "text", "foreignobject")
+_SVG_DEFINITION = ("defs", "symbol")
+_INTERACTIVE_OR_MEDIA = ("a", "button", "input", "select", "textarea", "img",
+                         "iframe", "video", "audio", "object", "embed")
+
+
+def _hidden_by_style(element) -> bool:
+    if element.has_attr("hidden") or element.get("aria-hidden") == "true":
+        return True
+    style = (element.get("style") or "").replace(" ", "").lower()
+    if "display:none" in style or "visibility:hidden" in style:
+        return True
+    return ("width:0" in style and "height:0" in style)
+
+
+def _is_definitions(element) -> bool:
+    """An SVG sprite or definitions block: draws nothing, is nobody's part.
+
+    Microsoft's file icons ship an SVG `<defs>` container with a CSS module
+    class (`ColoredFolderDefs_<hash>`), outside the canvas on every page that
+    shows a document. The `<name>_<hash>` shape made it "SPFx outside the
+    canvas" - a custom part nobody deployed, measured on a live intranet.
+    Nothing in it is rendered, so there is nothing in it to audit, whoever
+    built it: an SVG whose every drawing element sits in `<defs>`/`<symbol>`,
+    or an element hidden by its own attributes with no text, is skipped.
+    """
+    if element.name in _INTERACTIVE_OR_MEDIA or element.find(_INTERACTIVE_OR_MEDIA):
+        return False
+    svgs = [element] if element.name == "svg" else element.find_all("svg")
+    if svgs and element.name != "svg":
+        # Text outside the SVGs is content.
+        for text in element.find_all(string=True):
+            if text.strip() and text.find_parent("svg") is None:
+                return False
+    if svgs:
+        drawn = [node for svg in svgs for node in svg.find_all(_SVG_DRAWING)
+                 if node.find_parent(_SVG_DEFINITION) is None]
+        if not drawn:
+            return True
+    return _hidden_by_style(element) and not element.get_text(strip=True)
+
+
 def _outside_canvas(document, zones, web_parts) -> list:
     """SPFx markup that left the canvas: `custom`, named by what built it.
 
@@ -637,7 +718,8 @@ def _outside_canvas(document, zones, web_parts) -> list:
     regions = {id(element) for element in _select(document, AXE_EXCLUDE)}
     roots = [element for element in document.find_all(True)
              if id(element) not in inside and _module_class(element)
-             and not _in_region(element, regions)]
+             and not _in_region(element, regions)
+             and not _is_definitions(element)]
     if not roots:
         return []
     by_stem, by_hash = {}, {}
@@ -687,15 +769,90 @@ def _count_regions(document) -> dict:
     return regions
 
 
+def _empty_canvas(document) -> bool:
+    """A modern canvas with nothing in its layout: a page nobody authored.
+
+    VERIFIED on a live tenant: `[data-automation-id=Canvas]` holding an empty
+    `[data-automation-id=CanvasLayout]`, no canvas control anywhere.
+    """
+    canvas = _select(document, [CANVAS])
+    if not canvas:
+        return False
+    layouts = _select(canvas[0], [CANVAS_LAYOUT])
+    if not layouts:
+        return False
+    return not any(_has_content(layout) or layout.find(True) is not None
+                   for layout in layouts)
+
+
+def _classic_zones(document):
+    """The zones of a classic page, or `None` when it is not one.
+
+    Each web part in the main content area with something in it is a zone,
+    `custom`: on a classic page the web part's markup is the site owner's
+    (a Content Editor holds their HTML, a Script Editor their script), so
+    every rule applies. A rich-text field outside every web part (a
+    publishing page's content) is the author's. Everything else - the suite
+    bar, the ribbon, the title area with its search box, the left
+    navigation - is Microsoft's.
+    """
+    main = None
+    for selector in CLASSIC_MAIN:
+        found = _select(document, [selector])
+        if found:
+            main = found[0]
+            break
+    if main is None:
+        return None
+    zones = []
+    parts = _in_page_order(document, _select(main, [CLASSIC_WEB_PART]))
+    for part in parts:
+        if not _has_content(part):
+            continue
+        ident = str(part.get("id") or "")
+        short = ident[len("WebPart"):] if ident.startswith("WebPart") else ident
+        guid = _guid(str(part.get("webpartid") or ""))
+        zones.append(Zone(
+            ZONE_CUSTOM, f"Classic web part ({short})", part,
+            evidence=f'classic page: id="{ident}"; webpartid={guid}',
+            web_part_id=guid))
+    inside = {id(element) for zone in zones
+              for element in (zone.element, *zone.element.find_all(True))}
+    fields = [field_ for field_ in _in_page_order(
+                  document, _select(main, [CLASSIC_RICH_TEXT]))
+              if id(field_) not in inside and _has_content(field_)]
+    for field_ in fields:
+        zones.append(Zone(ZONE_AUTHOR, "Classic page content", field_,
+                          evidence=f"classic page: {CLASSIC_RICH_TEXT}"))
+    return zones
+
+
 def map_document(document, web_parts=(), registry: OotbRegistry | None = None) -> ZoneMap:
-    """Split a parsed page into zones. `document` is a BeautifulSoup tree."""
+    """Split a parsed page into zones. `document` is a BeautifulSoup tree.
+
+    Three kinds of page are read: a modern page (its canvas controls), a
+    modern page whose canvas is empty (recognised, no zones, said so), and a
+    classic page (`_classic_zones`). Anything else has no zones and is not
+    recognised, which the caller reports.
+    """
     registry = registry or DEFAULT_REGISTRY
     zones = [_classify(element, web_parts, registry)
              for element in _candidates(document, web_parts)]
+    page_kind, note = "", ""
     if zones:
+        page_kind = PAGE_MODERN
         # Only on a page this module recognised: a CSS module class on an
         # ordinary page says nothing about SharePoint.
         zones.extend(_outside_canvas(document, zones, web_parts))
+    elif _empty_canvas(document):
+        page_kind, note = PAGE_EMPTY_CANVAS, "the page's canvas is empty"
+    else:
+        classic = _classic_zones(document)
+        if classic is not None:
+            zones, page_kind = classic, PAGE_CLASSIC
+            if not zones:
+                note = "the classic page has no web part with content"
+    if zones:
         order = {id(element): index
                  for index, element in enumerate(document.find_all(True))}
         zones.sort(key=lambda zone: order.get(id(zone.element), 0))
@@ -703,7 +860,8 @@ def map_document(document, web_parts=(), registry: OotbRegistry | None = None) -
     inside = sum(1 + len(zone.element.find_all(True)) for zone in zones)
     return ZoneMap(zones=zones, platform_elements=max(0, total - inside),
                    elements_total=total,
-                   platform_regions=_count_regions(document))
+                   platform_regions=_count_regions(document),
+                   page_kind=page_kind, note=note)
 
 
 def map_page(markup: str, web_parts=(), registry: OotbRegistry | None = None):
@@ -737,6 +895,28 @@ def apply_zone(issues, zone: Zone, summary: "Summary | None" = None) -> list:
     return kept
 
 
+def settle_references(issues, document) -> list:
+    """Drop `aria-reference-broken` findings the whole page resolves.
+
+    A zone is audited as a fragment, and an `aria-describedby` in a web part
+    may name an element elsewhere on the page - the page title, a status
+    line in the chrome. The fragment cannot see it and reported the
+    reference broken, `exact`. The page can: a finding whose every missing
+    id exists in the page's own markup is not a broken reference.
+    """
+    ids = None
+    kept = []
+    for issue in issues:
+        missing = (getattr(issue, "details", None) or {}).get("missing")
+        if getattr(issue, "rule_id", "") == "aria-reference-broken" and missing:
+            if ids is None:
+                ids = {str(tag.get("id")) for tag in document.find_all(id=True)}
+            if all(token in ids for token in missing):
+                continue
+        kept.append(issue)
+    return kept
+
+
 def _first_target(selector) -> str:
     """axe's `target` is a list (one entry per frame or shadow root)."""
     if isinstance(selector, (list, tuple)):
@@ -763,6 +943,8 @@ def _by_snippet(document, snippet: str):
     name = match.group(1).lower()
     attributes = {key.lower(): value.strip("\"'")
                   for key, value in _ATTRIBUTE.findall(match.group(2))}
+    from privacy import mask_text
+
     for key in _IDENTIFYING:
         value = attributes.get(key)
         if not value:
@@ -771,7 +953,9 @@ def _by_snippet(document, snippet: str):
             current = element.get(key)
             if isinstance(current, list):
                 current = " ".join(current)
-            if current == value:
+            # The quoted snippet was masked at birth (`privacy`); the DOM
+            # was not.
+            if current == value or mask_text(current) == value:
                 return element
     return None
 
@@ -801,9 +985,16 @@ def classify_browser_issues(issues, markup: str, web_parts=(),
     quoted element it can find - is kept and marked `zone: ""`, because
     hiding a finding nobody located would be guessing in the quiet direction.
     """
+    from audit.browser import COVERAGE_RULES
+
     document, zone_map = map_page(markup, web_parts, registry)
     kept = []
     for issue in issues:
+        if getattr(issue, "rule_id", "") in COVERAGE_RULES:
+            # Not a finding: what axe could not reach. Passed on to be
+            # recorded as coverage (`browser.take_untested_frames`).
+            kept.append(issue)
+            continue
         element = element_for(document, issue)
         if element is None:
             details = dict(getattr(issue, "details", None) or {})
@@ -901,6 +1092,11 @@ class Summary:
     pages: int = 0
     #: Pages on which no canvas was recognised: not audited, listed.
     pages_without_canvas: list = field(default_factory=list)
+    #: Pages that were read and had nothing to audit (an empty canvas, a
+    #: classic page with no web part content), with the reason.
+    pages_empty: list = field(default_factory=list)
+    #: Classic pages, read through `_classic_zones`.
+    pages_classic: list = field(default_factory=list)
     #: `{zone kind: placements}`.
     zones: dict = field(default_factory=dict)
     #: `{name: {"kind", "placements", "findings", "evidence"}}`.
@@ -917,6 +1113,14 @@ class Summary:
         if not zone_map.recognised:
             self.pages_without_canvas.append(url)
             return
+        if zone_map.page_kind == PAGE_CLASSIC:
+            self.pages_classic.append(url)
+        if not zone_map.zones:
+            # `reason` is a code a report translates; `note` the sentence.
+            reason = ("classic-empty" if zone_map.page_kind == PAGE_CLASSIC
+                      else zone_map.page_kind)
+            self.pages_empty.append({"url": url, "reason": reason,
+                                     "note": zone_map.note})
         self.platform_elements += zone_map.platform_elements
         for name, count in zone_map.platform_regions.items():
             self.platform_regions[name] = self.platform_regions.get(name, 0) + count
@@ -938,6 +1142,8 @@ class Summary:
         return {
             "pages": self.pages,
             "pages_without_canvas": list(self.pages_without_canvas),
+            "pages_empty": [dict(entry) for entry in self.pages_empty],
+            "pages_classic": list(self.pages_classic),
             "zones": dict(self.zones),
             "parts": {name: dict(value) for name, value in self.parts.items()},
             "skipped": {

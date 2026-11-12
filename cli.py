@@ -645,6 +645,8 @@ def cmd_audit(args) -> int:
     progress.stage("audit", "end",
                    documents=len(result.documents),
                    sources=len({d.source for d in result.documents}))
+    from cli_impl.auditpass import say_zones
+    say_zones(result)
 
     # The same suppression list governs both analyses: a user thinking "not
     # this part of the site" means it for the whole tool, not per subsystem.
@@ -757,8 +759,9 @@ def cmd_audit(args) -> int:
     if args.json:
         from duplicates import places_of
         from finding_contract import SCHEMA_VERSION, serialize_issue
+        from privacy import mask_value
         distinct = result.distinct()
-        print(json.dumps({
+        print(json.dumps(mask_value({
             "schema_version": SCHEMA_VERSION,
             "root": result.root,
             "mode": result.mode,
@@ -787,11 +790,12 @@ def cmd_audit(args) -> int:
             "coverage": getattr(result, "coverage", {}),
             "issues": [serialize_issue(issue, source=document.source)
                        for document in result.documents for issue in document.issues],
-        }, ensure_ascii=False, indent=2, default=_json_default))
+        }), ensure_ascii=False, indent=2, default=_json_default))
     else:
+        from privacy import mask_text
         for document in result.documents_with_issues():
             print()
-            print(document.source)
+            print(mask_text(document.source))
             for issue in document.issues:
                 explanation = render(issue, lang)
                 location = f"line {issue.line}" if issue.line else issue.selector[-60:]

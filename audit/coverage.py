@@ -142,6 +142,9 @@ def build_coverage(result, args=None, *, scan=None, pages=None) -> dict:
             "scan_read": walk, "pages": page_records, "engines": _engines(),
             "scan_cached_files": scan.get("cached_files", 0),
             "media": media, "auth": auth, "repo": json_value(result.repo),
+            # Frames axe could not test (cross-origin), per page: a limit of
+            # this run's coverage, not a defect of the page.
+            "untested_frames": json_value(result.coverage.get("untested_frames", [])),
             "options": options, "content_hashes": hashes,
             "hash_coordinate_system": "decoded-text-utf8",
             "mapping_confidence": "unknown",
@@ -166,5 +169,18 @@ def coverage_summary(coverage, lang="en") -> tuple[str, str]:
         records.extend(document.get("checks") or [document])
     counts = {status: sum(r.get("status") == status for r in records)
               for status in ("checked", "skipped", "unknown", "error")}
-    return title, sentence.format(**counts, pending=len(coverage.get("unknown") or []),
-                                  status=statuses.get(coverage.get("status"), statuses["unknown"]))
+    text = sentence.format(**counts, pending=len(coverage.get("unknown") or []),
+                           status=statuses.get(coverage.get("status"), statuses["unknown"]))
+    frames = [entry for entry in coverage.get("untested_frames") or []
+              if isinstance(entry, dict)]
+    if frames:
+        origins = sorted({origin for entry in frames
+                          for origin in entry.get("origins") or []})
+        said = {
+            "en": " Frames axe could not test (their content is not covered): {pages} page(s), {origins}.",
+            "uk": " Фрейми, які axe не зміг перевірити (їхній вміст не покрито): сторінок {pages}, {origins}.",
+            "it": " Frame che axe non ha potuto verificare (il loro contenuto non è coperto): {pages} pagine, {origins}.",
+        }
+        text += said.get(lang, said["en"]).format(pages=len(frames),
+                                                  origins=", ".join(origins[:5]))
+    return title, text

@@ -40,8 +40,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .base import (
-    ACCESSIBILITY, ADVISORY, CRITICAL, EXACT, MINOR, MODERATE, NEEDS_BROWSER,
-    PERFORMANCE, SERIOUS, Issue,
+    ACCESSIBILITY, ADVISORY, BEST_PRACTICES, CRITICAL, EXACT, MINOR, MODERATE,
+    NEEDS_BROWSER, PERFORMANCE, SERIOUS, Issue,
 )
 from . import engine_codes
 
@@ -449,16 +449,25 @@ MEASUREMENT_SCRIPT = """
       // the opposite of the rule's purpose. Keyed by `src` because that is
       // what the static finding recorded; an image with none cannot be
       // matched and is left as the static pass had it.
+      // Below the fold is recorded too: it is what turns the static guess
+      // into a measurement (`settle_image_loading`). An address listed in
+      // both (one icon used twice) counts as above: deferring it would
+      // delay the copy the visitor sees.
       result.imagesAboveFold = [];
-      var seenSrc = {};
+      result.imagesBelowFold = [];
+      var seenSrc = {}, belowSrc = {};
       var images = document.getElementsByTagName('img');
       for (var i = 0; i < images.length; i++) {
         var rect = images[i].getBoundingClientRect();
-        var src = images[i].getAttribute('src') || '';
-        if (!src || seenSrc[src]) continue;
+        var src = (images[i].getAttribute('src') || '').slice(0, 500);  // IMAGE_SRC_LIMIT
+        if (!src) continue;
         if (rect.top + window.scrollY < window.innerHeight) {
+          if (seenSrc[src]) continue;
           seenSrc[src] = true;
-          result.imagesAboveFold.push(src.slice(0, 500));
+          result.imagesAboveFold.push(src);
+        } else if (!belowSrc[src]) {
+          belowSrc[src] = true;
+          result.imagesBelowFold.push(src);
         }
       }
       // XAUDIT_VITALS_SNAPSHOT
@@ -517,10 +526,14 @@ def issues_from_axe(payload: str, source: str, exclude_rules=()) -> list:
                 severity = MINOR
             for node in entry.get("nodes", []):
                 measured = _measured_details(entry.get("id"), node)
+                node_severity, category = severity, ACCESSIBILITY
+                if (entry.get("id") == "autocomplete-valid"
+                        and not _collects_user_data(node.get("html", ""))):
+                    node_severity, category = MINOR, BEST_PRACTICES
                 issues.append(Issue(
                     rule_id=f"axe:{entry.get('id')}",
-                    severity=severity,
-                    category=ACCESSIBILITY,
+                    severity=node_severity,
+                    category=category,
                     selector=node.get("target", ""),
                     snippet=node.get("html", ""),
                     source=source,
@@ -541,6 +554,57 @@ def issues_from_axe(payload: str, source: str, exclude_rules=()) -> list:
                     },
                 ))
     return issues
+
+
+#: The input purposes of WCAG 2.1 section 7 - what 1.3.5 Identify Input
+#: Purpose is about: fields that collect information *about the user*.
+INPUT_PURPOSES = frozenset((
+    "name", "honorific-prefix", "given-name", "additional-name", "family-name",
+    "honorific-suffix", "nickname", "username", "new-password",
+    "current-password", "organization-title", "organization",
+    "street-address", "address-line1", "address-line2", "address-line3",
+    "address-level4", "address-level3", "address-level2", "address-level1",
+    "country", "country-name", "postal-code", "cc-name", "cc-given-name",
+    "cc-additional-name", "cc-family-name", "cc-number", "cc-exp",
+    "cc-exp-month", "cc-exp-year", "cc-csc", "cc-type",
+    "transaction-currency", "transaction-amount", "language", "bday",
+    "bday-day", "bday-month", "bday-year", "sex", "url", "photo", "tel",
+    "tel-country-code", "tel-national", "tel-area-code", "tel-local",
+    "tel-local-prefix", "tel-local-suffix", "tel-extension", "email", "impp",
+))
+#: Input types that collect information about the user by what they are.
+_PERSONAL_INPUT_TYPES = frozenset(("email", "tel", "password", "url"))
+
+
+def _collects_user_data(html: str) -> bool:
+    """Is this field one 1.3.5 covers?
+
+    `axe:autocomplete-valid` reports any token the HTML spec does not know
+    as *serious* under 1.3.5. But 1.3.5 covers only fields that collect
+    information about the user (`INPUT_PURPOSES`). Seen on a live intranet:
+    SharePoint's search box, `<input type="search" autocomplete="search">` -
+    an invalid token on a field that asks for a query, not for anything
+    about the person. That is a best-practice defect (the browser ignores
+    the token), not a Level AA failure, so it is reported as minor under
+    best practices. A field whose token names a purpose (`postal-code
+    shipping`, the right word in the wrong order) or whose type is personal
+    (email, tel, password, url) keeps axe's weight: there it is 1.3.5. A
+    misspelt purpose on a plain text field (`postal-cod`) reads as no
+    purpose and is downgraded - the cost of not guessing at intent.
+    """
+    match = re.search(r"<\s*(input|select|textarea)\b([^>]*)>?", html or "", re.I)
+    if not match:
+        return True  # cannot tell: keep axe's own weight
+    attributes = match.group(2)
+    kind = re.search(r"""\btype\s*=\s*["']?([\w-]+)""", attributes, re.I)
+    if kind and kind.group(1).lower() in _PERSONAL_INPUT_TYPES:
+        return True
+    token = re.search(r"""\bautocomplete\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""",
+                      attributes, re.I)
+    if not token:
+        return True
+    value = next(group for group in token.groups() if group is not None)
+    return any(part in INPUT_PURPOSES for part in value.lower().split())
 
 
 #: Detail names `_measured_details` writes; carried across a deduplication.
@@ -764,7 +828,7 @@ DEFAULT_BUDGETS = {
 }
 
 
-def merge_into_document(document, page_audit) -> None:
+def merge_into_document(document, page_audit, siblings=()) -> None:
     """Fold one page's browser findings into its static ones. One owner.
 
     Both the CLI's browser pass (`cli_impl/auditpass._run_browser_pass`) and
@@ -778,15 +842,98 @@ def merge_into_document(document, page_audit) -> None:
     the browser disproved must not reach `deduplicate`, or it would be
     corroborated by a real finding and reported alongside it.
 
+    `siblings` are the page's other documents. One page can be several: a
+    SharePoint page is a document per zone (`engine._documents_for_zones`),
+    and the static finding about an image sits in the zone's document while
+    the browser's lands on the page's first one. Deduplicating against the
+    first document alone kept both - measured on a live intranet, 58
+    `image-alt` and 23 `axe:image-alt` on the same images. So the browser's
+    findings are offered to every document of the page in turn; one a
+    document absorbed is gone, the rest move on, and what nobody absorbed
+    lands on `document`. Static findings of two documents never meet each
+    other: each document is deduplicated with its own, as before, because a
+    fragment's selector (`div:nth-of-type(1) > ...`) is relative to the
+    fragment and two zones can spell two elements the same way.
+
     Geometry comes from the widest pass that produced numbers (see
     `responsive.merge`): desktop is the DOM the reader is most likely to have
     open, and it is the same choice made for the selector a merged row keeps.
     """
-    settled = settle_image_loading(
-        list(document.issues), getattr(page_audit, "measurements", None) or {})
-    document.issues = deduplicate(
-        settled + list(page_audit.issues),
-        markup=getattr(page_audit, "html", "") or "")
+    measurements = getattr(page_audit, "measurements", None) or {}
+    markup = getattr(page_audit, "html", "") or ""
+    documents = [document, *[other for other in siblings
+                             if other is not document]]
+    pending = list(page_audit.issues)
+    for current in documents:
+        settled = settle_image_loading(list(current.issues), measurements)
+        if not pending:
+            current.issues = settled
+            continue
+        offered = {id(issue) for issue in pending}
+        kept = deduplicate(settled + pending, markup=markup)
+        current.issues = [issue for issue in kept if id(issue) not in offered]
+        pending = [issue for issue in kept if id(issue) in offered]
+    document.issues = list(document.issues) + pending
+
+
+#: axe results that are about what axe could not reach, not about the page.
+#: `frame-tested`: axe could not run inside an iframe (a cross-origin frame
+#: it may not inject into). The frame's content went untested; the page has
+#: no defect for it. A coverage limit, reported as one.
+COVERAGE_RULES = frozenset({"axe:frame-tested"})
+
+
+def take_untested_frames(issues: list) -> tuple:
+    """`(issues without the coverage limits, [{"origin", "selector"}])`."""
+    from urllib.parse import urlsplit
+
+    kept, frames = [], []
+    for issue in issues:
+        if issue.rule_id not in COVERAGE_RULES:
+            kept.append(issue)
+            continue
+        match = re.search(r"""\bsrc\s*=\s*["']?([^"'\s>]+)""", issue.snippet or "")
+        origin = ""
+        if match:
+            parts = urlsplit(match.group(1))
+            if parts.scheme and parts.netloc:
+                origin = f"{parts.scheme}://{parts.netloc}"
+        selector = issue.selector
+        if isinstance(selector, (list, tuple)):
+            selector = " ".join(str(part) for part in selector)
+        frames.append({"origin": origin or "(no address)",
+                       "selector": str(selector or "")})
+    return kept, frames
+
+
+def record_untested_frames(result, source: str, frames: list) -> None:
+    """Say, per page, which frames axe could not test, and that the page's
+    coverage is partial because of it - not a finding, not a clean page."""
+    entry = {"source": source, "frames": frames,
+             "origins": sorted({frame["origin"] for frame in frames})}
+    coverage = getattr(result, "coverage", None)
+    if isinstance(coverage, dict):
+        listed = coverage.setdefault("untested_frames", [])
+        if entry not in listed:
+            listed.append(entry)
+    browser = getattr(result, "browser_coverage", None)
+    if isinstance(browser, list):
+        item = {"source": source, "engine": "axe-frames", "status": "unknown",
+                "reason": "frame(s) axe could not test: "
+                          + ", ".join(entry["origins"])}
+        if item not in browser:
+            browser.append(item)
+
+
+def _documents_of(result, document) -> list:
+    """The other documents of the page `document` is one of, readable ones."""
+    documents = getattr(result, "documents", None)
+    if not isinstance(documents, list):
+        return []
+    return [other for other in documents
+            if other is not document
+            and getattr(other, "source", None) == document.source
+            and not getattr(other, "error", None)]
 
 
 def merge_page_audit(result, document, page_audit) -> bool:
@@ -816,7 +963,13 @@ def merge_page_audit(result, document, page_audit) -> bool:
     if measurements:
         result.coverage.setdefault("performance", []).append({
             "source": document.source, "measurements": measurements})
-    merge_into_document(document, page_audit)
+    frames = []
+    if getattr(page_audit, "issues", None):
+        page_audit.issues, frames = take_untested_frames(page_audit.issues)
+    if frames:
+        record_untested_frames(result, document.source, frames)
+    merge_into_document(document, page_audit,
+                        siblings=_documents_of(result, document))
     return True
 
 
@@ -837,14 +990,51 @@ def settle_image_loading(issues: list, measurements: dict) -> list:
     thing both sides recorded; an `<img>` that loads from `srcset` or
     `data-src` alone has no `src` to match and is left as the static pass had
     it, reported rather than silently dropped.
+
+    Both sides keep the address up to `IMAGE_SRC_LIMIT` characters and are
+    compared on exactly that much. The rule used to keep 120 and the browser
+    500, so an address longer than 120 never matched: on a live SharePoint
+    intranet every icon in the sticky header (a CDN address well past 120
+    characters) was reported as "add loading=lazy" although the browser had
+    measured it above the fold. An address the browser did not list stays
+    `needs-browser`, as the rule declares: not listed is not proof.
+    An address the browser measured *below* the fold (and nowhere above it)
+    is the rule's guess confirmed by a measurement, and only that becomes
+    `exact`.
     """
     above = measurements.get("imagesAboveFold")
-    if not isinstance(above, list) or not above:
+    below = measurements.get("imagesBelowFold")
+    above = above if isinstance(above, list) else []
+    below = below if isinstance(below, list) else []
+    if not above and not below:
         return list(issues)
-    visible = {str(src) for src in above if src}
-    return [issue for issue in issues
-            if not (issue.rule_id == "perf-image-loading"
-                    and str((issue.details or {}).get("src", "")) in visible)]
+    visible = {_src_identity(src) for src in above if src}
+    hidden = {_src_identity(src) for src in below if src} - visible
+    kept = []
+    for issue in issues:
+        if issue.rule_id != "perf-image-loading":
+            kept.append(issue)
+            continue
+        src = _src_identity((issue.details or {}).get("src", ""))
+        if src and src in visible:
+            continue
+        if src and src in hidden:
+            issue.confidence = EXACT
+        kept.append(issue)
+    return kept
+
+
+#: How much of an image address both the static rule and the browser keep.
+#: One number, so the two always compare the same length.
+IMAGE_SRC_LIMIT = 500
+
+
+def _src_identity(src) -> str:
+    # Masked like the finding's own copy (`privacy`), or an address with a
+    # token in it would never match the one the browser measured.
+    from privacy import mask_text
+
+    return mask_text(str(src or "").strip()[:IMAGE_SRC_LIMIT])
 
 
 def deduplicate(issues: list, markup: str = "") -> list:
@@ -886,27 +1076,30 @@ def deduplicate(issues: list, markup: str = "") -> list:
     """
     from .base import SEVERITY_ORDER
 
-    #: How many elements of each key the document actually contains. Empty
-    #: when the caller had no document to give.
+    #: How many elements of each identity the document actually contains.
+    #: Empty when the caller had no document to give.
     element_counts = _element_counts(markup)
 
     kept: dict = {}
     order = []
-    #: (source, family, element key) -> the issue already kept for it, used
+    #: (source, family, element) -> the issue already kept for it, used
     #: only to match findings that came from a *different* engine.
     by_element: dict = {}
+    #: id(kept issue) -> the full element a clipped one was paired with. A
+    #: clipped snippet is a pattern; it may pair with one element, never two.
+    paired: dict = {}
     unpaired = 0
 
     for issue in issues:
-        family = _rule_family(issue.rule_id)
-        element = _element_key(issue)
-        shared = element_counts.get(element, 0) > 1
+        family = _family_of(issue)
+        identity = _element_of(issue)
+        shared = (identity is not None
+                  and _count_in(element_counts, identity) > 1)
 
         existing = None
-        if element and not shared:
-            candidate = by_element.get((issue.source, family, element))
-            if candidate is not None and candidate.engine != issue.engine:
-                existing = candidate
+        if identity is not None and not shared:
+            existing = _corroborating(by_element, paired, issue, family,
+                                      identity)
 
         if family in _DOCUMENT_FAMILIES:
             signature = (issue.source, family)
@@ -923,8 +1116,8 @@ def deduplicate(issues: list, markup: str = "") -> list:
         if existing is None:
             kept[signature] = issue
             order.append(signature)
-            if element and not shared:
-                by_element.setdefault((issue.source, family, element), issue)
+            if identity is not None and not shared:
+                by_element.setdefault((issue.source, family, identity), issue)
             continue
 
         # Only a *different* engine is corroboration. One engine reporting the
@@ -932,6 +1125,8 @@ def deduplicate(issues: list, markup: str = "") -> list:
         # still collapses to one row, but writing "also found by htmlcs" on an
         # htmlcs finding would read as nonsense to whoever has to act on it.
         if issue.engine != existing.engine:
+            if identity is not None:
+                _pair(paired, existing, issue, identity)
             confirmations = set(existing.details.get("also_found_by", []))
             confirmations.add(issue.engine)
             existing.details["also_found_by"] = sorted(confirmations)
@@ -975,14 +1170,72 @@ def _stronger(left: str, right: str) -> str:
 #: The opening tag of a snippet: name, then everything up to the `>`.
 _OPEN_TAG = re.compile(r"<\s*([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[^>]*?)?)/?\s*>")
 _ATTRIBUTE = re.compile(r"([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)")
+#: An opening tag `base.snippet_of` clipped: no `>`, the clip's ellipsis at
+#: the end.
+_CLIPPED_TAG = re.compile(r"<\s*([a-zA-Z][a-zA-Z0-9-]*)(\s[^>]*)?\u2026\s*$", re.S)
+#: One attribute of a clipped tag, whose value may be cut open.
+_ATTRIBUTE_PART = re.compile(
+    r"""([a-zA-Z_:][-a-zA-Z0-9_:.]*)(?:\s*=\s*("[^"]*"?|'[^']*'?|[^\s>]*))?""")
+#: A clipped tag is a pattern, and a short one matches anything. Below this
+#: many known characters it identifies nothing and is not used.
+_CLIPPED_MINIMUM = 32
+
+
+@dataclass(frozen=True)
+class _Element:
+    """What an element *is*, read from a snippet or from the document.
+
+    `clipped` when the snippet was cut (`base.snippet_of` clips the opening
+    tag at 160 characters and appends an ellipsis): the attributes before the
+    cut are known, `partial` is the one the cut went through as
+    `(name, start of value)`, and nothing is known about the rest. axe
+    quotes the whole opening tag, so the static `image-alt` on an image with
+    a long CDN address and axe's `image-alt` on the same image never compared
+    equal - measured on a live intranet, 58 and 23 rows for the same images.
+    """
+    tag: str
+    attributes: tuple
+    partial: tuple = ()
+    clipped: bool = False
+
+    def key(self) -> str:
+        rendered = ";".join(f"{name}={value}" for name, value in self.attributes)
+        if self.clipped:
+            name, start = self.partial or ("", "")
+            rendered += f";{name}={start}\u2026"
+        return f"{self.tag}|{rendered}"
+
+    def admits(self, other: "_Element") -> bool:
+        """Is `other`, a whole element, one this clipped pattern describes?"""
+        if not self.clipped or other.clipped or other.tag != self.tag:
+            return False
+        theirs = dict(other.attributes)
+        for name, value in self.attributes:
+            if theirs.get(name) != value:
+                return False
+        if self.partial:
+            name, start = self.partial
+            if start is not None:
+                value = theirs.get(name)
+                if value is None or not value.startswith(start):
+                    return False
+        return True
+
+
+def _value(raw: str) -> str:
+    """An attribute value as both sides can compare it: entities decoded,
+    whitespace collapsed (`snippet_of` collapses it, a browser does not)."""
+    import html as html_mod
+
+    return " ".join(html_mod.unescape(raw).split())
 
 
 def _element_counts(markup: str) -> dict:
-    """How many elements of each `_element_key` the document contains.
+    """How many elements of each identity the document contains.
 
-    Parsed once per document. The key is built the same way as from a snippet,
-    so the two are comparable: that is the whole point of computing it here
-    rather than trusting the findings to describe the page.
+    Parsed once per document. The identity is built the same way as from a
+    snippet, so the two are comparable: that is the whole point of computing
+    it here rather than trusting the findings to describe the page.
     """
     if not markup:
         return {}
@@ -993,19 +1246,72 @@ def _element_counts(markup: str) -> dict:
         return {}
     counts: dict = {}
     for tag in soup.find_all(True):
-        key = _key_of_tag(tag)
-        counts[key] = counts.get(key, 0) + 1
+        identity = _identity_of_tag(tag)
+        counts[identity] = counts.get(identity, 0) + 1
     return counts
 
 
-def _key_of_tag(tag) -> str:
-    attributes = sorted(
+def _count_in(counts: dict, identity: _Element) -> int:
+    """How many of the document's elements this identity can be."""
+    if not identity.clipped:
+        return counts.get(identity, 0)
+    return sum(count for element, count in counts.items()
+               if identity.admits(element))
+
+
+def _identity_of_tag(tag) -> _Element:
+    # Masked as a finding's snippet is (`privacy`), so the two compare.
+    from privacy import mask_text
+
+    attributes = tuple(sorted(
         (name.lower(),
-         " ".join(value) if isinstance(value, list) else str(value))
+         _value(mask_text(" ".join(value) if isinstance(value, list) else str(value))))
         for name, value in (tag.attrs or {}).items()
-    )
-    rendered = ";".join(f"{name}={value}" for name, value in attributes)
-    return f"{tag.name.lower()}|{rendered}"
+    ))
+    return _Element(tag.name.lower(), attributes)
+
+
+def _key_of_tag(tag) -> str:
+    return _identity_of_tag(tag).key()
+
+
+def _element_of(issue):
+    """The `_Element` a finding is about, or `None` when it names none."""
+    snippet = issue.snippet or ""
+    match = _OPEN_TAG.search(snippet)
+    if match:
+        attributes = tuple(sorted(
+            (name.lower(), _value(value.strip("\"'")))
+            for name, value in _ATTRIBUTE.findall(match.group(2) or "")
+        ))
+        return _Element(match.group(1).lower(), attributes)
+    clipped = _CLIPPED_TAG.search(snippet)
+    if not clipped:
+        return None
+    body = clipped.group(2) or ""
+    complete, partial = [], ()
+    parts = list(_ATTRIBUTE_PART.finditer(body))
+    for index, part in enumerate(parts):
+        name, raw = part.group(1).lower(), part.group(2)
+        last = index == len(parts) - 1
+        cut_open = raw is not None and raw[:1] in "\"'" and (
+            len(raw) == 1 or raw[-1] != raw[0])
+        # The token the clip ran into: a quoted value left open, or the last
+        # token with no space after it (an unquoted value or a name cut
+        # short).
+        if cut_open or (last and part.end() == len(body)):
+            if raw is None:
+                partial = (name, None)           # a name cut short: nothing known
+            else:
+                partial = (name, _value(raw.lstrip("\"'")))
+            break
+        complete.append((name, _value((raw or "").strip("\"'"))))
+    identity = _Element(clipped.group(1).lower(), tuple(sorted(complete)),
+                        partial=partial, clipped=True)
+    known = sum(len(name) + len(value) for name, value in complete)
+    if partial and partial[1]:
+        known += len(partial[1])
+    return identity if known >= _CLIPPED_MINIMUM else None
 
 
 def _element_key(issue) -> str:
@@ -1016,16 +1322,43 @@ def _element_key(issue) -> str:
     it. `<img src="a.png"/>` and `<img src="a.png">` are the same image, and
     this is what makes them compare equal.
     """
-    match = _OPEN_TAG.search(issue.snippet or "")
-    if not match:
-        return ""
-    tag = match.group(1).lower()
-    attributes = sorted(
-        (name.lower(), value.strip("\"'"))
-        for name, value in _ATTRIBUTE.findall(match.group(2) or "")
-    )
-    rendered = ";".join(f"{name}={value}" for name, value in attributes)
-    return f"{tag}|{rendered}"
+    identity = _element_of(issue)
+    return identity.key() if identity is not None else ""
+
+
+def _corroborating(by_element: dict, paired: dict, issue, family: str,
+                   identity: _Element):
+    """A kept finding of another engine about the same element, or `None`.
+
+    Exact identities compare equal. A clipped one is matched against the
+    whole elements it admits (and the other way round) - but only a single
+    one: a clipped snippet already paired with one element is not paired
+    with a second, because two elements fitting one pattern are two
+    elements, and merging them would hide a real problem.
+    """
+    candidate = by_element.get((issue.source, family, identity))
+    if candidate is not None and candidate.engine != issue.engine:
+        return candidate
+    for (source, other_family, other), kept in by_element.items():
+        if source != issue.source or other_family != family:
+            continue
+        if kept.engine == issue.engine:
+            continue
+        if not (identity.clipped and identity.admits(other)
+                or other.clipped and other.admits(identity)):
+            continue
+        if paired.get(id(kept), identity) != identity:
+            continue
+        return kept
+    return None
+
+
+def _pair(paired: dict, kept, issue, identity: _Element) -> None:
+    """Remember what a clipped/whole match paired `kept` with, so the
+    pattern side of it is never paired with a second, different element."""
+    own = _element_of(kept)
+    if own is not None and own.clipped != identity.clipped:
+        paired.setdefault(id(kept), identity)
 
 
 #: Rules that mean the same thing across engines, so the deduplicator can
@@ -1052,8 +1385,10 @@ _RULE_FAMILIES = {
     # headings
     "heading-order": "heading-order", "page-has-h1": "heading-order",
     "axe:heading-order": "heading-order", "axe:page-has-heading-one": "heading-order",
-    # ids
-    "duplicate-id": "id", "aria-reference-broken": "id",
+    # ids. A duplicate id and a reference to an id that does not exist are
+    # two problems, and one element can have both: they were one family, and
+    # the second was merged away.
+    "duplicate-id": "id", "aria-reference-broken": "aria-reference",
     "axe:duplicate-id": "id", "axe:duplicate-id-active": "id",
     # HTML_CodeSniffer's own duplicate-id message (the 4.1.1 failure F77) is
     # the same element the static rule already named. Without this a page
@@ -1068,13 +1403,21 @@ _RULE_FAMILIES = {
     "viewport-zoom": "zoom", "axe:meta-viewport": "zoom",
     # tabindex
     "tabindex-positive": "tabindex", "axe:tabindex": "tabindex",
-    # link text
-    "link-text-vague": "link-text", "axe:link-in-text-block": "link-text",
+    # link text. Not `axe:link-in-text-block`: that one is about a link told
+    # apart from the text around it by colour alone (1.4.1), a different
+    # problem, and a link that had both lost one of them to the merge.
+    "link-text-vague": "link-text",
+    # the visible label is not in the accessible name (2.5.3)
+    "label-in-name": "label-in-name",
+    "axe:label-content-name-mismatch": "label-in-name",
+    "htmlcs:2_5_3": "label-in-name",
     # buttons
     "button-type": "button-type",
-    # media
-    "media-captions": "media", "media-autoplay": "media",
-    "axe:video-caption": "media", "axe:audio-caption": "media",
+    # media. Captions and autoplay are two problems (1.2.x and 1.4.2/2.2.2):
+    # one family made a video that autoplays *and* has no captions one row.
+    "media-captions": "captions",
+    "axe:video-caption": "captions", "axe:audio-caption": "captions",
+    "media-autoplay": "autoplay", "axe:no-autoplay-audio": "autoplay",
     # bypassing repeated navigation. Three engines answer this question and
     # none of them was mapped, so a page with no skip link was reported three
     # times, by three names, with nothing saying they agreed - on the one
@@ -1096,6 +1439,29 @@ _DOCUMENT_FAMILIES = frozenset(("skip",))
 
 def _rule_family(rule_id: str) -> str:
     return _RULE_FAMILIES.get(rule_id, rule_id)
+
+
+#: An ARIA attribute that points at ids.
+_IDREF_ATTRIBUTE = re.compile(
+    r"aria-(?:labelledby|describedby|controls|owns|activedescendant|"
+    r"errormessage|details|flowto)", re.I)
+
+
+def _family_of(issue) -> str:
+    """The family of one finding: by rule, and for one axe rule by message.
+
+    `axe:aria-valid-attr-value` covers two problems: a value of the wrong
+    kind (`aria-expanded="maybe"`), and an id reference to nothing - which
+    is what `aria-reference-broken` reports. Seen on a live intranet: both on
+    `<button aria-describedby="counter_N">`, two rows for one dangling
+    reference. Only the reference case joins that family; a wrong value
+    stays its own problem.
+    """
+    if issue.rule_id == "axe:aria-valid-attr-value":
+        why = str((issue.details or {}).get("why", ""))
+        if re.search(r"\bID\b", why) and _IDREF_ATTRIBUTE.search(why):
+            return "aria-reference"
+    return _rule_family(issue.rule_id)
 
 
 def _short_code(code: str) -> str:

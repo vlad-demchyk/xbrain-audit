@@ -180,7 +180,11 @@ class ImagesWithoutLazyLoading(PerformanceRule):
             issues.append(Issue(
                 rule_id=self.id, severity=self.severity, category=self.category,
                 selector=selector, line=line, snippet=snippet_of(tag),
-                source=context.source, details={"src": (tag.get("src") or "")[:120]},
+                source=context.source, confidence=self.confidence,
+                # The whole address up to the length the browser keeps
+                # (`browser.IMAGE_SRC_LIMIT`): it is what the browser pass
+                # matches on, and a shorter cut never matched a long URL.
+                details={"src": (tag.get("src") or "")[:500]},
                 fix_snippet=_with_attribute(tag, "loading", "lazy"),
             ))
         return issues

@@ -346,7 +346,7 @@ def _template_fields(details: dict) -> dict:
                 "required", "foreground", "background", "content", "from", "to",
                 "marker", "tool", "path", "names", "read", "indicator", "color",
                 "edge", "coveredBy", "coverHeight", "provider", "target",
-                "language", "other_text"):
+                "language", "other_text", "name"):
         fields.setdefault(key, "")
     return fields
 

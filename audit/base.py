@@ -224,6 +224,14 @@ class Issue:
     #: thing can be collapsed into one row.
     engine: str = "static"
 
+    def __post_init__(self) -> None:
+        # Masked at birth, so every consumer sees one spelling: a username
+        # or an access hash in a quoted address never reaches a report, and
+        # the fingerprint is the same for everybody (see `privacy`).
+        from privacy import mask_issue
+
+        mask_issue(self)
+
     @property
     def key(self) -> tuple:
         """Identity for de-duplication across a crawl: the same rule firing

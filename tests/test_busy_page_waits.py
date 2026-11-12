@@ -59,6 +59,37 @@ class InARealBrowser(unittest.TestCase):
         self.assertIn("busy", result.engine_errors)
 
 
+#: SharePoint's search suggestions popup: busy, empty and not rendered, on
+#: every page. Synthetic, the shape of it only.
+HIDDEN_BUSY = """<!DOCTYPE html><html lang="en"><head><title>Intranet</title></head>
+<body><main><h1>News</h1></main>
+<div id="searchux-popup-0" role="listbox" aria-busy="true" style="display:none"></div>
+<div aria-hidden="true"><div role="status" aria-busy="true">Loading</div></div>
+<div role="status" aria-busy="true" style="visibility:hidden">Loading</div>
+<div role="status" aria-busy="true"></div>
+</body></html>"""
+
+
+class OnlyARenderedBusyElementIsWaitedFor(unittest.TestCase):
+    setUpClass = InARealBrowser.setUpClass
+
+    def test_hidden_and_empty_busy_elements_do_not_hold_the_page(self):
+        import time
+
+        started = time.monotonic()
+        result = _audit(HIDDEN_BUSY)
+        elapsed = time.monotonic() - started
+        self.assertNotIn("busy", result.engine_errors)
+        self.assertLess(elapsed, 6)
+
+    def test_a_visible_skeleton_is_still_waited_for(self):
+        # The Coach case, again, beside the hidden popup.
+        page = (LOADING % 1200).replace(
+            "</body>", '<div role="listbox" aria-busy="true" hidden></div></body>')
+        result = _audit(page)
+        self.assertIn("<h1>Loaded</h1>", result.html)
+
+
 FADING = """<!DOCTYPE html><html lang="en"><head><title>App</title><style>
   @keyframes appear { from { opacity: 0.1; } to { opacity: 1; } }
   h1 { animation: appear 1.5s ease-out forwards; }

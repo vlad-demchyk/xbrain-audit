@@ -494,6 +494,11 @@ def fingerprint(source: str, text: str, kind: str = "") -> str:
     line is added above and would make every dismissal expire on the next
     edit.
     """
+    from privacy import mask_text
+
+    # From the masked text and address: a per-user value would make the same
+    # finding a new one on every run (see `privacy`).
+    source, text = mask_text(source or ""), mask_text(text or "")
     payload = "␟".join((kind or "", source or "", " ".join((text or "").split())))
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 

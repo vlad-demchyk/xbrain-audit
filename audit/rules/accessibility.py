@@ -326,6 +326,16 @@ class VagueLinkText(AccessibilityRule):
             title = (tag.get("title") or "").strip()
             if title and title.lower() != text:
                 continue
+            # The same for a name given in ARIA, and more so: `aria-label`
+            # and a resolved `aria-labelledby` *replace* the text as the
+            # link's accessible name, which is what the links list reads
+            # out. `<a aria-label="Leggi Novità del portale">Leggi di
+            # più</a>` is not a vague link in that list. Whether the visible
+            # words are in the name is a different criterion (2.5.3), and
+            # `label-in-name` asks it.
+            named = _aria_name(tag, document)
+            if named and _plain(named) != text and _plain(named) not in vague:
+                continue
             # Screen reader users navigate by pulling up a list of every link
             # on the page, out of context. Fifteen entries reading "read
             # more" is a list of fifteen identical, useless choices.
@@ -334,6 +344,128 @@ class VagueLinkText(AccessibilityRule):
                 rule_id=self.id, severity=self.severity, selector=selector, line=line,
                 snippet=snippet_of(tag), source=context.source,
                 details={"text": _text_of(tag), "href": (tag.get("href") or "")[:120]},
+            ))
+        return issues
+
+
+def _plain(text: str) -> str:
+    return _WHITESPACE_RE.sub(" ", (text or "")).lower().strip(" .!?:»«\"'")
+
+
+def _aria_name(tag, document) -> str:
+    """The name ARIA gives `tag`: `aria-labelledby` resolved in the document,
+    else `aria-label`. Empty when neither names it."""
+    labelled_by = (tag.get("aria-labelledby") or "").strip()
+    if labelled_by:
+        parts = []
+        for token in labelled_by.split():
+            target = document.find(id=token)
+            if target is not None:
+                parts.append(_text_of(target) or (target.get("aria-label") or "").strip())
+        text = " ".join(part for part in parts if part).strip()
+        if text:
+            return text
+    return (tag.get("aria-label") or "").strip()
+
+
+#: Classes that hide text visually and leave it to screen readers. Text in
+#: them is not part of what a sighted user reads as the label.
+_VISUALLY_HIDDEN = re.compile(
+    r"^(sr-only|visually-?hidden|screen-?reader-?text|screenreader-?only|"
+    r"a11y-?hidden|offscreen|ms-hidden(?:visually)?|hiddenVisually|"
+    r"element-invisible)$", re.I)
+_WORD = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def _visible_text(tag) -> str:
+    """The text a sighted user reads on `tag`: hidden descendants left out."""
+    from bs4 import NavigableString
+
+    parts = []
+    for node in tag.descendants:
+        if type(node) is not NavigableString:  # not comments, not CDATA
+            continue
+        hidden = False
+        for parent in node.parents:
+            if parent is tag:
+                break
+            if parent.name in ("script", "style", "template"):
+                hidden = True
+                break
+            style = (parent.get("style") or "").replace(" ", "").lower()
+            classes = parent.get("class") or ()
+            if (parent.has_attr("hidden") or "display:none" in style
+                    or "visibility:hidden" in style
+                    or any(_VISUALLY_HIDDEN.match(str(c)) for c in classes)):
+                hidden = True
+                break
+        if not hidden:
+            parts.append(str(node))
+    return _WHITESPACE_RE.sub(" ", " ".join(parts)).strip()
+
+
+class LabelInName(AccessibilityRule):
+    """The visible label is not part of the accessible name (2.5.3).
+
+    `aria-label` replaces the text as the name. A voice-control user says
+    what they see - "click Leggi di più" - and nothing answers, because the
+    control is called "Leggi Novità del portale". A screen-reader user
+    sighted enough to read the screen hears a different label from the one
+    on it.
+
+    Conservative by construction, because the static pass cannot see CSS:
+
+    * only `aria-label` is read - a name from `aria-labelledby` may be in
+      another document of a fragment audit, and an unresolved reference is
+      `aria-reference-broken`'s question;
+    * only words: case, punctuation and order are ignored, and the finding
+      fires only when a word of the visible text is missing from the name
+      (the criterion's own best practice is "the name starts with the
+      label"; this asks much less);
+    * a visible label with no letters or digits (an icon, `×`, `>`) is not a
+      text label and 2.5.3 does not apply to it;
+    * text in a visually hidden descendant (`sr-only`, `hidden`,
+      `display:none`) is not what a sighted user reads, and is left out.
+
+    axe's own check is `label-content-name-mismatch` (experimental, off by
+    default); HTML_CodeSniffer's is F96 under `2_5_3`. Both map to this rule
+    in the deduplicator, so one element is one row.
+    """
+    id = "label-in-name"
+    severity = MODERATE
+    wcag = ("2.5.3",)
+
+    #: What carries a visible text label and a name from it.
+    ELEMENTS = ("a", "button", "summary")
+    ROLES = ("button", "link", "menuitem", "tab", "checkbox", "radio",
+             "switch", "option", "menuitemcheckbox", "menuitemradio")
+
+    def check(self, document, context) -> list:
+        issues = []
+        for tag in document.find_all(True):
+            role = (tag.get("role") or "").strip().lower()
+            if tag.name not in self.ELEMENTS and role not in self.ROLES:
+                continue
+            if tag.name == "a" and not tag.has_attr("href") and not role:
+                continue
+            label = (tag.get("aria-label") or "").strip()
+            if not label or tag.get("aria-labelledby"):
+                continue
+            if _is_hidden(tag):
+                continue
+            visible = _visible_text(tag)
+            words = [w.lower() for w in _WORD.findall(visible)]
+            if not words:
+                continue
+            named = {w.lower() for w in _WORD.findall(label)}
+            missing = [w for w in words if w not in named]
+            if not missing:
+                continue
+            selector, line = context.locate(tag)
+            issues.append(Issue(
+                rule_id=self.id, severity=self.severity, selector=selector,
+                line=line, snippet=snippet_of(tag), source=context.source,
+                details={"text": visible[:120], "name": label[:120]},
             ))
         return issues
 
@@ -737,9 +869,35 @@ class DuplicateIds(AccessibilityRule):
     # but the standard no longer says so, and a report must not cite it.
     wcag = ()
 
+    #: Attributes that point at an id by name, as a space-separated list.
+    REFERENCING = ("for", "aria-labelledby", "aria-describedby",
+                   "aria-controls", "aria-owns", "aria-activedescendant",
+                   "aria-details", "aria-errormessage", "aria-flowto",
+                   "headers", "list", "form")
+
+    def _referenced(self, document) -> set:
+        """Every id something in the document points at."""
+        ids: set = set()
+        for tag in document.find_all(True):
+            for name in self.REFERENCING:
+                value = tag.get(name)
+                if value:
+                    ids.update(str(" ".join(value) if isinstance(value, list)
+                                   else value).split())
+            for name in ("href", "xlink:href"):
+                value = str(tag.get(name) or "")
+                if value.startswith("#") and len(value) > 1:
+                    ids.add(value[1:])
+            style = " ".join(str(tag.get(name) or "") for name in (
+                "style", "fill", "stroke", "filter", "mask", "clip-path",
+                "marker-start", "marker-mid", "marker-end"))
+            ids.update(re.findall(r"url\(\s*['\"]?#([^'\")\s]+)", style))
+        return ids
+
     def check(self, document, context) -> list:
         seen: dict = {}
         issues = []
+        referenced = None
         for tag in document.find_all(id=True):
             identifier = (tag.get("id") or "").strip()
             if not identifier:
@@ -773,14 +931,34 @@ class DuplicateIds(AccessibilityRule):
                 # not. 130 of these on a sixteen-target run sat beside real
                 # duplicate form ids at the same severity, which is what made
                 # the real ones hard to see.
+                #
+                # And an id nothing points at harms nobody. WCAG 2.2 dropped
+                # 4.1.1 because browsers parse duplicates consistently; what
+                # is left is the reference that resolves to the wrong
+                # element. On a live intranet 52 duplicate ids were reported
+                # at one weight, most of them unreferenced framework ids. So
+                # a duplicate this document refers to keeps the weight, and so
+                # does one on a control (axe's `duplicate-id-active`: a label
+                # or a script will point at it); any other is a note - still
+                # listed, never hidden. In
+                # a fragment (a SharePoint zone) the reference may sit
+                # outside it; the note then understates, and says why in
+                # `referenced`.
+                if referenced is None:
+                    referenced = self._referenced(document)
                 in_svg = tag.find_parent("svg") is not None
+                is_referenced = identifier in referenced
+                active = (tag.name in _INTERACTIVE or tag.has_attr("tabindex"))
                 selector, line = context.locate(tag)
                 issues.append(Issue(
                     rule_id=self.id,
-                    severity=MINOR if in_svg else self.severity,
+                    severity=(self.severity
+                              if (is_referenced or active) and not in_svg
+                              else MINOR),
                     selector=selector,
                     line=line, snippet=snippet_of(tag), source=context.source,
-                    details={"id": identifier, "in_svg": in_svg},
+                    details={"id": identifier, "in_svg": in_svg,
+                             "referenced": is_referenced},
                 ))
             seen.setdefault(identifier, []).append(tag)
         return issues
@@ -2093,7 +2271,8 @@ class AbbreviationExpansion(AccessibilityRule):
 
 
 for _rule in (
-    ImageAlt, ImageAltIsFilename, ControlName, VagueLinkText, DocumentLanguage,
+    ImageAlt, ImageAltIsFilename, ControlName, VagueLinkText, LabelInName,
+    DocumentLanguage,
     DocumentLanguageMismatch, DeclaredLanguageContradictsAddress,
     DocumentTitle, HeadingOrder, MissingH1, PositiveTabindex, DuplicateIds,
     BrokenAriaReference, ButtonWithoutType, MediaWithoutCaptions, AutoplayingMedia,

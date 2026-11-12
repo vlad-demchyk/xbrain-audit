@@ -1254,11 +1254,12 @@ def _stop_short(state, folder, target, timings, phase, reason, *,
     coverage = partial_audit.coverage or build_coverage(partial_audit, scan=partial_scan)
     coverage["status"] = "incomplete"
     coverage.setdefault("errors", []).append({"phase": phase, "reason": reason})
-    print(json.dumps({"schema_version": SCHEMA_VERSION,
+    from privacy import mask_value
+    print(json.dumps(mask_value({"schema_version": SCHEMA_VERSION,
                       "target": target, "incomplete": True, "coverage": coverage,
                       "audit": {"issues": [serialize_issue(i) for i in partial_audit.issues()]},
                       "scan": partial_scan,
-                      "run": str(state.run_dir), "state": info},
+                      "run": str(state.run_dir), "state": info}),
                      indent=2, ensure_ascii=False))
     return EXIT_INCOMPLETE
 
@@ -1698,6 +1699,9 @@ def _run_phases_body(args, state, folder, timings, target, lang, is_url, is_page
             documents=len(audit_result.documents) if audit_result else 0,
             sources=len({d.source for d in audit_result.documents})
             if audit_result else 0)
+        if audit_result:
+            from cli_impl.auditpass import say_zones
+            say_zones(audit_result)
         if state is not None:
             state.done("audit", artifacts=filter(
                 None, [checkpoint.save_audit(state.run_dir, audit_result)]))
@@ -1914,7 +1918,8 @@ def _run_phases_body(args, state, folder, timings, target, lang, is_url, is_page
         documents=len(audit_result.documents) if audit_result else 0,
         sources=len({d.source for d in audit_result.documents})
         if audit_result else 0)
-    print(json.dumps(combined, indent=2, ensure_ascii=False))
+    from privacy import mask_value
+    print(json.dumps(mask_value(combined), indent=2, ensure_ascii=False))
 
     if args.check:
         critical = combined['audit']['counts']['critical']

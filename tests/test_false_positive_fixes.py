@@ -331,3 +331,27 @@ class TheSitesOwnSubdomainIsTheSite(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ADuplicateIdNothingPointsAt(unittest.TestCase):
+    """WCAG 2.2 dropped 4.1.1: a duplicate id harms where it is referenced
+    (or on a control a label will point at). Seen on a live intranet: 52 at
+    one weight, most of them unreferenced wrapper ids. T-2823."""
+
+    def _severity(self, markup):
+        found = [i for i in analyze_document(markup, "t").issues
+                 if i.rule_id == "duplicate-id"]
+        self.assertEqual(len(found), 1)
+        return found[0].severity
+
+    def test_an_unreferenced_wrapper_is_a_note(self):
+        self.assertEqual(self._severity(
+            '<html><body><div id="w">a</div><div id="w">b</div></body></html>'), "minor")
+
+    def test_a_referenced_one_keeps_its_weight(self):
+        self.assertEqual(self._severity(
+            '<html><body><p id="d">a</p><p id="d">b</p>'
+            '<button aria-describedby="d">Go</button></body></html>'), "moderate")
+        self.assertEqual(self._severity(
+            '<html><body><a href="#s">skip</a><div id="s">a</div><div id="s">b</div>'
+            '</body></html>'), "moderate")

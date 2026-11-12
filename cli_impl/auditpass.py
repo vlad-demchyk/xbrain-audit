@@ -836,6 +836,42 @@ def say_tree(tree) -> None:
                         errors=[e.message for e in tree.errors][:5])
 
 
+def say_zones(result) -> None:
+    """How many SharePoint pages were not audited, read empty, or classic.
+
+    The report's SharePoint section listed the pages it could not read, and
+    stderr said nothing: a run that left a third of its pages out finished
+    with the same lines as one that read them all. Said here, with the
+    reason, every time a SharePoint run has something to say.
+    """
+    summary = getattr(result, "sharepoint", None)
+    if not isinstance(summary, dict) or not summary:
+        return
+    missing = list(summary.get("pages_without_canvas") or [])
+    empty = list(summary.get("pages_empty") or [])
+    classic = list(summary.get("pages_classic") or [])
+    if missing:
+        line = (f"{len(missing)} page(s) not audited: no SharePoint canvas or "
+                f"classic content area recognised - "
+                f"{', '.join(missing[:5])}{' …' if len(missing) > 5 else ''}")
+        progress.notice("sharepoint", line, human=f"# [sharepoint] {line}",
+                        not_audited=len(missing), pages=missing[:25])
+    if empty:
+        reasons: dict = {}
+        for entry in empty:
+            reasons.setdefault(entry.get("note") or "nothing to audit",
+                               []).append(entry.get("url", ""))
+        for reason, urls in reasons.items():
+            line = (f"{len(urls)} page(s) read and empty ({reason}): "
+                    f"{', '.join(urls[:5])}{' …' if len(urls) > 5 else ''}")
+            progress.notice("sharepoint", line, human=f"# [sharepoint] {line}",
+                            empty=len(urls), reason=reason, pages=urls[:25])
+    if classic:
+        line = (f"{len(classic)} classic page(s) read through their web parts")
+        progress.notice("sharepoint", line, human=f"# [sharepoint] {line}",
+                        classic=len(classic))
+
+
 def say_registry(registry, entries: int, path: str) -> None:
     if registry is None:
         return

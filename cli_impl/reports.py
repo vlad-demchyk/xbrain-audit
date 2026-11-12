@@ -367,6 +367,11 @@ def _write_report(result, args, lang: str, fix_outcome=None, ai_findings=None) -
     }
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Everything the report quotes, masked once more at the door: the issues
+    # were masked at birth, the page list, the coverage and the errors were
+    # not (see `privacy`).
+    from privacy import mask_value
+    payload = mask_value(payload)
     if path.suffix.lower() == ".json":
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                         encoding="utf-8")

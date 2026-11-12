@@ -100,7 +100,7 @@ class WhatThePassActuallySends(unittest.TestCase):
         with mock.patch("audit.driver.available", return_value=(True, "")), \
                 mock.patch.object(auditpass, "_audit_at_widths", _fake), \
                 mock.patch("audit.browser.merge_into_document",
-                           side_effect=lambda doc, audit: merged.append(doc)):
+                           side_effect=lambda doc, audit, **_: merged.append(doc)):
             auditpass._run_browser_pass(result, mock.Mock(selectors=[], rules=[]))
         self.assertEqual(merged, [page, other])
 

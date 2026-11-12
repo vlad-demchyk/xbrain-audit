@@ -797,15 +797,18 @@ def _documents_for_zones(page, rules, ai_review, web_parts, summary,
     """One page of a SharePoint run: a document per zone, Microsoft's left out.
 
     Each zone is audited as a fragment and its findings carry the zone, the
-    part's name and the evidence that placed it. A page on which no canvas
-    was recognised is reported with an error rather than audited whole -
+    part's name and the evidence that placed it. A classic page is read the
+    same way, through its web parts (`sharepoint_zones._classic_zones`); a
+    page whose canvas is empty is recognised and has nothing to audit. A
+    page on which neither was recognised is reported with an error rather
+    than audited whole -
     auditing it whole is exactly the tenant's chrome this mode exists to
     leave out, and auditing nothing without a word would read as clean.
     """
     from audit import sharepoint_zones
 
     try:
-        _document, zone_map = sharepoint_zones.map_page(
+        document, zone_map = sharepoint_zones.map_page(
             page.raw_html or "", web_parts, registry)
     except Exception as exc:  # noqa: BLE001 - malformed markup is not a crash
         return [DocumentReport(source=page.url, error=str(exc))]
@@ -815,11 +818,19 @@ def _documents_for_zones(page, rules, ai_review, web_parts, summary,
             source=page.url,
             error="no SharePoint canvas recognised on this page; it was not "
                   "audited (sharepoint mode reads web parts, not the chrome)")]
+    if not zone_map.zones:
+        # Read, and nothing in it to audit: an empty canvas, a classic page
+        # whose web parts are empty. A document with no findings, and the
+        # reason is in the run's SharePoint summary (`pages_empty`) - not an
+        # error, because nothing was skipped.
+        return [DocumentReport(source=page.url, kind="fragment")]
     found = []
     for zone in zone_map.zones:
         report = analyze_document(str(zone.element), page.url, rules,
                                   ai_review=ai_review,
                                   document_kind="fragment")
+        report.issues = sharepoint_zones.settle_references(report.issues,
+                                                           document)
         report.issues = sharepoint_zones.apply_zone(report.issues, zone,
                                                     summary)
         found.append(report)

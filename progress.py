@@ -179,16 +179,18 @@ def emit(event: str, human: str = "", *, stream=None, **fields) -> None:
     call that names an event.
     """
     try:
+        from privacy import mask_text, mask_value
+
         out = stream if stream is not None else sys.stderr
         if _mode != MODE_JSONL:
             if human:
-                print(human, file=out, flush=True)
+                print(mask_text(human), file=out, flush=True)
             return
         record = {"event": event, "ts": _now()}
         for key, value in fields.items():
             if value is None:
                 continue
-            record[key] = _plain(value)
+            record[key] = mask_value(_plain(value))
         print(json.dumps(record, ensure_ascii=False), file=out, flush=True)
     except Exception:  # noqa: BLE001 - never the reason a run fails
         pass

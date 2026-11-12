@@ -74,6 +74,10 @@ _LABELS = {
         sharepoint="SharePoint: what was audited",
         sharepoint_note="Microsoft: skipped {elements} elements. The suite bar, the navigation, the command bar, the comments, the footer and the wrappers around web parts are Microsoft's markup: nobody running this site can change it, so it was not audited. Inside Microsoft's own web parts only what the author wrote was checked (alt text, link text, headings, language, captions, wording); {findings} findings about those parts' own markup were not listed.",
         sharepoint_missing="{count} page(s) had no SharePoint canvas this run could recognise and were not audited: {pages}",
+        sharepoint_empty="{count} page(s) were read and had nothing to audit ({reason}): {pages}",
+        sharepoint_classic="{count} classic page(s) were read through their web parts.",
+        sharepoint_empty_reason={"empty-canvas": "the page's canvas is empty",
+            "classic-empty": "no classic web part has content"},
         sharepoint_col_part="Part", sharepoint_col_kind="Whose",
         sharepoint_col_places="Placements",
         sharepoint_kind={"custom": "Custom (SPFx)", "author": "Author content",
@@ -133,6 +137,10 @@ _LABELS = {
         sharepoint="SharePoint: що аудитовано",
         sharepoint_note="Microsoft: пропущено елементів: {elements}. Suite bar, навігація, командна панель, коментарі, футер і обгортки навколо web parts - це розмітка Microsoft: ніхто з власників сайту не може її змінити, тому її не аудитували. Усередині web parts від Microsoft перевірено лише те, що написав автор (alt-тексти, текст посилань, заголовки, мова, субтитри, формулювання); знахідок про власну розмітку цих частин не показано: {findings}.",
         sharepoint_missing="Сторінок без канвасу SharePoint, який цей прогін зміг розпізнати, і тому не аудитованих: {count}: {pages}",
+        sharepoint_empty="Сторінок прочитано, але аудитувати на них нічого ({reason}): {count}: {pages}",
+        sharepoint_classic="Класичних сторінок, прочитаних через їхні web parts: {count}.",
+        sharepoint_empty_reason={"empty-canvas": "канвас сторінки порожній",
+            "classic-empty": "у жодному класичному web part немає вмісту"},
         sharepoint_col_part="Частина", sharepoint_col_kind="Чия",
         sharepoint_col_places="Розміщень",
         sharepoint_kind={"custom": "Кастом (SPFx)", "author": "Контент автора",
@@ -192,6 +200,10 @@ _LABELS = {
         sharepoint="SharePoint: che cosa è stato verificato",
         sharepoint_note="Microsoft: elementi saltati: {elements}. La suite bar, la navigazione, la barra dei comandi, i commenti, il piè di pagina e i contenitori delle web part sono markup di Microsoft: nessuno che gestisce il sito può modificarlo, quindi non è stato verificato. Nelle web part di Microsoft è stato controllato solo ciò che ha scritto l'autore (testo alternativo, testo dei link, titoli, lingua, sottotitoli, formulazione); risultati sul markup proprio di quelle parti non elencati: {findings}.",
         sharepoint_missing="Pagine senza un canvas SharePoint riconoscibile, quindi non verificate: {count}: {pages}",
+        sharepoint_empty="Pagine lette senza nulla da verificare ({reason}): {count}: {pages}",
+        sharepoint_classic="Pagine classiche lette attraverso le loro web part: {count}.",
+        sharepoint_empty_reason={"empty-canvas": "il canvas della pagina è vuoto",
+            "classic-empty": "nessuna web part classica ha contenuto"},
         sharepoint_col_part="Parte", sharepoint_col_kind="Di chi",
         sharepoint_col_places="Posizionamenti",
         sharepoint_kind={"custom": "Personalizzata (SPFx)", "author": "Contenuto dell'autore",
@@ -715,6 +727,21 @@ def _sharepoint_section(model: ReportModel, labels: dict) -> str:
         missing_note = (f'<p class="authwall-note">'
                         f'{_esc(labels["sharepoint_missing"].format(count=len(missing), pages=", ".join(missing[:5])))}'
                         f'</p>')
+    # Read and empty is a different answer from not audited, and from
+    # clean: said with its reason, grouped by it.
+    by_reason: dict = {}
+    for entry in data.get("pages_empty") or []:
+        if isinstance(entry, dict):
+            by_reason.setdefault(entry.get("reason") or "", []).append(entry.get("url", ""))
+    for reason, pages in by_reason.items():
+        said = labels["sharepoint_empty_reason"].get(reason, reason)
+        missing_note += (f'<p class="authwall-note">'
+                         f'{_esc(labels["sharepoint_empty"].format(count=len(pages), reason=said, pages=", ".join(pages[:5])))}'
+                         f'</p>')
+    classic = data.get("pages_classic") or []
+    if classic:
+        missing_note += (f'<p class="authwall-note">'
+                         f'{_esc(labels["sharepoint_classic"].format(count=len(classic)))}</p>')
     return (f'<section class="authwall sharepoint"><h2>{_esc(labels["sharepoint"])}</h2>'
             f'<p class="authwall-note">{_esc(note)}</p>{missing_note}{table}</section>')
 

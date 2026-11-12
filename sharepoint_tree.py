@@ -455,6 +455,33 @@ def _error_message(resp) -> str:
 # OData shapes
 
 
+#: Columns an item query cannot do without: the address of the page.
+_REQUIRED_ITEM_FIELDS = frozenset({"FileRef"})
+
+
+def _missing_field(exc: RestError, fields: list) -> str:
+    """The column a 400 answer says does not exist, if it is one asked for.
+
+    SharePoint names it in quotes in the user's language ("The field or
+    property 'Title' does not exist", "Il campo o la proprietà 'Title' non
+    esiste"), so the name is read, not the sentence. A 400 that names none
+    of them gives up PromotedState first, as before: the commonest cause.
+    """
+    if exc.status != 400:
+        return ""
+    message = exc.message or ""
+    for field_ in fields:
+        if field_ in _REQUIRED_ITEM_FIELDS:
+            continue
+        if re.search(rf"""['"«“‘]{re.escape(field_)}['"»”’]""", message):
+            return field_
+    if "PromotedState" in fields and not any(
+            re.search(rf"""['"«“‘]{re.escape(field_)}['"»”’]""", message)
+            for field_ in _REQUIRED_ITEM_FIELDS):
+        return "PromotedState"
+    return ""
+
+
 def _rows(body) -> list:
     if not isinstance(body, dict):
         return []
@@ -723,20 +750,22 @@ class _Walk:
                 self._error(SOURCE_SITEPAGES, primary_failed)
             self._error(SOURCE_SITEPAGES, exc)
             return
-        found_any = False
         for lib in libs:
             root = _single(lib.get("RootFolder") or {})
             path = str(root.get("ServerRelativeUrl") or "")
             if not path or _path_key(path) in read:
                 continue
-            found_any = True
+            if primary_failed is not None and _path_key(path) == _path_key(site_pages):
+                continue  # already asked, and its failure is counted below
             try:
                 self._items(web, path, SOURCE_SITEPAGES)
                 read.add(_path_key(path))
             except RestError as exc:
                 self._error(SOURCE_SITEPAGES, exc)
-        if primary_failed is not None and primary_failed.status != 404 \
-                and not found_any:
+        # A SitePages that exists and could not be read is an error whether
+        # or not another library was found: its pages are missing from the
+        # tree. Only "there is no SitePages here" (404) is not one.
+        if primary_failed is not None and primary_failed.status != 404:
             self._error(SOURCE_SITEPAGES, primary_failed)
 
     def _items(self, web: TreeWeb, library_path: str, source: str,
@@ -745,15 +774,23 @@ class _Walk:
         base = self._api(web.url, "web/GetList('"
                          + quote(_odata_string(library_path), safe="/")
                          + "')/items")
-        fields = _ITEM_FIELDS if not documents else _ITEM_FIELDS_PLAIN
-        try:
-            rows = list(self._paged(f"{base}?$select={fields}&$top=500"))
-        except RestError as exc:
-            if exc.status != 400 or fields == _ITEM_FIELDS_PLAIN:
-                raise
-            # A library without the PromotedState column (publishing pages).
-            rows = list(self._paged(
-                f"{base}?$select={_ITEM_FIELDS_PLAIN}&$top=500"))
+        fields = (_ITEM_FIELDS if not documents else _ITEM_FIELDS_PLAIN).split(",")
+        while True:
+            try:
+                rows = list(self._paged(
+                    f"{base}?$select={','.join(fields)}&$top=500"))
+                break
+            except RestError as exc:
+                missing = _missing_field(exc, fields)
+                if not missing:
+                    raise
+                # A library without one of the columns asked for: a
+                # publishing library has no PromotedState, and a classic
+                # subsite's SitePages answered 400 "the field 'Title' does
+                # not exist" (live, localised). Asked again without it; a
+                # failure that names no column, or names `FileRef`, is
+                # raised and counted by the caller.
+                fields = [field_ for field_ in fields if field_ != missing]
         for row in rows:
             ref = str(row.get("FileRef") or "")
             if not ref:

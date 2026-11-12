@@ -192,7 +192,7 @@ ciascuno correggibile sul posto.
 
 **Regole del sito**, per categoria, con il numero che la suite verifica:
 
-`accessibility` (40), `best-practices` (13), `geo` (2), `performance` (8), `security` (10), `seo` (8)
+`accessibility` (41), `best-practices` (13), `geo` (2), `performance` (8), `security` (10), `seo` (8)
 
 Una regola gira dove significa qualcosa e da nessun'altra parte, e a deciderlo
 è una prova: la sintassi del file (le regole JSX solo in `.jsx`/`.tsx`), a cosa
@@ -221,6 +221,14 @@ controllo di reciprocità hreflang e contati in una riga; un link che
 HTML_CodeSniffer segnala come immagine senza `alt` ma che ha un nome da
 `aria-label`, `aria-labelledby` o `title` è un promemoria per verificare il nome,
 non una violazione.
+
+**Etichetta nel nome (2.5.3).** `label-in-name` segnala un link o un pulsante il
+cui `aria-label` tralascia parole del testo visibile: `<a aria-label="Leggi
+le novità del portale">Leggi di più</a>` ha un nome che chi usa il
+controllo vocale non può pronunciare. Prudente: solo `aria-label`, solo parole
+(maiuscole, punteggiatura e ordine ignorati), mai un'icona o un simbolo, mai
+testo nascosto alla vista. Lo stesso link non è segnalato come testo vago: il
+suo nome accessibile dice dove porta.
 
 **Nel browser**, quando ce n'è uno: axe-core e HTML_CodeSniffer, la pagina nello
 stato in cui la mette una persona - indicatore di focus e se si distingue dallo
@@ -386,7 +394,16 @@ gli stessi flag, gli stessi rifiuti (codice 2) e le stesse zone nel JSON - ogni 
   cornice della pagina (un header personalizzato, un popup). Quel markup si
   trova dalle classi dei moduli CSS (`name_1a2b3c4d`), viene legato alla parte
   con lo stesso alias o bundle ed esaminato come personalizzato: è
-  un'inferenza, e il report la segna come tale.
+  un'inferenza, e il report la segna come tale. Uno sprite SVG di
+  definizioni (`<defs>`, un set di icone nascosto) non disegna nulla e non
+  viene mai preso per una parte.
+- **Pagine classiche e canvas vuoti.** Una pagina classica (senza canvas
+  moderno, contenuto in `#DeltaPlaceHolderMain`) viene letta attraverso le sue
+  web part: ogni `WebPartWPQn` con contenuto è esaminato con tutte le regole
+  come «Classic web part (WPQn)»; barra della suite, ribbon, area del titolo e
+  navigazione a sinistra sono di Microsoft. Una pagina moderna con il canvas
+  vuoto è riportata come letta e vuota, non come non esaminata. stderr dice
+  quante pagine non sono state esaminate, lette vuote o classiche, e perché.
 
 Limiti:
 
@@ -418,6 +435,17 @@ XBrain Audit/example.com/2026-09-02-0930/
   changes.md    cosa è cambiato dall'esecuzione precedente
   state.json    stato ripristinabile
 ```
+
+**I dati personali restano fuori.** Una pagina dietro un accesso cita la persona
+che ha effettuato l'accesso: l'indirizzo di un sondaggio incorporato porta
+`username=` e un `hash=` personale. I valori di questi parametri (`username`,
+`user`, `email`, `mail`, `hash`, `token`, `access_token`, `auth`, `key`, `sig`,
+`signature`, `session`, `sid`, `code`, `password`, `pwd`, `upn`, `login`) e gli
+indirizzi e-mail sono sostituiti da `[masked]` e `[email]` in ogni risultato, nel
+JSON, nei report Markdown, HTML e PDF e su stderr; il nome del parametro resta.
+Le impronte sono calcolate dal testo mascherato, quindi lo stesso risultato ha
+la stessa impronta per tutti. È un filtro su forme note, non una garanzia: un
+report su un sito con accesso va condiviso con cura.
 
 Ogni documento si apre nominando il comando e i parametri che hanno cambiato ciò
 che è stato misurato. Un problema ripetuto è elencato una volta sola, con i suoi

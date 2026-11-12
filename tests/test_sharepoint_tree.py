@@ -636,3 +636,41 @@ def test_subsites_carry_their_language():
     webs_call = next(u for u in session.urls() if "/_api/web/webs" in u)
     assert "Language" in webs_call.split("$select=", 1)[1]
     assert [w.language for w in tree.webs] == [1040, 1033]
+
+
+# -- a library without a column asked for (T-2823) -----------------------
+
+
+def _bad_field(name):
+    return FakeResponse(400, {"odata.error": {"code": "-1, System.ArgumentException",
+        "message": {"value": f"Il campo o la proprietà '{name}' non esiste."}}})
+
+
+def test_a_missing_title_column_is_asked_again_without_it():
+    """A classic subsite's SitePages answered 400 "'Title' does not exist"
+    to the query with Title, and again to the fallback that still had it."""
+    routes = full_site_routes()
+    # Every SitePages query that still selects Title fails; without it, rows.
+    routes.insert(0, (r"GetList\('/sites/Portal/SitePages'\)/items\?\$select=[^&]*Title",
+                      _bad_field("Title")))
+    tree, _t = run(FakeSession(routes))
+    sitepages = [e for e in tree.errors if e.source == spt.SOURCE_SITEPAGES]
+    assert sitepages == [], sitepages
+    assert any(p.url.lower().endswith("/sitepages/home.aspx") for p in tree.pages)
+
+
+def test_a_failure_that_names_no_column_is_counted():
+    routes = full_site_routes()
+    routes.insert(0, (r"GetList\('/sites/Portal/SitePages'\)/items",
+                      FakeResponse(400, {"odata.error": {"message": {"value": "Bad request."}}})))
+    tree, _t = run(FakeSession(routes))
+    assert any(e.source == spt.SOURCE_SITEPAGES and e.status == 400
+               for e in tree.errors)
+
+
+def test_the_page_address_column_is_never_dropped():
+    exc = spt.RestError("u", "The field or property 'FileRef' does not exist.", 400)
+    assert spt._missing_field(exc, ["FileRef", "Title"]) == ""
+    exc = spt.RestError("u", "The field or property 'Title' does not exist.", 400)
+    assert spt._missing_field(exc, ["FileRef", "Title"]) == "Title"
+    assert spt._missing_field(spt.RestError("u", "x", 500), ["PromotedState"]) == ""
