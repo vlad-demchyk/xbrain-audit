@@ -106,6 +106,7 @@ _LABELS = {
         side_col_count="Occurrences", side_col_pages="Pages", side_col_parts="Parts",
         side_col_examples="Examples", side_more="and {count} more",
         component_fix="One fix in the code of {name} fixes all {count} occurrences.",
+        tally="{problems} distinct problems · {occurrences} occurrences on {pages} pages · {to_verify} to check by hand · {recommendations} recommendations (the last two are not in the totals)",
         found_in="Found in {count} places", and_more="and {count} more",
         occurrences="Occurrences",
         distinct="distinct problems", occurrences_total="occurrences in total",
@@ -175,6 +176,7 @@ _LABELS = {
         side_col_count="Повторів", side_col_pages="Сторінок", side_col_parts="Частини",
         side_col_examples="Приклади", side_more="і ще {count}",
         component_fix="Одне виправлення в коді {name} виправляє всі входження: {count}.",
+        tally="Окремих проблем: {problems} · входжень: {occurrences}, сторінок: {pages} · перевірити вручну: {to_verify} · рекомендацій: {recommendations} (останні два не входять у підсумки)",
         found_in="Знайдено у {count} місцях", and_more="і ще {count}",
         occurrences="Повторів",
         distinct="окремих проблем", occurrences_total="входжень усього",
@@ -244,6 +246,7 @@ _LABELS = {
         side_col_count="Occorrenze", side_col_pages="Pagine", side_col_parts="Parti",
         side_col_examples="Esempi", side_more="e altri {count}",
         component_fix="Una sola correzione nel codice di {name} corregge tutte le {count} occorrenze.",
+        tally="{problems} problemi distinti · {occurrences} occorrenze su {pages} pagine · {to_verify} da verificare · {recommendations} raccomandazioni (le ultime due non sono nei totali)",
         found_in="Trovato in {count} punti", and_more="e altri {count}",
         occurrences="Occorrenze",
         distinct="problemi distinti", occurrences_total="occorrenze in totale",
@@ -1115,6 +1118,27 @@ def _side_table(rows, labels: dict) -> str:
             + "".join(body) + '</table>')
 
 
+def _tally_line(findings, to_verify, recommendations, labels: dict) -> str:
+    """What the overview counts, in one line under the stat cards.
+
+    The cards and "what was found" count distinct problems, and nothing said
+    so: a reader of a live report could not tell 207 problems from the
+    thousands of places they occur in, and the to-check and recommendations
+    sections were not mentioned at all. Every number here is taken from the
+    lists below it - the same grouping, the same section counts.
+    """
+    places = [where for finding in findings
+              for where in (finding.locations or ([finding.location] if finding.location else []))]
+    pages = {_page_of(where) for where in places if where}
+    text = labels["tally"].format(
+        problems=len(findings),
+        occurrences=sum(finding.occurrences for finding in findings),
+        pages=len(pages),
+        to_verify=len(_side_rows(to_verify)) if to_verify else 0,
+        recommendations=len(_side_rows(recommendations)) if recommendations else 0)
+    return f'<p class="tally">{_esc(text)}</p>'
+
+
 def render_html(model: ReportModel, lang: str = "en") -> str:
     """`ReportModel` -> a complete `<html>` document, ready for a browser or
     for `report.pdf.render_pdf`.
@@ -1197,6 +1221,7 @@ def render_html(model: ReportModel, lang: str = "en") -> str:
     # goes last, after the pages: it changes no total and asks nothing urgent.
     verify_section = _side_section("to_verify", to_verify)
     advice_section = _side_section("recommendations", recommendations)
+    tally = _tally_line(findings, to_verify, recommendations, labels)
 
     authwall_section = (_behind_the_login(model, labels, palette)
                         + _sharepoint_section(model, labels))
@@ -1302,6 +1327,7 @@ h2, h3 {{ break-after: avoid; page-break-after: avoid; }}
 .bar-num {{ flex: 0 0 auto; font-variant-numeric: tabular-nums;
   font-weight: 600; min-width: 9mm; text-align: right; }}
 .stat-grid {{ display: flex; flex-wrap: wrap; gap: 4mm; margin-bottom: 5mm; }}
+.tally {{ margin: -2mm 0 5mm; font-size: 9pt; color: {palette.text_muted}; }}
 .stat-card {{
   flex: 1 1 26mm; border: 1px solid {palette.border};
   border-top: 1mm solid {palette.border_strong};
@@ -1485,6 +1511,7 @@ footer {{
 <section class="summary">
   <h2>{_esc(labels["overview"])}</h2>
   <div class="stat-grid">{"".join(stat_cards)}</div>
+  {tally}
   {charts}
   <h3 class="table-title">{_esc(labels["what_found"])}</h3>
   {what_rows}
